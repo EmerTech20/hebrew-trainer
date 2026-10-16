@@ -1,0 +1,28 @@
+{
+ "name": "Hebrew Exam Trainer",
+ "short_name": "Hebrew",
+ "description": "Biblical Hebrew training for the Ruth exegesis final.",
+ "start_url": "./",
+ "scope": "./",
+ "display": "standalone",
+ "background_color": "#f2f4f7",
+ "theme_color": "#1d4f8f",
+ "icons": [
+  {
+   "src": "icon-192.png",
+   "sizes": "192x192",
+   "type": "image/png"
+  },
+  {
+   "src": "icon-512.png",
+   "sizes": "512x512",
+   "type": "image/png"
+  },
+  {
+   "src": "icon-maskable-512.png",
+   "sizes": "512x512",
+   "type": "image/png",
+   "purpose": "maskable"
+  }
+ ]
+}
