@@ -1,5 +1,5 @@
 // Offline support: the app files are cached on install; fonts and libraries are cached the first time they load.
-const V = 'het-5136a12c45';
+const V = 'het-8fd9d2cad1';
 const CORE = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'firebase-bundle.js', 'lexicon.js'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(V).then(c => c.addAll(CORE)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== V && k.startsWith('het-')).map(k => caches.delete(k)))).then(() => self.clients.claim())); });

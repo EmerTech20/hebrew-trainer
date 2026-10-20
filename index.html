@@ -3396,8 +3396,8 @@ function validateTutorReport(o, title) {
   if (o.schema !== TUTOR_SCHEMA) return { ok: false, rejected: [{ where: 'schema', reason: 'not ' + TUTOR_SCHEMA }] };
   const date = /^\d{4}-\d{2}-\d{2}$/.test(o.date || '') ? o.date : (rej.push({ where: 'date', reason: 'missing or not YYYY-MM-DD; today used' }), dayKey());
   const weak = (Array.isArray(o.weak_points) ? o.weak_points : []).filter((w, i) => { const ok = w && WP[w.area] && String(w.detail || '').trim(); if (!ok) rej.push({ where: `weak_points[${i}]`, reason: !w || !WP[w.area] ? `unknown area “${w && w.area}”` : 'empty detail' }); return ok; }).map(w => ({ wp: w.area, detail: String(w.detail) + (w.evidence ? ` (answered: ${w.evidence})` : '') }));
-  const parse = (Array.isArray(o.parse_items) ? o.parse_items : []).filter((p, i) => { const r = String((p || {}).root || '').replace(/[^א-ת]/g, ''); const why = !p ? 'empty' : !heb(p.form) ? 'form has no Hebrew' : !STEMS[p.stem] ? `unknown stem “${p.stem}”` : !CONJ[p.conj] ? `unknown conjugation “${p.conj}”` : !pgnOK(p.conj, String(p.pgn || '')) ? `person/gender/number “${p.pgn}” does not fit ${p.conj}` : !/^[א-ת]{2,4}$/.test(r) ? 'root must be 2–4 Hebrew letters' : null; if (why) rej.push({ where: `parse_items[${i}]`, reason: why }); return !why; })
-    .map(p => ({ form: String(p.form).trim(), root: String(p.root).replace(/[^א-ת]/g, ''), stem: p.stem, conj: p.conj, pgn: p.conj === 'inf' ? '' : String(p.pgn), gloss: String(p.gloss || ''), evidence: String(p.explanation || ''), trap: '', topic: pbTopic([p.form, p.root, p.stem, p.conj]), verified: false }));
+  const parse = (Array.isArray(o.parse_items) ? o.parse_items : []).filter((p, i) => { const r = String((p || {}).root || '').replace(/[^א-ת]/g, ''); const why = !p ? 'empty' : !heb(p.form) ? 'form has no Hebrew' : !STEMS[p.stem] ? `unknown stem “${p.stem}”` : !CONJ[p.conj] ? `unknown conjugation “${p.conj}”` : !pgnOK(p.conj, String(p.pgn || '')) ? `person/gender/number “${p.pgn}” does not fit ${p.conj}` : !/^[א-ת]{2,4}$/.test(r) ? 'root must be 2–4 Hebrew letters' : (() => { const ck = typeof lexCheckParse === 'function' ? lexCheckParse(p) : null; if (ck && !ck.ok) return `the Hebrew Bible reads ${p.form} as ${ck.found}, not ${p.stem} ${p.conj} ${p.pgn || ''}`.trim(); if (p) p._checked = !!ck; return null; })(); if (why) rej.push({ where: `parse_items[${i}]`, reason: why }); return !why; })
+    .map(p => ({ form: String(p.form).trim(), root: String(p.root).replace(/[^א-ת]/g, ''), stem: p.stem, conj: p.conj, pgn: p.conj === 'inf' ? '' : String(p.pgn), gloss: String(p.gloss || ''), evidence: String(p.explanation || ''), trap: '', topic: pbTopic([p.form, p.root, p.stem, p.conj]), verified: !!p._checked }));
   const suffix = (Array.isArray(o.suffix_items) ? o.suffix_items : []).filter((x, i) => { const ok = x && heb(x.form) && x.meaning && Array.isArray(x.wrong) && x.wrong.length >= 2; if (!ok) rej.push({ where: `suffix_items[${i}]`, reason: 'needs a Hebrew form, a meaning and at least 2 wrong meanings' }); return ok; }).map(x => ({ form: String(x.form).trim(), meaning: String(x.meaning), wrong: x.wrong.slice(0, 3).map(String), explain: String(x.explain || ''), verified: false }));
   const mc = (Array.isArray(o.mc_items) ? o.mc_items : []).filter((q, i) => { const ok = q && q.q && Array.isArray(q.options) && q.options.length >= 2 && Number.isInteger(q.answer) && q.answer >= 0 && q.answer < q.options.length; if (!ok) rej.push({ where: `mc_items[${i}]`, reason: 'needs a question, 2+ options and a valid answer index' }); return ok; }).map(q => ({ wp: WP[q.area] ? q.area : 'binyan', q: String(q.q), options: q.options.map(String), answer: q.answer, explain: String(q.explain || '') }));
   const ins = { title: title || `Tutor report ${date}`, date, summary: String(o.summary || ''), checkpoint: String(o.checkpoint || ''), strengths: String(o.strengths || ''), weak, parse, suffix, mc, recommendations: (Array.isArray(o.recommendations) ? o.recommendations : []).map(String).slice(0, 10), source: 'json', schema: TUTOR_SCHEMA, rejected: rej, supplementary: true };
@@ -3813,6 +3813,23 @@ function wordTable(texts, known) {
   const seen = new Set((known || []).map(w => lexNorm(w.he).replace(/[־\s]/g, ''))); const rows = [];
   for (const w of lexWords(texts.join(' '))) { const k = lexNorm(w); if (seen.has(k)) continue; seen.add(k); const a = analyzeWord(w); if (a) rows.push(a); if (rows.length >= 90) break; }
   return rows;
+}
+// Checking a parse someone else gave (e.g. a ChatGPT tutor report) against the Hebrew Bible's morphology.
+// Returns null when the exact form is not a biblical form (cannot check), else { ok, found }.
+const LEX_STEM = { q: 'qal', N: 'niphal', p: 'piel', P: 'pual', t: 'hithpael', h: 'hiphil', H: 'hophal' };
+const LEX_CONJ = { p: 'qatal', q: 'weqatal', i: 'yiqtol', j: 'yiqtol', h: 'yiqtol', w: 'wayyiqtol', v: 'impv', r: 'ptc', s: 'ptc', a: 'inf', c: 'inf' };
+function lexParses(form) {
+  const idx = lexIndex(); if (!idx) return null; const hit = idx.get(lexNorm(form).replace(/[־\s]/g, '')); if (!hit) return null;
+  return hit.map(([seg, lem, morph]) => { const lp = lem.split('/'), mp = morph.slice(1).split('/'); const c = mp[lp.length - 1] || ''; if (c[0] !== 'V') return null; const L0 = window.LEX_L[+lp[lp.length - 1]] || [];
+    let conj = LEX_CONJ[c[2]] || ''; if (conj === 'yiqtol' && lp.slice(0, -1).includes('c')) conj = 'weyiqtol'; const rest = c.slice(3);
+    const pgn = conj === 'inf' ? '' : conj === 'ptc' ? (rest.slice(0, 2)).replace('b', 'c') : rest.slice(0, 3).replace('b', 'c');
+    return { stem: LEX_STEM[c[1]] || c[1], conj, pgn, root: lexCons(L0[3] || L0[0]) }; }).filter(Boolean);
+}
+function lexCheckParse(p) {
+  const all = lexParses(p.form); if (!all || !all.length) return null;
+  const same = a => a.stem === p.stem && (a.conj === p.conj || (a.conj === 'yiqtol' && p.conj === 'weyiqtol') || (a.conj === 'qatal' && p.conj === 'weqatal')) && (!a.pgn || !p.pgn || a.pgn === String(p.pgn));
+  const ok = all.some(same);
+  return { ok, found: all.map(a => `${a.stem} ${a.conj}${a.pgn ? ' ' + a.pgn : ''}`).join(' or ') };
 }
 
 // ===== Measurement layer: event log, exposure history, response time, assistance =====
@@ -5903,7 +5920,7 @@ async function doUpload() {
       let ins = null;
       if (purpose === 'insight') {
         meta.kind = 'tutor';
-        const js = findTutorJSON(text);
+        const js = findTutorJSON(text); if (js) { st('checking every parse against the Hebrew Bible'); try { await lexLoad(); } catch {} }
         if (js) { const vr = validateTutorReport(js, j.title); ins = vr.ins; meta.summary = ins.summary; meta.topics = [...new Set(ins.weak.map(w => WP[w.wp].topic))].filter(x => topicById(x)); if (vr.rejected.length) note = `Structured report: ${vr.rejected.length} entr${vr.rejected.length === 1 ? 'y' : 'ies'} rejected (${vr.rejected.slice(0, 3).map(r => r.where + ': ' + r.reason).join('; ')}).`; }
         else if (aiAvailable()) { try { ins = await extractInsights(text, j.title, st); meta.summary = ins.summary; meta.topics = [...new Set(ins.weak.map(w => WP[w.wp].topic))].filter(x => topicById(x)); } catch (e) { note = 'Saved, but Claude could not read the weak points (' + aiError(e) + '). Try again later.'; } }
         else note = 'Saved. Reading the weak points needs Claude.';
@@ -6024,5 +6041,5 @@ function guessDocMeta(title, text) {
 }
 
 </script>
-<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='5136a12c45';</script>
+<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='8fd9d2cad1';</script>
 </body></html>
