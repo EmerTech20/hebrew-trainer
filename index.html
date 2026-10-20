@@ -3400,7 +3400,7 @@ function validateTutorReport(o, title) {
     .map(p => ({ form: String(p.form).trim(), root: String(p.root).replace(/[^א-ת]/g, ''), stem: p.stem, conj: p.conj, pgn: p.conj === 'inf' ? '' : String(p.pgn), gloss: String(p.gloss || ''), evidence: String(p.explanation || ''), trap: '', topic: pbTopic([p.form, p.root, p.stem, p.conj]), verified: !!p._checked }));
   const suffix = (Array.isArray(o.suffix_items) ? o.suffix_items : []).filter((x, i) => { const ok = x && heb(x.form) && x.meaning && Array.isArray(x.wrong) && x.wrong.length >= 2; if (!ok) rej.push({ where: `suffix_items[${i}]`, reason: 'needs a Hebrew form, a meaning and at least 2 wrong meanings' }); return ok; }).map(x => ({ form: String(x.form).trim(), meaning: String(x.meaning), wrong: x.wrong.slice(0, 3).map(String), explain: String(x.explain || ''), verified: false }));
   const mc = (Array.isArray(o.mc_items) ? o.mc_items : []).filter((q, i) => { const ok = q && q.q && Array.isArray(q.options) && q.options.length >= 2 && Number.isInteger(q.answer) && q.answer >= 0 && q.answer < q.options.length; if (!ok) rej.push({ where: `mc_items[${i}]`, reason: 'needs a question, 2+ options and a valid answer index' }); return ok; }).map(q => ({ wp: WP[q.area] ? q.area : 'binyan', q: String(q.q), options: q.options.map(String), answer: q.answer, explain: String(q.explain || '') }));
-  const ins = { title: title || `Tutor report ${date}`, date, summary: String(o.summary || ''), checkpoint: String(o.checkpoint || ''), strengths: String(o.strengths || ''), weak, parse, suffix, mc, recommendations: (Array.isArray(o.recommendations) ? o.recommendations : []).map(String).slice(0, 10), source: 'json', schema: TUTOR_SCHEMA, rejected: rej, supplementary: true };
+  const ins = { title: title || `Tutor report ${date}`, date, summary: String(o.summary || ''), checkpoint: String(o.checkpoint || ''), strengths: String(o.strengths || ''), weak, parse, suffix, mc, recommendations: (Array.isArray(o.recommendations) ? o.recommendations : []).map(String).slice(0, 10), source: 'json', schema: TUTOR_SCHEMA, rejected: rej, supplementary: true, concepts: (Array.isArray(o.concepts) ? o.concepts : []).filter((c, i) => { const ok = c && typeof CONCEPTS !== 'undefined' && CONCEPTS.some(x => x.id === c.id) && TUTOR_STATUS[c.status]; if (!ok) rej.push({ where: `concepts[${i}]`, reason: 'unknown concept id or status' }); return ok; }).map(c => ({ id: c.id, status: c.status, forms: (c.forms || []).map(String).slice(0, 8), note: String(c.note || '') })) };
   return { ok: true, ins, rejected: rej };
 }
 
@@ -4868,6 +4868,74 @@ function startStoryQuestions(ch, n = 10) {
   startSession({ title: `Story questions · Ch. ${ch}`, items: pickN.map(storyItem), back: S.tab === 'read' ? 'read' : S.tab === 'today' ? 'today' : 'practice' });
 }
 
+// ===== Concept ladder (concepts-v1) =====
+// One row per recurring weakness. Each row climbs five steps:
+//   1 difficulty → 2 explained → 3 correct after help → 4 correct on your own → 5 on your own again (mastered).
+// Evidence: (a) your own answers in this app (independent = no hint, no translation shown, not the immediate re-practice of a miss,
+// and either the first time you saw the item or 1+ days later); (b) tutor reports, always labelled “tutor-reported”.
+// Mastered needs independent correct answers on at least 2 different forms on at least 2 different days, ≥80% of the last 10, and the latest one correct.
+// A wrong independent answer after that moves the concept back to step 1 (with the reason shown).
+const LADDER = ['No evidence yet', 'Difficulty seen', 'Explained (not tested)', 'Correct after help', 'Correct on your own', 'On your own again: mastered'];
+const TUTOR_STATUS = { observed_difficulty: 1, explained_unverified: 2, correct_after_support: 3, self_corrected: 3, independent_correct: 4, repeatedly_independent: 4 };
+const isParse = e => e.k === 'parse' && e.f;
+const CONCEPTS = [
+  { id: 'stem-form', name: 'Stem (בִּנְיָן) vs form (נְטִיָּה)', plain: 'Qal/Piel/Hiphil/Niphal is the stem; qatal/yiqtol/imperative/infinitive is the form. A verb has both.', applies: isParse, ok: e => e.f.stem && e.f.conj, pk: () => true },
+  { id: 'piel', name: 'Piel: doubled middle root letter', plain: 'כִּבֵּד, כַּבֵּד, לְחַיּוֹת: the dot (dagesh) in the middle root letter.', applies: e => isParse(e) && e.st2 === 'piel', ok: e => e.f.stem, pk: r => r[2] === 'piel' },
+  { id: 'hiphil', name: 'Hiphil: the ה / i-vowel pattern', plain: 'הִקְטִיל, יַקְטִיל, הֵמִית: causative “make someone …”.', applies: e => isParse(e) && e.st2 === 'hiphil', ok: e => e.f.stem, pk: r => r[2] === 'hiphil' },
+  { id: 'niphal', name: 'Niphal: נִ prefix or doubled first letter', plain: 'נִשְׁמַר (Ni-phal: perfects and participles), הִשָּׁמֵר / יִשָּׁמֵר (Hippael).', applies: e => isParse(e) && e.st2 === 'niphal', ok: e => e.f.stem, pk: r => r[2] === 'niphal' },
+  { id: 'prefix-person', name: 'Who does it? yiqtol prefixes א י ת נ', plain: 'א = I, י = he, ת = you / she, נ = we; read the ending too (־וּ, ־ִי, ־נָה).', applies: e => isParse(e) && ['yiqtol', 'wayyiqtol', 'weyiqtol'].includes(e.cj) && e.f.pgn != null, ok: e => e.f.pgn, pk: r => ['yiqtol', 'wayyiqtol', 'weyiqtol'].includes(r[3]) },
+  { id: 'nonfinite', name: 'Infinitives & participles have no person', plain: 'לְחַיּוֹת “to keep alive”, נֹתֵן “giving”: no person; ־וֹת here is not a plural.', applies: e => isParse(e) && ['inf', 'ptc'].includes(e.cj), ok: e => e.f.conj && (e.f.pgn == null || e.f.pgn), pk: r => ['inf', 'ptc'].includes(r[3]) },
+  { id: 'cohortative', name: 'Cohortative ־ָה “let me / let us”', plain: 'וַאֲדַבְּרָה “and let me speak”: א (I) + ־ָה (wish). Marked as yiqtol / weyiqtol 1cs.', applies: e => isParse(e) && /ָה$/.test(e.h || '') && ['yiqtol', 'weyiqtol'].includes(e.cj) && /^1c/.test(String((e.exp || '').split(' ')[2] || '')), ok: e => e.f.conj && e.f.pgn, pk: r => /ָה$/.test(r[0]) && /^1c/.test(r[4]) && ['yiqtol', 'weyiqtol'].includes(r[3]) },
+  { id: 'subject-object', name: 'Ending = subject or object?', plain: 'תַעַבְדֵם: ת = you (who serves), ־ם = them (who is served). שִׁבְטֵיכֶם: ־כֶם = your.', applies: e => e.sf === 1 || ['pronouns', 'obj_suffix'].includes(e.t) || (e.cn || []).includes('suffix'), ok: e => e.s >= 1, drill: () => startNominal() },
+  { id: 'question-words', name: 'Question words in the quizzes', plain: 'הֲ yes/no, מִי who, מָה what, מֵאַיִן from where, מָה הַפֹּעַל הַזֶּה what is this verb.', applies: e => e.t === 'terminology' || e.k === 'comp', ok: e => e.s >= 1, drill: () => startTopicDrill('terminology') },
+];
+// Older tutor reports without per-concept statuses: their weak-point areas count only as “difficulty seen”.
+const WP_TO_CONCEPT = { form: 'stem-form', suffix: 'subject-object', pgn: 'prefix-person', binyan: 'stem-form' };
+const dShortSafe = ts => new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+function independentEv(e) { return e.as === 'none' && !e.tv && e.m !== 'reinforce' && (e.x === 0 || e.g < 0 || e.g >= 1); }
+function tutorEvidence(cid) {
+  const out = [];
+  for (const ins of S.insights || []) {
+    const list = Array.isArray(ins.concepts) ? ins.concepts.filter(c => c.id === cid) : (ins.weak || []).filter(w => WP_TO_CONCEPT[w.wp] === cid).map(() => ({ id: cid, status: 'observed_difficulty' }));
+    for (const c of list) out.push({ step: TUTOR_STATUS[c.status] || 1, status: c.status, date: ins.date || '', forms: c.forms || [], note: c.note || '', title: ins.title || 'tutor report' });
+  }
+  return out.sort((a, b) => String(a.date).localeCompare(String(b.date)));
+}
+function conceptState(c) {
+  const evs = (MEAS.all || []).filter(e => e.k !== 'sess' && e.k !== 'view' && (() => { try { return c.applies(e); } catch { return false; } })());
+  const ind = evs.filter(independentEv), indOk = ind.filter(e => c.ok(e)), helped = evs.filter(e => !independentEv(e) && c.ok(e));
+  const forms = new Set(indOk.map(e => e.h || e.c)), days = new Set(indOk.map(e => dayKey(new Date(e.ts))));
+  const last10 = ind.slice(-10), acc = last10.length ? last10.filter(e => c.ok(e)).length / last10.length : null, latest = ind[ind.length - 1];
+  const tut = tutorEvidence(c.id), tutTop = tut.length ? tut[tut.length - 1] : null;
+  let step = 0, why = '';
+  if (latest && !c.ok(latest)) { step = 1; why = `your last answer on your own was wrong: ${(latest.h && latest.h.length > 2 ? latest.h : latest.q || '').slice(0, 60)} (${dShortSafe(latest.ts)}); ${indOk.length} of ${ind.length} correct on your own so far`; }
+  else if (indOk.length && forms.size >= 2 && days.size >= 2 && acc >= .8) { step = 5; why = `${indOk.length} correct on your own, ${forms.size} different forms, ${days.size} days; last 10: ${Math.round(acc * 100)}%`; }
+  else if (indOk.length) { step = 4; const need = [forms.size < 2 ? 'a 2nd different form' : '', days.size < 2 ? 'a 2nd day' : '', acc != null && acc < .8 ? `80% of the last 10 (now ${Math.round(acc * 100)}%)` : ''].filter(Boolean); why = `${indOk.length} of ${ind.length} correct on your own (${forms.size} form${forms.size > 1 ? 's' : ''}, ${days.size} day${days.size > 1 ? 's' : ''}); for mastered it still needs ${need.join(' and ')}`; }
+  else if (helped.length) { step = 3; why = `${helped.length} correct only with help (hint, translation shown or right after a miss)`; }
+  else if (tutTop) { step = tutTop.step; why = `tutor-reported: ${tutTop.status.replace(/_/g, ' ')} (${tutTop.date})`; }
+  // The app's own evidence decides when it exists; a tutor report can only describe where you started.
+  return { step, why, ind: ind.length, indOk: indOk.length, helped: helped.length, tut, acc };
+}
+function conceptDrill(cid) {
+  const c = CONCEPTS.find(x => x.id === cid); if (!c) return;
+  if (c.drill) return c.drill();
+  // New forms first: verb-bank forms of this pattern you have not seen yet (taught stems only).
+  const pool = pkPool().filter(i => c.pk(PRACTICE_VERBS[i]));
+  if (!pool.length) return flash('No practice forms for this yet.');
+  const fresh = pool.filter(i => !expGet('f:' + AN.hash(AN.normHe(PRACTICE_VERBS[i][0]))));
+  const pickN = fresh.length >= 10 ? pick(fresh, 10) : [...fresh, ...pick(pool.filter(i => !fresh.includes(i)), 10 - fresh.length)];
+  startSession({ title: 'Concept · ' + c.name.replace(/\s*\(.*?\)/g, ''), items: pickN.map(pkItem), back: S.tab === 'today' ? 'today' : 'progress' });
+}
+function conceptPanelHTML() {
+  if (typeof MEAS === 'undefined' || !MEAS.all) return '';
+  const rows = CONCEPTS.map(c => ({ c, st: conceptState(c) })).sort((a, b) => (a.st.step || 9) - (b.st.step || 9));
+  const dots = st => `<div class="row" style="gap:3px;flex-wrap:nowrap" aria-label="step ${st} of 5">${[1, 2, 3, 4, 5].map(k => `<span title="${esc(LADDER[k])}" style="width:16px;height:8px;border-radius:3px;background:${k <= st ? (st >= 5 ? 'var(--good,#2e7d4f)' : st <= 1 ? 'var(--bad,#b3261e)' : 'var(--accent,#1d4f8f)') : 'var(--line,#ddd)'}"></span>`).join('')}</div>`;
+  return `<div class="panel stack" id="concepts"><div class="row" style="justify-content:space-between"><h2>Concept ladder</h2><span class="small muted">From your own answers here; tutor reports only mark where you started</span></div>
+    <p class="small muted">${LADDER.slice(1).map((l, i) => `${i + 1} ${l}`).join(' → ')}. “Mastered” needs correct answers on your own (no hint) on 2 different forms on 2 different days.</p>
+    <div class="stack" style="gap:8px">${rows.map(({ c, st }) => `<div class="dl" style="grid-template-columns:minmax(0,1fr) 96px auto;align-items:center"><div style="min-width:0"><b style="font-weight:500">${heWrap(esc(c.name))}</b> <span class="chip">${esc(LADDER[st.step])}</span><div class="small muted">${heWrap(esc(c.plain))}</div><div class="small">${st.why ? heWrap(esc(st.why)) : 'No answers on this yet.'}${st.tut.length && st.ind ? ` <span class="muted">· tutor-reported: ${esc(st.tut[st.tut.length - 1].status.replace(/_/g, ' '))} (${esc(st.tut[st.tut.length - 1].date)})</span>` : ''}</div></div>${dots(st.step)}<button class="btn sm" data-concept="${c.id}">Practice</button></div>`).join('')}</div></div>`;
+}
+function wireConceptPanel(v) { $$('[data-concept]', v).forEach(b => b.onclick = () => conceptDrill(b.dataset.concept)); }
+
 // ===== Chart kit for the progress dashboard (inline SVG, hover tips, clickable points, PNG export) =====
 // Conventions: filled dot = measured; hollow dot = week in progress; dashed line = projection (estimate); shaded = uncertainty range.
 const CH = { clicks: {}, seq: 0 };
@@ -5364,6 +5432,7 @@ async function renderProgress() {
     <div class="f"><span>Skills</span><div class="row" style="gap:4px">${Object.entries(SKILL_OPTS).map(([k, n]) => `<button class="btn sm ${DASH.skills.includes(k) ? 'primary' : ''}" data-sk="${k}" aria-pressed="${DASH.skills.includes(k)}">${n}</button>`).join('')}</div></div>
   </div>
   ${sel.live ? '' : coveragePanelHTML(sel)}
+  ${typeof conceptPanelHTML === 'function' ? conceptPanelHTML() : ''}
   <div class="panel stack"><div class="row" style="justify-content:space-between"><h2>At a glance</h2><span class="small muted">${cmp ? 'compared with ' + esc(weekLabel(cmp)) : 'no comparison week'}${sel.live ? ' · this week is still in progress' : ''}</span></div>
     <div class="grid3" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">
       ${kpiTile('Independent exam score', m.independent ? m.independent.score : null, 'pts', m.independent ? m.independent.n : null, R['independent.score'], 'unseen, timed')}
@@ -5441,6 +5510,7 @@ async function renderProgress() {
   $('#dw-pdf').onclick = $('#dw-pdf2').onclick = () => exportReport('week', sel, cmp, anon());
   $('#dw-sem').onclick = $('#dw-sem2').onclick = () => exportReport('semester', sel, cmp, anon());
   $('#dw-claude').onclick = () => analyzeWithClaude(all, sel);
+  if (typeof wireConceptPanel === 'function') wireConceptPanel(v);
   $('#ex-json').onclick = () => saveFile(`hebrew-progress-${dayKey()}.json`, JSON.stringify(buildExport(anon()), null, 1));
   $('#ex-csv').onclick = () => saveFile(`hebrew-answers-${dayKey()}.csv`, eventsCSV(anon()));
   $('#ex-csv2').onclick = () => saveFile(`hebrew-test-items-${dayKey()}.csv`, itemsCSV(anon()));
@@ -6041,5 +6111,5 @@ function guessDocMeta(title, text) {
 }
 
 </script>
-<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='8fd9d2cad1';</script>
+<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='22abf181cb';</script>
 </body></html>
