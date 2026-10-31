@@ -1459,6 +1459,92 @@ function startLookalikes() {
 if (!TOPICS.some(t => t.id === 'lookalike')) TOPICS.splice(TOPICS.findIndex(t => t.id === 'terminology'), 0, { id: 'lookalike', name: 'Look-alike words', ch: 'Review', pt: 'palavras parecidas', from: null,
   notes: `<p>Words that look or sound alike but mean different things. Your tutor reports show these again and again, so learn them in pairs: ${H('שֵׁם')} name / ${H('שָׁם')} there · ${H('לֶחֶם')} bread / ${H('לָהֶם')} to them · ${H('נָשִׁים')} women / ${H('בָּנִים')} sons · ${H('שָׁנִים')} years / ${H('שְׁנֵי')} two of · ${H('אִשָּׁה')} woman, wife / ${H('אִישׁ')} man, husband / ${H('אִישָׁהּ')} her husband · ${H('וַיֵּשֶׁב')} he sat / ${H('וַיִּשָּׁבַע')} he swore · ${H('רָעָה')} evil / ${H('רָאָה')} saw · ${H('עִם')} with / ${H('אִם')} if · ${H('לוֹ')} to him / ${H('לֹא')} not · ${H('יָמִים')} days / ${H('מַיִם')} water.</p><p>Method: say the word aloud, name the vowel that differs (tsere or qamets?) or the letter (א or ע? ו or א?), then give the meaning.</p>` });
 
+// ===== Pattern clues: grammar rules that help you diagnose a form (course names: PPP rule, BuMP rule, two/three shapes…) =====
+// Each question practises one clue. Right answer first (the app shuffles). Examples from the class texts where possible.
+const PATTERNS = [
+// --- Conjunction and article
+{ r:'BuMP rule', q:`Why is “and” written ${H('וּ')} in ${H('וּמֵאִישָׁהּ')} (Ruth 1:5), not ${H('וְ')}?`, o:['BuMP rule: before ב, מ, פ the conjunction becomes וּ', 'the וּ means “they”', 'it is a vowel letter of the root', 'it marks the plural'], x:`“BuMP”: ${H('וְ')} becomes ${H('וּ')} before the lip letters <b>B</b>, <b>M</b>, <b>P</b> (ב מ פ). Here before מ (מֵ “from”).` },
+{ r:'BuMP rule', q:`${H('וּשְׁנֵי בָנָיו')} (Ruth 1:1): why ${H('וּ')} before ש?`, o:['before a letter with shewa the conjunction also becomes וּ', 'BuMP: ש is a lip letter', 'the וּ is a plural ending', 'it is a weqatal'], x:'Two shewas cannot stand together at the start of a word, so וְ + שְׁ → וּשְׁ. (BuMP covers ב מ פ; the shewa case is the second rule for וּ.)' },
+{ r:'Article', q:`How do you recognize the article “the” in ${H('הַשֹּׁפְטִים')} (Ruth 1:1)?`, o:['ה with patah + doubled first letter (dot in שּׁ)', 'ה with hiriq + ת', 'the ending ־ִים', 'the shewa under ה'], x:`Article = ${H('הַ')} + doubling of the next letter. Before gutturals the doubling cannot be written and the vowel changes (${H('הָאִישׁ')}, ${H('הָעִיר')}).` },
+{ r:'Article vs question', q:`${H('הֲלוֹא')} begins with ה. Is it the article?`, o:['No: ה with hateph-patah (ֲ) is the question marker “is it not…?”', 'Yes: “the not”', 'No: it is a Hiphil', 'Yes, before ל'], x:`Question ${H('הֲ')} has a hateph vowel and no doubling; the article ${H('הַ')} has patah + doubling.` },
+// --- Wayyiqtol / weqatal
+{ r:'Wayyiqtol sign', q:`What two signs together mark a wayyiqtol like ${H('וַיֵּלֶךְ')} (Ruth 1:1)?`, o:['וַ (patah) + the prefix letter doubled (dot in יּ)', 'וְ (shewa) + a suffix ending', 'only the letter ו at the start', 'the ending ־וּ'], x:'Wayyiqtol = וַ + doubled prefix (יּ / תּ / נּ). With א (1cs) the doubling cannot be written: וָאֶ… (qamets).' },
+{ r:'Wayyiqtol sign', q:`${H('וָאֶשְׁתַּחֲוֶה')} / ${H('וָאָבוֹא')}: why ${H('וָ')} with qamets instead of ${H('וַ')} + dot?`, o:['1cs wayyiqtol: א cannot be doubled, so the vowel of ו lengthens', 'it is a weqatal', 'it is a Niphal', 'the qamets means “she”'], x:'Gutturals (and א) refuse the dagesh; the vowel before them lengthens: וַ → וָ.' },
+{ r:'Weqatal', q:`${H('וְהָלַכְתִּי')} starts with ו + a perfect (with an ending). What is the usual meaning?`, o:['future / instruction: “and I will go”', 'past narrative: “and I went”', 'a command to someone else', 'a participle: “and going”'], x:'Weqatal (וְ + perfect) continues a future or instruction line. Wayyiqtol (וַ + prefix) is the past story line.' },
+{ r:'Weqatal', q:'How do you tell a weqatal from a wayyiqtol at a glance?', o:['weqatal: וְ/וּ + an ending after the root (־תִּי, ־תָּ, ־וּ…); wayyiqtol: וַ + a prefix letter before the root', 'weqatal has a doubled prefix', 'wayyiqtol always ends in ־וּ', 'there is no visible difference'], x:'Look at where the person is written: AFTER the root = suffix conjugation (weqatal); BEFORE the root = prefix conjugation (wayyiqtol).' },
+// --- Shapes
+{ r:'Three shapes (Qal)', q:'The Qal has three shapes. Which list is right?', o:['קָטַל (perfect, weqatal) · יִקְטֹל (imperfect, wayyiqtol, commands, infinitive) · קֹטֵל (participle)', 'קָטַל · קִטֵּל · הִקְטִיל', 'only one shape for all forms', 'נִקְטַל · הִקָּטֵל · מִתְקַטֵּל'], x:'Suffix-conjugation shape, prefix-conjugation shape, and the participle shape.' },
+{ r:'Two shapes (Piel)', q:`Piel has two shapes. Which forms use ${H('קַטֵּל')} (patah under the first letter)?`, o:['imperfect, wayyiqtol, commands, infinitive and participle (with מְ)', 'only the perfect', 'only the participle', 'the perfect and weqatal'], x:`${H('קִטֵּל')} (hiriq) = perfect and weqatal. ${H('קַטֵּל')} = everything else: ${H('יְדַבֵּר')}, ${H('וַיְדַבֵּר')}, ${H('לְדַבֵּר')}, ${H('מְדַבֵּר')}.` },
+{ r:'Two shapes (Niphal)', q:`Which Niphal shape do the perfect, weqatal and participle use?`, o:[`${H('נִקְטַל')} / ${H('נִקְטָל')} (Ni-phal: נ in front)`, `${H('הִקָּטֵל')} (doubled first letter)`, `${H('הִתְקַטֵּל')}`, `${H('קֻטַּל')}`], x:'Ni-phal for perfects and participles; Hippael (הִקָּטֵל, doubled first letter: the “Niphal triangle”) for all other forms.' },
+{ r:'Two shapes (Hiphil)', q:`${H('הִקְרִיב')} → ${H('יַקְרִיב')} → ${H('וַיַּקְרֵב')}: what happened to the Hiphil ה?`, o:['it drops after a prefix letter; the a-vowel under the prefix and ִי/ֵ remain', 'it became the prefix י', 'it moved to the end', 'nothing: these are three different stems'], x:'Hi-phil (perfect, weqatal) vs Ha-phil (long, imperfect) and Ha-phel (short, wayyiqtol and some commands).' },
+// --- PPP
+{ r:'PPP rule', q:`${H('הַשָּׁבָה')} (Ruth 1:22, the Ruth 1 quiz): why can it be parsed two ways?`, o:['PPP rule: in hollow Qal verbs the perfect and the participle look the same (שָׁבָה = she returned / returning, f.)', 'it is both Qal and Piel', 'the article makes it a noun', 'שׁוב is a III-ה verb'], x:'“Participles and Perfects Pattern”: hollow Qal 3ms perfect and ms participle are identical (קָם “he arose / arising”); the same for 3fs/fs שָׁבָה. With the article, “the one who returned”.' },
+{ r:'PPP rule', q:`${H('קָם')} can be…`, o:['Qal perfect 3ms (“he arose”) or Qal participle ms (“arising”)', 'only an imperative', 'only a perfect', 'a Niphal'], x:'PPP rule for hollow verbs; the sentence decides.' },
+{ r:'PPP rule', q:`Hollow Hiphil: ${H('הֵקִים')} “he raised” and ${H('מֵקִים')} “raising” both have ֵ under the prefix. Which rule?`, o:['PPP: perfects and participles pattern together', 'BuMP', 'III-ה rule', 'Niphal triangle'], x:'Strong Hiphil participles have מַ (מַמְלִיךְ); hollow ones take the perfect’s ֵ (מֵקִים).' },
+{ r:'PPP rule', q:'In Niphal, which forms share the נִ “Ni-phal” template?', o:['perfect, weqatal and participle', 'imperfect and wayyiqtol', 'imperative and infinitive', 'all forms'], x:'Perfects and Participles Pattern together. Note נִשְׁמַר (perfect, patah) vs נִשְׁמָר (participle, qamets).' },
+// --- Piel / Pual / Hithpael
+{ r:'Doubling', q:`Which root letter is doubled in a Piel like ${H('דִּבֶּר')}?`, o:['the middle one (בּ)', 'the first one (דּ)', 'the last one', 'none'], x:'The dot in the first ד is a dagesh lene (start of the word). The Piel doubling is in the MIDDLE root letter.' },
+{ r:'Doubling', q:`Which root letter is doubled in a Niphal like ${H('וַיִּפָּקֵד')}?`, o:['the first (פּ): the Niphal נ assimilated', 'the middle (ק)', 'the prefix י', 'none'], x:'Niphal (Hippael forms) doubles the FIRST root letter; Piel the MIDDLE one; Hithpael the middle one after הִתְ.' },
+{ r:'Gutturals hate dagesh', q:`${H('וַיְכַהֲנוּ')} “and they served as priests” is Piel, but no letter is doubled. Why?`, o:['the middle root letter ה is a guttural and cannot be doubled', 'it is a Qal', 'it is a Hiphil', 'the doubling is in the וּ'], x:'Gutturals (א ה ח ע) and ר refuse the dagesh. The vowels still follow the Piel pattern (shewa under the prefix יְ).' },
+{ r:'Gutturals hate dagesh', q:`${H('בֵּרַךְ')} “he blessed” (Piel): why tsere under ב instead of hiriq + doubled ר?`, o:['ר cannot be doubled, so the vowel before it lengthens (ִ → ֵ)', 'it is a Qal', 'it is a passive', 'it is a different root'], x:'Compensatory lengthening: compare דִּבֶּר with בֵּרַךְ, and וַיְבָרֶךְ “and he blessed”.' },
+{ r:'Prefix vowel', q:`${H('יְדַבֵּר')} vs ${H('יִשְׁמֹר')}: what does the shewa under the prefix (יְ) suggest?`, o:['Piel (or Pual): the prefix has shewa', 'Qal: the prefix always has shewa', 'Niphal', 'Hiphil'], x:'Qal prefix: hiriq (יִ). Piel: shewa (יְ). Hiphil: patah/qamets (יַ / יָ).' },
+{ r:'Hithpael metathesis', q:`${H('הִשְׁתַּמֵּר')}: the ת comes after the שׁ. Why?`, o:['the first root letter is a sibilant (ס צ שׂ שׁ ז), so ת and the sibilant swap places', 'the ת is a root letter', 'it is a Niphal', 'it is a Hiphil'], x:'Metathesis; with צ the ת also becomes ט (הִצְטַדֵּק).' },
+// --- Hiphil signs
+{ r:'Hiphil signs', q:`What vowel after the 2nd root letter is typical of Hiphil (${H('הִשְׁמִיעַ')}, ${H('יַגִּיד')}, ${H('לְהַבְדִּיל')})?`, o:['ִי (hireq-yod)', 'ֹ (holem)', 'ֻ (qibbuts)', 'ְ (shewa)'], x:'Hiphil theme vowel ִי (short forms ֵ: וַיַּקְרֵב, הַשְׁלֵךְ).' },
+{ r:'Hiphil signs', q:`Hiphil participle: what is at the front of ${H('מַמְלִיךְ')} / ${H('מוֹשִׁיעַ')}?`, o:['מ + a-vowel (or וֹ for I-י roots); not מְ', 'מְ like the Piel', 'נ like the Niphal', 'הִתְ'], x:'Piel and Pual participles: מְ. Hiphil: מַ (strong), מוֹ (I-י), מֵ (hollow: PPP).' },
+// --- Weak roots
+{ r:'I-נ assimilation', q:`${H('וַיִּפֹּל')} “and he fell”, root נפל: where is the נ?`, o:['it assimilated into the next letter: the dot in פּ', 'it was dropped and left no trace', 'it is the prefix נ', 'it moved to the end'], x:'Nun likes to assimilate to the following consonant (dagesh forte). Also יִתֵּן (נתן), וַיִּשְׂאוּ (נשׂא, Ruth 1:4), יַגִּיד (נגד).' },
+{ r:'I-נ assimilation', q:`${H('וַיִּשְׂאוּ לָהֶם נָשִׁים')} (Ruth 1:4): root?`, o:['נשׂא “lift / take (a wife)”', 'שׂאה', 'ישׂא', 'שׁאל'], x:'The first root letter נ assimilated into שׂ; the doubling dot is not written here because שׂ has a shewa (compare יִשָּׂא “he will lift”, with the dot). וּ = they.' },
+{ r:'I-י (Qal)', q:`${H('וַיֵּלֶךְ')}, ${H('וַיֵּשְׁבוּ')}, ${H('יֵדַע')}: what signals a I-י root (or הלך) in the Qal prefix forms?`, o:['two e-vowels: tsere under the prefix (ֵ) and e-vowel later (“two i-class vowels”)', 'a doubled middle letter', 'an ה at the front', 'the ending ־וּ'], x:'יָשַׁב → יֵשֵׁב / וַיֵּשֶׁב; הָלַךְ → יֵלֵךְ / וַיֵּלֶךְ. The root’s י disappears.' },
+{ r:'I-י (Hiphil, Niphal)', q:`${H('הוֹשִׁיעַ')}, ${H('יוֹצִיא')}, ${H('נוֹלַד')}: what is the וֹ after the prefix?`, o:['the original first root letter ו (I-י roots were I-ו)', 'a plural sign', 'the Qal participle vowel', 'a pronoun ending'], x:'In Hiphil and Niphal the old ו comes back: יצא → הוֹצִיא; ילד → נוֹלַד (and doubled in יִוָּלֵד).' },
+{ r:'Hollow', q:`Hollow verbs (קוּם, שׁוּב, בּוֹא, שִׂים): what is typical of the Qal prefix forms?`, o:['qamets under the prefix + the middle vowel letter: יָקוּם, יָשׁוּב, יָשִׂים', 'hiriq + doubled middle letter', 'shewa under the prefix', 'an ה at the front'], x:'Wayyiqtol often shortens: וַיָּקָם, וַתָּשָׁב (Ruth 1:6). “Stay in the same vowel class”: u-roots keep u, i-roots keep i.' },
+{ r:'Hollow', q:`${H('וַתָּקָם')} and ${H('וַתָּשָׁב')} (Ruth 1:6): root letters?`, o:['קום and שׁוב: the middle ו is not written', 'תקם and תשׁב', 'קמה and שׁבה', 'יקם and ישׁב'], x:'In hollow verbs the middle root letter (ו/י) often disappears; ת = she, וַ = and (story past).' },
+{ r:'III-ה (Remember III-y)', q:`${H('בָּנָה')} “he built”, ${H('בָּנִיתָ')} “you built”: why does י appear?`, o:['III-ה roots were III-י: before a consonant ending the י shows up', 'it is a different root', 'it is the ending “my”', 'it is a Hiphil'], x:'“Remember III-y”. Before vowel endings the ה simply drops: בָּנוּ “they built”.' },
+{ r:'III-ה (short forms)', q:`${H('וַיִּבֶן')}, ${H('וַיַּעַשׂ')}, ${H('וַיַּרְא')}: what is missing?`, o:['the final ה of the root (short wayyiqtol of III-ה verbs)', 'the prefix', 'the root’s first letter', 'nothing'], x:'Long imperfect יִבְנֶה, short wayyiqtol וַיִּבֶן. Compare וַיַּרְא “and he saw” (ראה).' },
+{ r:'III-ה (endings)', q:'Which ending marks the infinitive construct of a III-ה verb?', o:[`${H('־וֹת')}: ${H('לִבְנוֹת')}, ${H('לַעֲשׂוֹת')}`, `${H('־ָה')}`, `${H('־ֶה')}`, `${H('־וּ')}`], x:'Do not read ־וֹת here as a feminine plural.' },
+{ r:'III-ה (endings)', q:`For III-ה verbs, which vowel before the final ה usually marks the imperfect and the participle?`, o:['segol: יִבְנֶה, בֹּנֶה', 'qamets: בָּנָה', 'hiriq', 'holem'], x:'Perfect 3ms ־ָה (בָּנָה), imperfect/participle ־ֶה (יִבְנֶה, בֹּנֶה), imperative ־ֵה (בְּנֵה).' },
+{ r:'Geminate', q:`${H('סָבַב')} “he went around”, ${H('סַבּוֹתָ')} “you went around”: what is typical?`, o:['identical 2nd and 3rd root letters; before endings they appear as one doubled letter (+ a helping וֹ)', 'it is a Piel', 'it is a hollow verb', 'it is III-ה'], x:'Geminate (“doubled”) roots: ע״ע.' },
+// --- Gutturals and vowels
+{ r:'Gutturals', q:`${H('וַיַּעֲמֹד')}: why ֲ (hateph-patah) under ע instead of a simple shewa?`, o:['gutturals prefer a compound (hateph) shewa and a-class vowels', 'it marks a Hiphil', 'it marks a plural', 'it is a mistake'], x:'Gutturals (א ה ח ע): no dagesh, compound shewa, a-vowels.' },
+{ r:'Furtive patah', q:`${H('שֹׁמֵעַ')}: why is there a patah under the final ע?`, o:['furtive patah: pronounced BEFORE the ע (sho-ME-a)', 'it is a feminine ending', 'it marks a perfect', 'it doubles the ע'], x:'At the end of a word after a non-a vowel, ח ע (and ה with mappiq) take a “furtive” patah.' },
+{ r:'Dagesh lene vs forte', q:`In ${H('דִּבֶּר')}, which dot is a dagesh LENE (no doubling)?`, o:['the dot in the first letter ד', 'the dot in ב', 'both', 'neither'], x:'Dagesh lene: in בגדכפת at the start of a word or after a closed syllable; it only changes the sound. After a vowel, a dot = forte (doubling).' },
+{ r:'Qamets hatuf', q:`${H('חָכְמָה')} “wisdom”: how is the first qamets read?`, o:['as “o” (qamets hatuf): closed, unaccented syllable', 'as “a”', 'it is silent', 'as “e”'], x:'A closed, unaccented syllable must have a short vowel: חָכְ = chokh-.' },
+// --- Endings and roles
+{ r:'Subject endings', q:`${H('־תִּי')} on a perfect (${H('וְעָמַדְתִּי')}, ${H('שָׁמַעְתִּי')}) means…`, o:['“I” (the subject)', '“me” (the object)', '“you”', 'passive'], x:'Suffix-conjugation subject endings: ־תִּי I, ־תָּ you (m.), ־תְּ you (f.), ־ָה she, ־וּ they, ־נוּ we, ־תֶּם you all.' },
+{ r:'Object vs subject', q:`${H('יִפְקְדֵנִי')} “he will miss me”: who is the subject and who the object?`, o:['subject: י = he; object: ־נִי = me', 'subject: ־נִי = I', 'subject: they', 'there is no object'], x:'Prefix = who acts; a pronoun ending on a verb = the object.' },
+{ r:'Possessive endings', q:`${H('בָנָיו')} (Ruth 1:1) vs ${H('בָנֶיהָ')} (Ruth 1:3)?`, o:['his sons / her sons', 'her sons / his sons', 'their sons / his sons', 'my sons / your sons'], x:'On plural nouns: ־ָיו his (say “av”), ־ֶיהָ her, ־ֵיהֶם their, ־ֶיךָ your.' },
+{ r:'Three kinds of ־ָה', q:`${H('הַמִּדְבָּרָה')} “to the wilderness”: what is the final ־ָה?`, o:['directional ־ָה (“toward”) on a noun', 'feminine ending', '3fs perfect', 'cohortative'], x:'Three different ־ָה: on a noun = direction; on a perfect = she (3fs); on a 1st-person imperfect = “let me” (cohortative, אֶשְׁמְרָה).' },
+{ r:'Three kinds of ־ָה', q:`${H('אֶשְׁמְרָה')}: what does the final ־ָה add?`, o:['wish / resolve: “let me keep” (cohortative)', 'she', 'direction', 'feminine plural'], x:'Cohortative: 1st person prefix (א/נ) + ־ָה.' },
+// --- Non-finite forms
+{ r:'Participle', q:'Which categories does a participle have?', o:['gender and number, but no person', 'person, gender and number', 'only person', 'none'], x:'Infinitives: none of the three. Participles: gender + number (ms, fs, mp, fp).' },
+{ r:'Infinitive', q:`${H('שְׁפֹט')} in ${H('בִּימֵי שְׁפֹט הַשֹּׁפְטִים')} (Ruth 1:1) is…`, o:['Qal infinitive construct (no ל): “the judging of”', 'Qal perfect 3ms', 'Qal imperative', 'Qal participle'], x:'An infinitive construct can stand without ל, here after a construct noun: “in the days of the judging of the judges”.' },
+{ r:'Infinitive + suffix', q:`${H('בְּבֹאֲכֶם')} “when you enter”: what is ${H('־כֶם')}?`, o:['the subject of the infinitive (“you all”)', 'the object', 'a possessive “your” with no verbal meaning', 'a plural ending'], x:'On an infinitive, a pronoun ending usually names the doer.' },
+{ r:'Infinitive absolute', q:`${H('יָשֹׁב אֵשֵׁב')}: what does the first word add?`, o:['emphasis: “I will surely sit” (infinitive absolute + finite verb)', 'a second subject', 'a command', 'a past tense'], x:'Infinitive absolute (no person) + finite verb of the same root = intensifies.' },
+// --- Construct and nouns
+{ r:'Construct', q:`${H('בִּגְדֵי־קֹדֶשׁ')}: where does English “of” come from?`, o:['from the construct ending ־ֵי (masculine plural construct): “garments of”', 'from the maqaf', 'from קֹדֶשׁ', 'there is a hidden word'], x:'Construct forms: mp ־ֵי, fs ־ַת. The first noun is “X of”.' },
+{ r:'Construct', q:`${H('שְׁנֵי')} in ${H('וּשְׁנֵי בָנָיו')} means…`, o:['“two (of)” (construct of שְׁנַיִם)', '“years”', '“second”', '“change”'], x:'שָׁנִים = years; הַשֵּׁנִית = the second (f.).' },
+// --- Stem meanings
+{ r:'Stem meaning', q:'Typical meanings: Niphal / Piel / Hiphil / Hithpael?', o:['passive or middle / “make (be)…”, from nouns / causative / reflexive', 'causative / passive / reflexive / active', 'all the same as Qal', 'reflexive / passive / causative / middle'], x:'Niphal: was found, hid himself. Piel: make holy, serve as priest. Hiphil: bring out, make king. Hithpael: consecrate oneself, pray.' },
+{ r:'Stem meaning', q:`Qal ${H('יָצָא')} “go out” → Hiphil ${H('הוֹצִיא')} means…`, o:['bring out (cause to go out)', 'be brought out', 'go out often', 'go out for oneself'], x:'Hiphil = causative of the Qal.' },
+];
+function patternItem(i) { const p = PATTERNS[i]; return { kind: 'mc', key: 'pt|' + i, cid: 'pt:' + AN.hash(p.q), t: 'patterns', rule: p.r, q: `<div class="small muted">Clue: ${esc(p.r)}</div>${p.q}`, o: p.o, a: 0, x: p.x }; }
+function startPatternQuiz(rule) {
+  const pool = PATTERNS.map((p, i) => i).filter(i => !rule || PATTERNS[i].r === rule).map(patternItem);
+  const n = Math.min(rule ? 10 : 12, pool.length);
+  const items = weightedPick(pool, x => S.prog.mistakes.some(m => m.key === x.key) ? 2.5 : expGet(AN.contentId(x)) ? .6 : 1.5, n);
+  startSession({ title: rule ? 'Pattern clues · ' + rule : 'Pattern clues', items, back: S.tab === 'today' ? 'today' : 'practice' });
+}
+if (!TOPICS.some(t => t.id === 'patterns')) TOPICS.splice(TOPICS.findIndex(t => t.id === 'terminology'), 0, { id: 'patterns', name: 'Pattern clues (grammar rules)', ch: 'Review', pt: 'pistas de padrões', from: null,
+  notes: `<p>Clues that let you diagnose a form before you translate it. Ask in this order: <b>(1)</b> what is in front of the root (וַ / וְ, a person prefix א י ת נ, ה, נ, מ, הִתְ)? <b>(2)</b> which root letter is doubled — first (Niphal), middle (Piel, Hithpael) or none? <b>(3)</b> which vowels (prefix ִ Qal, ְ Piel, ַ Hiphil; ִי after the 2nd letter = Hiphil)? <b>(4)</b> what ending (subject ending, object ending, ־וֹת infinitive of III-ה, ־ָה)? <b>(5)</b> which root letter is missing (weak root)?</p>
+<ul><li><b>BuMP rule:</b> וְ → וּ before ב מ פ (and before a shewa).</li><li><b>PPP rule:</b> perfects and participles pattern together: hollow Qal קָם / שָׁבָה (perfect or participle), hollow Hiphil הֵקִים / מֵקִים, Niphal נִ for perfects and participles.</li><li><b>Shapes:</b> Qal three (קָטַל · יִקְטֹל · קֹטֵל); Piel two (קִטֵּל · קַטֵּל); Hiphil two (הִקְטִיל · הַקְטִיל/הַקְטֵל); Niphal two (נִקְטַל · הִקָּטֵל); Hithpael one (הִתְקַטֵּל).</li><li><b>Doubling:</b> Niphal = first root letter; Piel and Hithpael = middle; I-נ verbs = the letter after the lost נ. Gutturals and ר cannot double (the vowel before them lengthens).</li><li><b>Weak roots:</b> I-נ assimilates (יִפֹּל); I-י: two e-vowels in Qal (יֵשֵׁב), וֹ in Hiphil/Niphal (הוֹשִׁיעַ, נוֹלַד); hollow: qamets prefix (יָקוּם, וַיָּקָם); III-ה: “remember III-y” (בָּנִיתָ), short wayyiqtol (וַיִּבֶן), infinitive ־וֹת.</li><li><b>Three ־ָה:</b> directional (noun), 3fs perfect (she), cohortative (let me).</li></ul>` });
+
+// ---- Ruth 1 quiz (Oct 30): translation of Ruth 1:20–22 as practice (Hebrew text: Westminster Leningrad Codex).
+TRANSLATE.push(
+  ['וַתֹּאמֶר אֲלֵיהֶן אַל־תִּקְרֶאנָה לִי נָעֳמִי קְרֶאןָ לִי מָרָא כִּי־הֵמַר שַׁדַּי לִי מְאֹד', 'And-she-said to-them(f.) not you(f.pl.)-call to-me Naomi call(f.pl.)! to-me Mara for made-bitter Shaddai to-me very', 'She said to them, “Do not call me Naomi; call me Mara, for the Almighty has dealt very bitterly with me.”'],
+  ['אֲנִי מְלֵאָה הָלַכְתִּי וְרֵיקָם הֱשִׁיבַנִי יְהוָה לָמָּה תִקְרֶאנָה לִי נָעֳמִי וַיהוָה עָנָה בִי וְשַׁדַּי הֵרַע לִי', 'I full I-went and-empty brought-me-back YHWH why you(f.pl.)-call to-me Naomi and-YHWH testified against-me and-Shaddai did-wrong to-me', 'I went away full, and the LORD has brought me back empty. Why call me Naomi, when the LORD has testified against me and the Almighty has brought calamity on me?'],
+  ['וַתָּשָׁב נָעֳמִי וְרוּת הַמּוֹאֲבִיָּה כַלָּתָהּ עִמָּהּ הַשָּׁבָה מִשְּׂדֵי מוֹאָב וְהֵמָּה בָּאוּ בֵּית לֶחֶם בִּתְחִלַּת קְצִיר שְׂעֹרִים', 'And-she-returned Naomi and-Ruth the-Moabite her-daughter-in-law with-her the-one-returning from-fields-of Moab and-they came Beth(house-of) lehem(bread) in-beginning-of harvest-of barley', 'So Naomi returned, and Ruth the Moabite, her daughter-in-law, with her, the one who returned from the fields of Moab. They came to Bethlehem at the beginning of the barley harvest.'],
+);
+
 // ===== Learning analytics: pure functions (no page access), unit-tested in tests/analytics.test.js =====
 // Every number shown in the Progress tab comes from these functions applied to the recorded events and assessments.
 const AN = (() => {
@@ -1495,7 +1581,7 @@ const AN = (() => {
   const normHe = s => String(s || '').normalize('NFC').replace(/[֑-ֽ֯׀׃׆]/g, '').replace(/[־]/g, ' ').replace(/\s+/g, ' ').trim();
   const cons = s => normHe(s).replace(/[^א-ת]/g, '').replace(/[ךםןףץ]/g, c => ({ 'ך':'כ','ם':'מ','ן':'נ','ף':'פ','ץ':'צ' }[c]));
   const stripTags = s => String(s || '').replace(/<[^>]+>/g, ' ');
-  function heRuns(html) { return (stripTags(html).match(/[ְ-״־א-ת][֑-״־ ]*/g) || []).map(normHe).filter(x => /[א-ת]/.test(x)); }
+  function heRuns(html) { return (stripTags(html).normalize('NFC').match(/[ְ-״־א-ת][֑-״־ ]*/g) || []).map(normHe).filter(x => /[א-ת]/.test(x)); }
   // The underlying Hebrew content an item is about (a form, a word, a verse). Rewording a question about the same content keeps the same id.
   function contentId(it) {
     if (it.cid) return it.cid;
@@ -2026,14 +2112,14 @@ function streak() {
 }
 const MIS_CLEAR = 5; // correct answers needed to clear a notebook item (a miss sets it back to 0)
 function addMistake(item) {
-  const key = item.key || JSON.stringify(item).slice(0, 120);
+  const key = item.misKey || item.key || JSON.stringify(item).slice(0, 120);
   const ex = S.prog.mistakes.find(m => m.key === key);
   if (ex) { const was = ex.ok; ex.ok = 0; ex.t = Date.now(); saveProg(); return { back: was }; }
   else { S.prog.mistakes.push({ key, item, ok: 0, t: Date.now() }); if (S.prog.mistakes.length > 150) S.prog.mistakes.shift(); }
   saveProg();
 }
 function mistakeCorrect(item) {
-  const key = item.key; if (!key) return;
+  const key = item.misKey || item.key; if (!key) return;
   const m = S.prog.mistakes.find(x => x.key === key); if (!m) return;
   m.ok++; const cleared = m.ok >= MIS_CLEAR; if (cleared) S.prog.mistakes = S.prog.mistakes.filter(x => x !== m);
   saveProg(); return { ok: m.ok, cleared };
@@ -2593,6 +2679,9 @@ function startSession(opts) {
   SES = { mode: 'practice', ...opts, i: 0, results: [], answered: false }; newSid(); SES.sid = MEAS.sid;
   sessMark(SES, 'start');
   SES.items = opts.items.filter(Boolean);
+  // Same pattern, new word: a parse form you have already seen twice is swapped for another form with the same pattern,
+  // so you practise the clues, not the memory of which buttons to press. (Not in tests, placement, delayed checks or right-after-a-miss practice.)
+  if (!opts.noVary && ['practice', 'workout', 'mistakes', undefined].includes(opts.mode)) { const used = new Set(SES.items.map(x => AN.normHe(x.form || ''))); SES.items = SES.items.map(x => { const y = varyParse(x, used); if (y !== x) used.add(AN.normHe(y.form)); return y; }); }
   $$('section.view').forEach(s => s.hidden = s.id !== 'v-session'); S.tab = 'session';
   window.scrollTo({ top: 0 });
   drawItem();
@@ -2660,6 +2749,23 @@ function drawItem() {
   $('#b-idk').onclick = () => giveUp();
   $('#b-tr')?.addEventListener('click', e => { if (SES.answered) return; it._hint = true; it._trBefore = 1; e.target.remove(); showMeaning(it, true); });
 }
+function parseSiblings(it, used) {
+  const st = String(it.stem || '').split('|')[0], pg = String(it.pgn || '').split('|')[0], f0 = AN.normHe(it.form); const cand = [];
+  PARSE_BANK.forEach((p, i) => { const f = AN.normHe(p[0]); if (f === f0 || (used && used.has(f))) return; const T = TOPICS.find(t => t.id === p[6]); if (T && T.upcoming && !isCovered(T)) return; const b = bankItem(i); if (isLockedItem(b)) return; cand.push({ it: b, s: String(p[2]).split('|')[0], c: p[3], g: String(p[4]).split('|')[0] }); });
+  try { pkPool().forEach(i => { const r = PRACTICE_VERBS[i]; const f = AN.normHe(r[0]); if (f === f0 || (used && used.has(f))) return; const b = pkItem(i); if (isLockedItem(b)) return; cand.push({ it: b, s: r[2], c: r[3], g: r[4] }); }); } catch {}
+  for (const tier of [x => x.s === st && x.c === it.conj && x.g === pg, x => x.c === it.conj && x.g === pg, x => x.s === st && x.c === it.conj]) {
+    const l = cand.filter(tier); if (!l.length) continue;
+    const fresh = l.filter(x => !expGet(AN.contentId(x.it))); return (fresh.length ? fresh : l).map(x => x.it);
+  }
+  return [];
+}
+function varyParse(it, used) {
+  if (!it || it.kind !== 'parse' || it._delayed || it.noVary || it.misKey) return it;
+  const r = expGet(AN.contentId(it)); if (!r || r[0] < 2) return it;
+  const sib = parseSiblings(it, used); if (!sib.length) return it;
+  const s = pick(sib, 1)[0]; const inBook = S.prog.mistakes.some(m => m.key === it.key);
+  return { ...s, misKey: inBook ? it.key : undefined, variedFrom: it.form, cat: it.cat };
+}
 function nextBtn(extra = '') {
   $('#ctl').innerHTML = `<button class="btn primary" id="b-next">${SES.i + 1 >= SES.items.length ? 'See results' : 'Next'}</button>${extra}`;
   $('#b-next').onclick = () => { SES.i++; drawItem(); };
@@ -2669,6 +2775,7 @@ function logResult(it, score) {
   // After any answer (right, wrong or "I don't know"): the English meaning of the whole form, under its pronunciation.
   try { const fe = document.getElementById('form-en'); if (fe && !fe.innerHTML) fe.innerHTML = formEnglishHTML(it); } catch (e) { console.error(e); }
   SES.results.push({ t: it.t, score, it });
+  try { trvResult(it, score); } catch (e) { console.error(e); }
   try { record(it.t, score); } catch (e) { console.error(e); }
   try { if (it.card && score < 1) rateCard(it.card, 0); } catch (e) { console.error(e); }
   recordCauses(it, score);
@@ -2726,9 +2833,11 @@ function answerParse() {
   // 3cp/1cs/1cp are "common": masc. or fem. is accepted, but the quiz grid has מְשֻׁתָּף.
   const common = it.conj !== 'inf' && (it.pgn || '').split('|').some(a => parsePGN(a).g === 'c') && ['m', 'f'].includes(it._sel.g) && res.g;
   const commonNote = common ? `<div class="small" style="margin-top:4px">Gender: “${it._sel.g === 'm' ? 'masc.' : 'fem.'}” is accepted here, but this form is <b>common</b> (${H('מְשֻׁתָּף')}: men or women). On the quiz, choose ${H('מְשֻׁתָּף')}.</div>` : '';
-  $('#fb').innerHTML = `<div class="fb ${cls}"><b class="t">${score === 1 ? 'Perfect parse.' : `Check: ${wrong.join(', ')}.`}</b>${commonNote}<div>${parseAnswerHTML(it)}</div>${extraHTML(it)}${it.note ? `<div class="small">${heWrap(esc(it.note))}</div>` : ''}${score < 1 && it.t ? `<div class="small"><a href="#" id="see-topic">Review the notes: ${esc(topicName(it.t))}</a></div>` : ''}</div>`;
+  const varNote = it.variedFrom ? `<div class="small muted">New word, same pattern as ${H(esc(it.variedFrom))} (which you had already seen twice).</div>` : '';
+  $('#fb').innerHTML = `<div class="fb ${cls}"><b class="t">${score === 1 ? 'Perfect parse.' : `Check: ${wrong.join(', ')}.`}</b>${commonNote}${varNote}<div>${parseAnswerHTML(it)}</div>${extraHTML(it)}${it.note ? `<div class="small">${heWrap(esc(it.note))}</div>` : ''}${score < 1 && it.t ? `<div class="small"><a href="#" id="see-topic">Review the notes: ${esc(topicName(it.t))}</a></div>` : ''}</div>`;
   $('#see-topic')?.addEventListener('click', e => { e.preventDefault(); go('topic', it.t); });
   nextBtn(); logResult(it, score);
+  try { showStoryExamples(it); } catch (e) { console.error(e); }
   if (score < 1 && it.ctx) showMeaning(it);
 }
 async function answerWrite() {
@@ -2737,12 +2846,21 @@ async function answerWrite() {
   if (strictEl && strictEl.readOnly === false) strictEl.readOnly = true;
   if (!(strictEl ? (strictEl.value.trim() || $('#w-ans').value.trim()) : ans)) { $('#fb').innerHTML = `<div class="fb part">Write an answer first, or press “I don't know yet”.</div>`; return; }
   SES.answered = true; $('#b-check').disabled = true; $('#w-ans').readOnly = true; it._ms = activeMs(it);
-  if (!aiAvailable()) { it._sc = 'self'; return selfGrade(it); }
+  if (!aiAvailable()) {
+    it._sc = 'self';
+    if (it.sub === 'translate2' && it.strict) {
+      $('#fb').innerHTML = `<div class="fb part thinking">Checking your answer word by word…</div>`;
+      try { const r = await analyzeTranslation(it, strictEl ? strictEl.value : '', $('#w-ans').value); it._an = r; const n = addTrWords(r.missed, it.ref || 'translation practice'); it._anAdded = n; } catch (e) { console.error(e); }
+    }
+    return selfGrade(it);
+  }
   $('#fb').innerHTML = `<div class="fb part thinking">Checking your answer…</div>`;
   try {
-    const r = await ask(`${learnerBlock()}\n\nYou are grading one answer from a Biblical Hebrew practice question.\nQuestion type: ${it.sub}.\nQuestion: ${it.q}\n${it.he ? 'Hebrew text: ' + it.he + '\n' : ''}${SES.passage ? 'Passage:\n' + SES.passage.lines.join('\n') + '\n' : ''}Model answer: ${it.strict ? 'STRICT (Hebrew order): ' + it.strict + '\nNATURAL: ' : ''}${it.model}\nStudent answer: ${ans}\n\n${it.strict ? 'Grade both parts. In the strict part check every word: right lexical value, construct “of”, object marker [DOM], suffixes, and that natural smoothing is NOT hidden in it. ' : ''}Grade fairly: accept any answer that shows correct understanding, even without vowels, with small spelling errors, or written in English for a Hebrew question. Reply with only JSON: {"score": number from 0 to 1, "feedback": "2-4 short, kind sentences: what was right, what to fix, and the correct answer"}.`, { json: true, tier: 'quick' });
+    const r = await ask(`${learnerBlock()}\n\nYou are grading one answer from a Biblical Hebrew practice question.\nQuestion type: ${it.sub}.\nQuestion: ${it.q}\n${it.he ? 'Hebrew text: ' + it.he + '\n' : ''}${SES.passage ? 'Passage:\n' + SES.passage.lines.join('\n') + '\n' : ''}Model answer: ${it.strict ? 'STRICT (Hebrew order): ' + it.strict + '\nNATURAL: ' : ''}${it.model}\nStudent answer: ${ans}\n\n${it.strict ? 'Grade both parts. In the strict part check every word: right lexical value, construct “of”, object marker [DOM], suffixes, and that natural smoothing is NOT hidden in it. ' : ''}Grade fairly: accept any answer that shows correct understanding, even without vowels, with small spelling errors, or written in English for a Hebrew question. Reply with only JSON: {"score": number from 0 to 1, "verdict": "right" | "refine" | "wrong", "feedback": "2-4 short, kind sentences: what was right, what to fix, and the correct answer", "missed": ["each Hebrew word of the text (copied exactly) that the student left out, marked as unknown (---, ?), or translated wrongly"]}.`, { json: true, tier: 'quick' });
     const sc = Math.max(0, Math.min(1, Number(r.score) || 0)); it._sc = 'ai';
-    $('#fb').innerHTML = `<div class="fb ${sc >= .8 ? 'ok' : sc >= .4 ? 'part' : 'no'}"><b class="t">${sc >= .8 ? 'Good answer.' : sc >= .4 ? 'Partly right.' : 'Not yet.'} (${Math.round(sc * 100)}%)</b><div class="ai">${md(r.feedback || '')}</div>${modelHTML(it)}</div>`;
+    let added = 0; try { const heTxt = lexNorm(it.he || ''); const miss = (Array.isArray(r.missed) ? r.missed : []).map(String).filter(w => /[א-ת]/.test(w) && heTxt.includes(lexNorm(w).replace(/[־\s]/g, '').slice(0, 3))); added = addTrWords(miss.map(he => ({ he })), it.ref || 'translation practice'); r._miss = miss; } catch (e) { console.error(e); }
+    const vd = { right: 'Correct.', refine: 'Needs refinement.', wrong: 'Not yet.' }[r.verdict] || (sc >= .8 ? 'Good answer.' : sc >= .4 ? 'Partly right.' : 'Not yet.');
+    $('#fb').innerHTML = `<div class="fb ${sc >= .8 ? 'ok' : sc >= .4 ? 'part' : 'no'}"><b class="t">${vd} (${Math.round(sc * 100)}%)</b><div class="ai">${md(r.feedback || '')}</div>${modelHTML(it)}${(r._miss || []).length ? `<div class="small">Added to your vocabulary practice: ${r._miss.map(w => `<span class="he" dir="rtl">${esc(w)}</span>`).join(', ')}</div>` : ''}</div>`;
     nextBtn(); logResult(it, sc);
     if (sc < .8) { $('#mean-pre') && ($('#mean-pre').innerHTML = ''); showMeaning(it); }
   } catch (e) { selfGrade(it, aiError(e)); }
@@ -2755,7 +2873,8 @@ function selfGrade(it, msg) {
   // Translations: the same 4-point rubric as the tests, ticked by the student against the model answer.
   if (it.sub === 'translate2') {
     const C = [['lex', 'word meanings right'], ['verb', 'verb forms right (person, time)'], ['rel', 'relations right (of, object, suffixes)'], ['complete', 'nothing missing or added']];
-    $('#fb').innerHTML = `<div class="fb part">${msg ? `<div class="small">${esc(msg)}</div>` : ''}${modelHTML(it)}<div class="small" style="margin-top:6px"><b>Check your answer against the model:</b></div><div class="row" style="gap:10px">${C.map(([k, l]) => `<label class="small"><input type="checkbox" data-cr="${k}"> ${l}</label>`).join('')}</div><button class="btn sm primary" id="sg-done">Done</button></div>`;
+    const an = it._an, pre = an ? { lex: an.cov >= .9, verb: an.rows.filter(x => x.verb && x.ok !== null).every(x => x.ok), rel: an.cov >= .9, complete: an.cov >= .9 && !an.unknownMarks } : {};
+    $('#fb').innerHTML = `<div class="fb ${an ? { right: 'ok', refine: 'part', wrong: 'no' }[an.verdict] : 'part'}">${an ? trAnalysisHTML(an) : ''}${msg ? `<div class="small">${esc(msg)}</div>` : ''}${modelHTML(it)}<div class="small" style="margin-top:6px"><b>Check your answer against the model${an ? ' (boxes pre-ticked by the automatic check; change them if needed)' : ''}:</b></div><div class="row" style="gap:10px">${C.map(([k, l]) => `<label class="small"><input type="checkbox" data-cr="${k}" ${pre[k] ? 'checked' : ''}> ${l}</label>`).join('')}</div><button class="btn sm primary" id="sg-done">Done</button></div>`;
     $('#sg-done').onclick = () => { const f = {}; C.forEach(([k]) => f[k] = $(`[data-cr="${k}"]`).checked ? 1 : 0); it._f = f; it._sc = 'self'; const sc = Object.values(f).reduce((a, b) => a + b, 0) / 4; $('#sg-done').disabled = true; nextBtn(); logResult(it, sc); if (sc < 1) showMeaning(it); };
     return;
   }
@@ -2772,6 +2891,7 @@ function giveUp() {
   else ans = modelHTML(it);
   $('#fb').innerHTML = `<div class="fb part"><b class="t">Here is the answer.</b><div>${ans}</div>${it.x ? `<div>${it.x}</div>` : ''}${it.note ? `<div class="small">${heWrap(esc(it.note))}</div>` : ''}<div class="small muted">Saved to your mistakes notebook. It will come back.</div></div>`;
   nextBtn(); logResult(it, 0);
+  if (it.kind === 'parse') try { showStoryExamples(it); } catch (e) { console.error(e); }
   $('#mean-pre') && ($('#mean-pre').innerHTML = ''); showMeaning(it);
 }
 function finishSession(early) {
@@ -2927,6 +3047,9 @@ function renderPractice() {
     <div class="panel stack"><h3>Placement check</h3><p class="small muted">${S.prog.placementDone ? 'Retake it to update your levels.' : 'About 15 minutes. Shows what you already know.'}</p><div><button class="btn" id="p-place">${S.prog.placementDone ? 'Retake' : 'Start'}</button></div></div>
   </div>
   <div class="grid3">
+    <div class="panel stack" style="border-color:var(--accent)"><h3>Pattern clues</h3><p class="small muted">Rules that help you diagnose a form: PPP rule, BuMP rule, the shapes of each stem, which letter is doubled, weak roots (I-נ, I-י, hollow, III-ה), the three kinds of ־ָה.</p><div class="row"><button class="btn primary" id="p-pat">Start</button><select id="p-patr" class="sm" style="max-width:190px"><option value="">All rules</option>${[...new Set(PATTERNS.map(p => p.r))].map(r => `<option>${esc(r)}</option>`).join('')}</select></div></div>
+    <div class="panel stack"><h3>Look-alike words</h3><p class="small muted">${H('שֵׁם / שָׁם')}, ${H('לֶחֶם / לָהֶם')}, ${H('נָשִׁים / בָּנִים')} and the other pairs your tutor reports keep finding, each in its verse.</p><div><button class="btn primary" id="p-la">Start</button></div></div>
+    <div class="panel stack"><h3>Vocabulary check</h3><p class="small muted">15 words. ${trvActive().length ? `Includes up to 6 of the ${trvActive().length} words you missed in translations; the rest are new or due words from your course list.` : 'Words you miss in translations are added here automatically.'}</p><div><button class="btn primary" id="p-voc">Start</button></div></div>
     <div class="panel stack"><h3>Grammar questions</h3><p class="small muted">“Why” questions: which dot is the Piel doubling, where the Hiphil ה went, participle or infinitive. More questions on what you miss.</p><div><button class="btn primary" id="p-gram">Start</button></div></div>
     <div class="panel stack"><h3>Translation</h3><p class="small muted">Two steps every time: strict (Hebrew order), then natural English. Lines from your stories.</p><div class="row"><button class="btn primary" id="p-trans">Start</button></div>
       <label class="f">Or new lines from a story (AI)<select id="p-tstory">${S.lib.filter(l => l.kind === 'story').sort((a, b) => (a.chapter || 0) - (b.chapter || 0)).map(l => `<option value="${l.id}">${esc(l.title)}</option>`).join('')}</select></label><div><button class="btn sm" id="p-taI">Translate from this story</button></div></div>
@@ -2945,6 +3068,9 @@ function renderPractice() {
   $('#p-mixed').onclick = () => startMixed();
   $('#p-wk').onclick = () => startWorkout();
   $('#p-gram').onclick = startGrammar;
+  $('#p-pat').onclick = () => startPatternQuiz($('#p-patr').value);
+  $('#p-la').onclick = () => startLookalikes();
+  $('#p-voc').onclick = () => startVocabCheck();
   $('#p-trans').onclick = startTranslation;
   $('#p-r20').onclick = startReview20;
   $('#p-simF').onclick = () => startFinalSim('full'); $('#p-simQ').onclick = () => startFinalSim('quick');
@@ -3623,6 +3749,8 @@ function mergeProgData(older, newer) {
   out.mastery = { ...(a.mastery || {}) }; for (const [k, v] of Object.entries(b.mastery || {})) { const l = out.mastery[k]; if (!l || (v.n || 0) >= (l.n || 0)) out.mastery[k] = v; }
   out.daily = { ...(a.daily || {}) }; for (const [k, v] of Object.entries(b.daily || {})) { const l = out.daily[k]; if (!l) { out.daily[k] = v; continue; } const m = { ...l, ...v }; for (const f of Object.keys(m)) if (typeof l[f] === 'number' && typeof v[f] === 'number') m[f] = Math.max(l[f], v[f]); out.daily[k] = m; }
   out.covered = { ...(a.covered || {}), ...(b.covered || {}) };
+  // Words missed in translations (vocabulary feed): one entry per word, the most recently updated copy wins.
+  const tv = new Map(); [...(a.trv || []), ...(b.trv || [])].forEach(e => { if (!e || !e.he) return; const c = tv.get(e.he); if (!c || (e.u || e.t || 0) >= (c.u || c.t || 0)) tv.set(e.he, e); }); out.trv = [...tv.values()].sort((p, q) => (p.t || 0) - (q.t || 0)).slice(-200);
   out.errs = { ...(a.errs || {}) }; for (const [k, v] of Object.entries(b.errs || {})) { const l = out.errs[k]; out.errs[k] = typeof v === 'number' && typeof l === 'number' ? Math.max(v, l) : v; }
   out.flags = { ...(a.flags || {}), ...(b.flags || {}) };
   const sa = a.settingsT || 0, sb = b.settingsT || 0; out.settings = sa > sb ? { ...(b.settings || {}), ...(a.settings || {}) } : { ...(a.settings || {}), ...(b.settings || {}) }; if (sa || sb) out.settingsT = Math.max(sa, sb); else delete out.settingsT;
@@ -4074,6 +4202,8 @@ function formEnglish(it) {
   const x = (typeof PARSE_EXTRA !== 'undefined' && PARSE_EXTRA[it.form]) || it.extra || {};
   if (x.en) return x.en;
   if (isFinishedEn(it.gloss)) return it.gloss;
+  // היה 3ms in the story line is impersonal: וַיְהִי “and it happened / and there was”, וְהָיָה “and it will be”.
+  if (enKey(it.root, 'qal') === enKey('היה', 'qal') && String(it.stem || '').startsWith('qal') && it.pgn === '3ms') { const k = { wayyiqtol: 'and it happened / and there was', weqatal: 'and it will be / and it will happen', qatal: 'it was / he was', yiqtol: 'it will be / he will be' }[it.conj]; if (k) return k; }
   if (!it.conj || !it.stem) return '';
   const base = enBase(it); if (!base) return '';
   const f = (typeof AN !== 'undefined' ? AN.normHe(it.form) : String(it.form)).replace(/[֑-֯]/g, '');
@@ -4093,6 +4223,218 @@ function formEnglish(it) {
 function formEnglishHTML(it) {
   const en = formEnglish(it); if (!en) return '';
   return `<div class="form-en" style="text-align:center;margin-top:2px"><span class="small muted">English:</span> <b>“${heWrap(esc(en))}”</b></div>`;
+}
+
+// ===== How a verb form is built + the same pattern in the class texts =====
+// After a parse answer: (1) the word split into its parts (prefix, stem sign, root, ending) with the job of each part,
+// (2) one or two other verbs with the SAME pattern (stem + form + person/gender/number) taken from the class stories,
+// each with its line and its own parts, (3) on request, the same stem in every form found in the stories.
+// Examples are taken only when the Hebrew Bible morphology gives the word a single verbal analysis (no guessing).
+const SX = { idx: null, building: null, n: 0 };
+const SX_CONJ_ORDER = ['qatal', 'weqatal', 'yiqtol', 'wayyiqtol', 'weyiqtol', 'impv', 'inf', 'ptc'];
+const sxStrip = s => String(s || '').normalize('NFC').replace(/[֑-ֽ֯׀׃-׆]/g, '');
+function sxParse(word) {
+  const idx = lexIndex(); if (!idx) return null;
+  const key = lexNorm(word).replace(/[־\s]/g, ''); const alts = idx.get(key); if (!alts || !alts.length) return null;
+  const out = [];
+  for (const [seg, lem, morph] of alts) {
+    const lp = String(lem).split('/'), mp = String(morph).slice(1).split('/'); const c = mp[lp.length - 1] || ''; if (c[0] !== 'V') return null; // a noun reading too: skip
+    let conj = LEX_CONJ[c[2]] || ''; if (!conj) return null; if (conj === 'yiqtol' && lp.slice(0, -1).includes('c')) conj = 'weyiqtol';
+    const rest = c.slice(3); const pgn = conj === 'inf' ? '' : conj === 'ptc' ? rest.slice(0, 2).replace('b', 'c') : rest.slice(0, 3).replace('b', 'c');
+    const L0 = window.LEX_L[+lp[lp.length - 1]] || [];
+    out.push({ stem: LEX_STEM[c[1]] || '', conj, pgn, root: lexCons(L0[3] || L0[0] || ''), def: String(L0[2] || '').split(/[;,]/)[0].replace(/^to\s+/, '').trim(), passive: c[2] === 's', sfx: mp.slice(lp.length).map(x => x[0] === 'S' && x[1] === 'p' ? x.slice(2, 5) : '').filter(Boolean)[0] || '' });
+  }
+  const a = out[0]; if (!a.stem || out.some(o => o.stem !== a.stem || o.conj !== a.conj || o.pgn !== a.pgn)) return null;
+  return a;
+}
+async function storyIndex() {
+  if (SX.idx) return SX.idx; if (SX.building) return SX.building;
+  SX.building = (async () => {
+    await lexLoad(); const idx = new Map(); const seen = new Set();
+    const src = [];
+    // Texts already studied first (course chapters up to now); later Ruth chapters only as a fallback.
+    const nowCh = Math.max(0, ...TOPICS.filter(t => /^\d/.test(t.ch || '') && isCovered(t)).map(t => parseInt(t.ch, 10) || 0));
+    const stories = (S.lib || []).filter(l => l.kind === 'story');
+    const mine = stories.filter(l => l.source !== 'builtin'); const ruthHave = new Set(mine.map(l => l.ruth).filter(Boolean)); const ruthNow = Math.max(1, ...ruthHave);
+    const ruthNo = l => l.ruth || (l.source === 'builtin' && l.chapter > 100 ? l.chapter - 100 : 0);
+    for (const l of stories.sort((a, b) => (a.chapter || 0) - (b.chapter || 0))) {
+      const rn = ruthNo(l); if (l.source === 'builtin' && rn && ruthHave.has(rn)) continue; // your own copy of that Ruth chapter is used instead
+      const later = rn ? rn > ruthNow : (l.chapter || 0) > nowCh;
+      try { src.push({ title: l.title, later, text: await getDocText(l.id) }); } catch {}
+    }
+    if (!src.some(s => /Ruth 1\b/.test(s.title)) && typeof RUTH !== 'undefined') src.push({ title: 'Ruth 1', text: RUTH.verses['1'].map(([n, t]) => `${n} ${t}`).join('\n') });
+    for (const s of src) for (const raw of String(s.text || '').split('\n')) {
+      const line = sxStrip(raw).replace(/\s+/g, ' ').trim(); if (!/[א-ת]/.test(line) || line.length > 400) continue;
+      for (const w of lexWords(line)) {
+        const p = sxParse(w); if (!p) continue;
+        const ex = { form: lexNorm(w), line, title: s.title, later: !!s.later, ...p };
+        const dk = ex.form + '|' + s.title; if (seen.has(dk)) continue; seen.add(dk);
+        for (const k of [`${p.stem}|${p.conj}|${p.pgn}`, `${p.stem}|${p.conj}|*`]) { const a = idx.get(k) || []; if (a.length < 40) a.push(ex); idx.set(k, a); }
+        SX.n++;
+      }
+    }
+    SX.idx = idx; return idx;
+  })();
+  return SX.building;
+}
+const SX_WHO = { '1cs': 'I', '1cp': 'we', '2ms': 'you (one man)', '2fs': 'you (one woman)', '2mp': 'you all (m.)', '2fp': 'you all (f.)', '3ms': 'he', '3fs': 'she', '3mp': 'they (m.)', '3fp': 'they (f.)', '3cp': 'they' };
+const SX_PREFIX = { '1cs': 'א', '1cp': 'נ', '2ms': 'ת', '2fs': 'ת', '2mp': 'ת', '2fp': 'ת', '3ms': 'י', '3fs': 'ת', '3mp': 'י', '3fp': 'ת' };
+const SX_PREFIX_MEAN = { '1cs': '“I”', '1cp': '“we”', '3ms': '“he”', '3mp': '“they” (with the ending וּ)', '3fs': '“she”', '2ms': '“you” (one man)', '2fs': '“you” (one woman, with the ending ִי)', '2mp': '“you all” (with the ending וּ)', '3fp': '“they” (f., with the ending נָה)', '2fp': '“you all” (f., with the ending נָה)' };
+const SX_QATAL_END = { '1cs': ['תי', 'תִּי', 'I'], '2ms': ['ת', 'תָּ', 'you (m.)'], '2fs': ['ת', 'תְּ', 'you (f.)'], '3fs': ['ה', 'ָה', 'she'], '3cp': ['ו', 'וּ', 'they'], '1cp': ['נו', 'נוּ', 'we'], '2mp': ['תם', 'תֶּם', 'you all'], '2fp': ['תן', 'תֶּן', 'you all (f.)'] };
+const SX_PREF_END = { '2fs': ['י', 'ִי', 'you (f.)'], '3mp': ['ו', 'וּ', 'plural: they'], '2mp': ['ו', 'וּ', 'plural: you all'], '3fp': ['נה', 'נָה', 'plural (f.)'], '2fp': ['נה', 'נָה', 'plural (f.)'] };
+const SX_PTC_END = { fs: ['ה|ת', 'ָה / ֶת', 'feminine singular'], mp: ['ים', 'ִים', 'masculine plural'], fp: ['ות', 'וֹת', 'feminine plural'] };
+const sxCons = s => sxStrip(s).replace(/[^א-ת]/g, '').replace(/[ךםןףץ]/g, c => ({ 'ך': 'כ', 'ם': 'מ', 'ן': 'נ', 'ף': 'פ', 'ץ': 'צ' }[c]));
+// The parts of one verb form, each with its job. Only parts that are really visible in the word are listed.
+function anatomyParts(x) {
+  const f = sxStrip(x.form), c = sxCons(f), r = sxCons(x.root), pgn = String(x.pgn || '').split('|')[0], parts = [];
+  const stem = String(x.stem || '').split('|')[0], conj = x.conj; let i = 0;
+  if (/^ו/.test(f)) {
+    const w = f.match(/^ו[ְַָּ]?ּ?/)[0];
+    parts.push([w, conj === 'wayyiqtol' ? '“and” — with the doubled prefix this is the story past (wayyiqtol)' : conj === 'weqatal' ? '“and” — on a perfect it turns the meaning to future / instructions (weqatal)' : conj === 'weyiqtol' ? '“and” / “so that” (weyiqtol)' : '“and”']); i = 1;
+  }
+  const after = c.slice(i);
+  if (['ptc', 'inf'].includes(conj)) {
+    const p = after[0];
+    if (conj === 'inf' && 'לבכמ'.includes(p) && !(stem === 'qal' && r[0] === p)) { parts.push([p, { 'ל': '“to” (purpose)', 'ב': '“in / when”', 'כ': '“as / when”', 'מ': '“from”' }[p]]); i++; }
+    else if (conj === 'ptc' && 'לבכ'.includes(p) && /^ו?[לבכ][ַָ]/.test(f)) { parts.push([p, { 'ל': '“to” + the (the vowel shows the article)', 'ב': '“in” + the', 'כ': '“as” + the' }[p]]); i++; }
+    else if (conj === 'ptc' && p === 'ה' && /^ו?ה[ַָ]/.test(f) && !['hiphil', 'hithpael', 'hophal'].includes(stem)) { parts.push(['ה', '“the” (article)']); i++; }
+  }
+  if (['yiqtol', 'wayyiqtol', 'weyiqtol'].includes(conj) && SX_PREFIX[pgn] && c[i] === SX_PREFIX[pgn]) parts.push([SX_PREFIX[pgn], `${SX_PREFIX_MEAN[pgn]} — person prefix${conj === 'wayyiqtol' && pgn !== '1cs' ? ' (doubled after וַ)' : ''}`]);
+  const R1 = r[0], R2 = r[1];
+  const doubled = L => new RegExp(L + '[\\u05B0-\\u05BB\\u05C1\\u05C2]*\\u05BC').test(f.replace(/[ךםןףץ]/g, ch => ({ 'ך': 'כ', 'ם': 'מ', 'ן': 'נ', 'ף': 'פ', 'ץ': 'צ' }[ch])));
+  const gutt = L => 'אהחער'.includes(L);
+  if (stem === 'piel') parts.push(['', R2 && gutt(R2) ? `Piel: the middle root letter ${R2} cannot be doubled, but the vowels are Piel's${/^ו?[יתאנ]ְ/.test(f) || /^ו?מְ/.test(f) ? ' (shewa under the prefix)' : ''}` : `Piel: the middle root letter ${R2 || ''} is doubled (dot inside it)`]);
+  else if (stem === 'pual') parts.push(['', `Pual: u-vowel + doubled middle root letter ${R2 || ''} (passive of Piel)`]);
+  else if (stem === 'hithpael') parts.push(['', /ת/.test(c.slice(0, 4)) ? `Hithpael: ת${['qatal', 'weqatal', 'impv', 'inf'].includes(conj) ? ' after the ה (הִתְ)' : ''} + doubled middle letter` : 'Hithpael: the ת has merged into the first root letter (it is doubled)']);
+  else if (stem === 'hiphil') parts.push(['', ['qatal', 'weqatal', 'impv', 'inf'].includes(conj) && /ה/.test(c.slice(i, i + 2)) ? 'Hiphil: ה in front; usually ִי (or ֵ) after the 2nd root letter' : conj === 'ptc' ? 'Hiphil participle: מ + a-vowel (מַ) or ֵ (hollow roots); ִי after the 2nd root letter' : 'Hiphil: the ה disappeared after the prefix; the prefix has an a-vowel (ַ/ָ) and ִי or ֵ comes after the 2nd root letter']);
+  else if (stem === 'niphal') parts.push(['', ['qatal', 'weqatal', 'ptc'].includes(conj) && /^ו?נ/.test(f) ? 'Niphal: נ in front (Ni-phal shape: perfects and participles, the PPP rule)' : R1 && gutt(R1) ? `Niphal: the first root letter ${R1} cannot double, so the prefix vowel lengthens (ֵ)` : `Niphal: the first root letter ${R1 || ''} is doubled — that is the Niphal נ, assimilated`]);
+  else if (stem === 'hophal') parts.push(['', 'Hophal: u/o-vowel under the prefix (הָ / הֻ / יָ / יֻ): passive of Hiphil']);
+  else if (stem === 'qal') parts.push(['', 'Qal: no stem letters — the basic pattern']);
+  const base = (typeof STEM_EN !== 'undefined' && STEM_EN[enKey(x.root, 'qal')]) || x.def || x.gloss || '';
+  const sm = stem !== 'qal' ? (typeof STEM_EN !== 'undefined' && STEM_EN[enKey(x.root, stem)]) || '' : '';
+  const hidden = r.length === 3 && [...r].filter(L => !c.includes(L));
+  const finalForm = t => t.replace(/[כמנפצ]$/, ch => ({ 'כ': 'ך', 'מ': 'ם', 'נ': 'ן', 'פ': 'ף', 'צ': 'ץ' }[ch]));
+  parts.push([x.root ? finalForm(sxStrip(x.root).replace(/[^א-ת]/g, '')) : '', `root${base ? ` “${base}”` : ''}${sm ? `; in ${STEMS[stem] ? STEMS[stem][1] : stem}: “${sm}”` : ''}${hidden && hidden.length ? ` — ${hidden.join(', ')} not visible (weak root)` : ''}`]);
+  const endWith = (cons, he, what) => { const ok = cons.split('|').some(k => c.endsWith(sxCons(k))); if (ok) parts.push([he, what]); return ok; };
+  if (conj === 'qatal' || conj === 'weqatal') { const e = SX_QATAL_END[pgn]; if (e) endWith(e[0], e[1], `“${e[2]}” — subject ending`); else if (pgn === '3ms') parts.push(['', 'no ending = “he”']); }
+  else if (['yiqtol', 'wayyiqtol', 'weyiqtol', 'impv'].includes(conj)) { const e = SX_PREF_END[pgn]; if (e) endWith(e[0], e[1], e[2]); else if (conj === 'impv') parts.push(['', 'no ending = command to one man']); else if (pgn === '1cs' && /ָה$/.test(f) && conj !== 'wayyiqtol') parts.push(['ָה', 'cohortative: “let me …”']); }
+  else if (conj === 'ptc') { const e = SX_PTC_END[pgn]; if (e) endWith(e[0], e[1], e[2]); else parts.push(['', 'no ending = masculine singular; no person']); }
+  else if (conj === 'inf') parts.push(['', 'infinitive: no person, gender or number']);
+  const sfx = x.suffix || x.sfx; if (sfx && typeof EN_OBJ !== 'undefined') parts.push(['', `pronoun ending: ${conj === 'inf' && !/^ו?ל/.test(f) ? (EN_SUBJ[sfx] || sfx) + ' (subject)' : (EN_OBJ[sfx] || sfx) + ' (object)'}`]);
+  return parts;
+}
+function anatomyHTML(x, opts = {}) {
+  const parts = anatomyParts(x); const stem = String(x.stem || '').split('|')[0];
+  // English only when the meaning in THIS stem is known (Qal, the stem table, or a course gloss); never a Qal meaning dressed as a Niphal.
+  const known = x.en || x.gloss || stem === 'qal' || (typeof STEM_EN !== 'undefined' && STEM_EN[enKey(x.root, stem)]);
+  const en = known && typeof formEnglish === 'function' ? formEnglish({ ...x, suffix: x.suffix || x.sfx || '', key: x.key || 'pk|x', gloss: x.gloss || (stem === 'qal' ? x.def : '') || '' }) : '';
+  return `<div class="anat small" style="display:flex;flex-wrap:wrap;gap:4px 6px;align-items:baseline">${opts.word ? `<span class="he" dir="rtl" style="font-size:1.25rem">${esc(x.form)}</span> =` : ''}${parts.map(([he, m], k) => `${k ? '<span class="muted">+</span>' : ''}<span style="border:1px solid var(--line);border-radius:6px;padding:1px 6px">${he ? `<b class="he" dir="rtl">${esc(he)}</b> ` : ''}${heWrap(esc(m))}</span>`).join('')}${en ? `<span>→ <b>“${heWrap(esc(en))}”</b></span>` : ''}</div>`;
+}
+const sxLabel = x => `${STEMS[x.stem] ? STEMS[x.stem][1] : x.stem} ${CONJ[x.conj] ? CONJ[x.conj][1] : x.conj}${x.pgn ? ' ' + x.pgn : ''}`;
+function sxLineHTML(ex) {
+  const re = new RegExp(`(^|[\\s־])(${ex.form.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})(?=$|[\\s־׃,.])`);
+  return `<div class="he" dir="rtl" style="font-size:1.2rem;line-height:1.8">${esc(ex.line).replace(re, '$1<b style="color:var(--accent);text-decoration:underline">$2</b>')}</div><div class="small muted">${esc(ex.title)}</div>`;
+}
+function sxPick(list, it, n) {
+  const f0 = sxStrip(it.form), r0 = sxCons(it.root);
+  const pool = (list || []).filter(e => e.form !== lexNorm(it.form) && sxStrip(e.form) !== f0);
+  const now = pool.filter(e => !e.later), soon = pool.filter(e => e.later);
+  const order = l => [...shuffle(l.filter(e => e.root !== r0)), ...l.filter(e => e.root === r0)];
+  const out = [], forms = new Set(); for (const e of [...order(now), ...order(soon)]) { const k = sxStrip(e.form); if (forms.has(k)) continue; forms.add(k); out.push(e); if (out.length >= n) break; }
+  return out;
+}
+// Shown in the parse feedback.
+async function storyExamplesHTML(it) {
+  const pgn = String(it.pgn || '').split('|')[0], stem = String(it.stem || '').split('|')[0];
+  const idx = await storyIndex();
+  const exact = sxPick(idx.get(`${stem}|${it.conj}|${it.conj === 'inf' ? '' : pgn}`), it, 2);
+  const near = exact.length ? [] : sxPick(idx.get(`${stem}|${it.conj}|*`), it, 2);
+  const shown = exact.length ? exact : near;
+  const forms = SX_CONJ_ORDER.map(cj => { const l = idx.get(`${stem}|${cj}|*`) || []; const sameRoot = l.find(e => e.root === sxCons(it.root)); return sameRoot || l[0]; }).filter(Boolean);
+  return `<div class="stack" style="gap:8px;margin-top:8px;border-top:1px solid var(--line);padding-top:8px">
+    <div><b>How this word is built</b>${anatomyHTML({ ...it, stem, pgn }, { word: true })}</div>
+    ${shown.length ? `<div><b>${exact.length ? 'The same pattern' : 'The same stem and form'} in your class texts</b> <span class="small muted">(${esc(sxLabel(exact.length ? { stem, conj: it.conj, pgn } : { stem, conj: it.conj }))})</span>${shown.map(ex => `<div style="margin-top:6px">${sxLineHTML(ex)}${anatomyHTML(ex, { word: true })}</div>`).join('')}</div>` : `<div class="small muted">No other ${esc(sxLabel({ stem, conj: it.conj, pgn }))} found in your class texts yet${SX.n ? '' : ' (add the stories in the Library)'}.</div>`}
+    ${forms.length > 1 ? `<details><summary class="small"><b>${esc(STEMS[stem] ? STEMS[stem][1] : stem)} in every form</b> (one example of each, from your texts)</summary><div class="stack" style="gap:6px;margin-top:6px">${forms.map(ex => `<div><span class="chip">${esc(CONJ[ex.conj] ? CONJ[ex.conj][1] : ex.conj)}</span> ${anatomyHTML(ex, { word: true })}<div class="small muted">${esc(ex.title)}</div></div>`).join('')}</div></details>` : ''}
+  </div>`;
+}
+function showStoryExamples(it) {
+  const fb = document.querySelector('#fb .fb'); if (!fb || it.kind !== 'parse') return;
+  fb.insertAdjacentHTML('beforeend', '<div id="sx-box" class="small muted" style="margin-top:6px">Looking for examples in your class texts…</div>');
+  storyExamplesHTML(it).then(h => { const b = document.getElementById('sx-box'); if (b) { b.className = ''; b.innerHTML = h; } }).catch(e => { console.error(e); const b = document.getElementById('sx-box'); if (b) b.remove(); });
+}
+// Library changed: rebuild next time.
+function storyIndexReset() { SX.idx = null; SX.building = null; SX.n = 0; }
+
+// ===== Translation check without AI + words you could not translate → vocabulary practice =====
+// The model's strict translation is written word by word in Hebrew order (one English group per Hebrew word), so each
+// Hebrew word can be checked: does your answer (strict or natural) contain the content words of its group, or a meaning
+// of the word from the dictionary? Function words (and, the, he, to…) are not scored. The result is an estimate.
+const TR_STOP = new Set('and the a an to of in on upon at by with for from into he she it they we you i me him her them us his hers its their our your my was were is are be been am will shall would that this these those which who whom whose there then also dom f m pl sg cs ms mp fs fp etc as so let'.split(' '));
+const TR_SYN = { lord: ['yhwh', 'yahweh', 'adonai', 'god', 'lord'], yhwh: ['lord', 'yahweh', 'adonai', 'god'], sons: ['children', 'boys'], son: ['child', 'boy'], wash: ['bathe', 'bath', 'clean'], bathe: ['wash'], water: ['waters'], bring: ['present', 'offer', 'approach'], near: ['close', 'present', 'offer', 'approach'], say: ['speak', 'tell'], speak: ['say', 'talk', 'tell'], grow: ['big', 'great', 'grown'], great: ['big', 'grow'], days: ['time', 'times'], famine: ['hunger'], sojourn: ['live', 'stay', 'dwell', 'reside'], dwell: ['live', 'stay', 'sit', 'remain'], sit: ['stay', 'dwell', 'remain', 'live'], remain: ['stay', 'left', 'remained'], wife: ['woman'], woman: ['wife'], husband: ['man'], man: ['husband'], field: ['fields', 'country', 'land'], fields: ['field', 'country', 'land'], call: ['name', 'named'], empty: ['nothing'], bitter: ['bitterly', 'bitterness', 'mara'], almighty: ['shaddai'], shaddai: ['almighty'], not: ['dont', 'no', 'never'], very: ['much', 'greatly'], die: ['dead', 'death'], go: ['walk', 'leave', 'went'], walk: ['go', 'went'], return: ['back', 'come'], see: ['look', 'saw'], put: ['place', 'set'], give: ['put', 'place'] };
+const trStem = w => { w = String(w).toLowerCase().replace(/[^a-z]/g, ''); if (typeof EN_IRR !== 'undefined') for (const [base, [past, pp]] of Object.entries(EN_IRR)) if ((w === past || w === pp) && base !== w && !base.includes(' ')) { w = base; break; } if (w.length > 4) w = w.replace(/(ing|ed|es|s|ly)$/, ''); if (w.length > 4 && /e$/.test(w)) w = w.slice(0, -1); return w.slice(0, 6); };
+const trWords = s => String(s || '').toLowerCase().replace(/\[[^\]]*\]|\([^)]*\)/g, ' ').replace(/[-–—/]/g, ' ').split(/[^a-z’']+/).map(w => w.replace(/[’']s?$/, '')).filter(Boolean);
+const trContent = s => trWords(s).filter(w => !TR_STOP.has(w));
+function trHebTokens(he) { return String(he || '').normalize('NFC').replace(/[׃.,;:!?]/g, ' ').split(/[\s־]+/).filter(w => /[א-ת]/.test(w)); }
+async function analyzeTranslation(it, strictAns, naturalAns) {
+  try { await lexLoad(); } catch {}
+  const toks = trHebTokens(it.he); const groups = String(it.strict || '').trim().split(/\s+/).filter(Boolean);
+  const aligned = groups.length === toks.length;
+  const user = [...trWords(strictAns), ...trWords(naturalAns)]; const ustem = new Set(user.map(trStem));
+  const unknownMarks = ((strictAns + ' ' + naturalAns).match(/-{3,}|\?{2,}|_{3,}|…|\.\.\./g) || []).length;
+  const rows = [];
+  for (let i = 0; i < toks.length; i++) {
+    const he = toks[i]; let a = null; try { a = analyzeWord(he); } catch {}
+    // Without an aligned strict translation, only the first sense of each part of the dictionary meaning is required.
+    const exp = aligned ? groups[i] : (a ? String(a.meaning).split('+').map(x => x.replace(/—.*$/, '').split(/[,;]/)[0]).join(' + ') : '');
+    const isName = a && /name/.test(a.grammar || '') || /^[A-Z]/.test(exp.replace(/^(and|the|to|in|from)-/i, '').replace(/^\[DOM\]-?/, ''));
+    let want = trContent(exp);
+    if (/^(לֹא|אַל|וְלֹא|וְאַל)/.test(lexNorm(he)) && !want.includes('not')) want.push('not');
+    if (!want.length) { rows.push({ he, exp, ok: null }); continue; }
+    const alt = a ? trContent(a.meaning).filter(w => !/^(subject|object|plural|sing)/.test(w)) : [];
+    const cands = [...new Set([...want, ...alt, ...want.flatMap(w => TR_SYN[w] || [])])];
+    // A word counts as found if your answer has the same stem, or (names, compounds) a word that starts with it: “Bethlehem” has “beth” and “lehem”.
+    const ok = cands.some(w => { const st = trStem(w); return ustem.has(st) || (st.length >= 4 && user.some(u => u.startsWith(st) || (st.length >= 5 && u.includes(st)))); });
+    rows.push({ he, exp, ok, name: isName, mean: a ? a.meaning : exp, lemma: a && a.lemma || '', verb: !!(a && /Qal|Niphal|Piel|Pual|Hithpael|Hiphil|Hophal/.test(a.grammar || '')) });
+  }
+  const scored = rows.filter(r => r.ok !== null); const hit = scored.filter(r => r.ok).length;
+  const cov = scored.length ? hit / scored.length : 0;
+  const verdict = cov >= .9 && !unknownMarks ? 'right' : cov >= .6 ? 'refine' : 'wrong';
+  return { rows, cov, verdict, unknownMarks, aligned, missed: scored.filter(r => !r.ok && !r.name) };
+}
+function trAnalysisHTML(r) {
+  const V = { right: ['ok', 'Looks right'], refine: ['part', 'Needs refinement'], wrong: ['no', 'Not yet'] }[r.verdict];
+  return `<div class="stack" style="gap:6px;margin-bottom:6px"><div><b class="t">${V[1]}</b> <span class="small muted">— automatic check: ${Math.round(r.cov * 100)}% of the content words found${r.unknownMarks ? `; ${r.unknownMarks} gap${r.unknownMarks > 1 ? 's' : ''} (---) in your answer` : ''}. It checks word meanings, not word order or grammar: confirm below.</span></div>
+    <div class="tw"><table class="mini" style="width:100%"><tr><th>Hebrew</th><th>Expected (strict)</th><th></th></tr>${r.rows.map(x => `<tr><td class="he" dir="rtl" style="white-space:nowrap">${esc(x.he)}</td><td class="small">${heWrap(esc(x.exp))}</td><td>${x.ok === null ? '<span class="muted small">—</span>' : x.ok ? '<span style="color:var(--good)">✓</span>' : '<span style="color:var(--bad)">✗ missing</span>'}</td></tr>`).join('')}</table></div>
+    ${r.missed.length ? `<div class="small">Added to your vocabulary practice: ${r.missed.map(x => `<span class="he" dir="rtl">${esc(x.he)}</span>`).join(', ')}</div>` : ''}</div>`;
+}
+// ---- The vocabulary feed: words missed in translations (and words the AI grader names), mixed into the vocabulary check.
+const TRV_CLEAR = 3; // correct on 3 different days → learned, leaves the list (so the list keeps changing)
+function addTrWords(list, src) {
+  if (!Array.isArray(S.prog.trv)) S.prog.trv = [];
+  const now = Date.now(); let n = 0;
+  for (const w of list || []) {
+    const he = lexNorm(w.he || w).replace(/[־\s]/g, ''); if (!he || !/[א-ת]/.test(he) || ['את', 'אֶת', 'אֵת'].includes(he)) continue;
+    let mean = w.mean || ''; if (!mean) { try { const a = analyzeWord(he); mean = a ? a.meaning : ''; } catch {} }
+    if (!mean) continue;
+    const ex = S.prog.trv.find(e => e.he === he);
+    if (ex) { ex.ok = 0; ex.days = []; ex.u = now; ex.miss = (ex.miss || 0) + 1; }
+    else { S.prog.trv.push({ he, mean: String(mean).slice(0, 80), src: String(src || '').slice(0, 60), t: now, u: now, ok: 0, days: [], miss: 1 }); n++; }
+  }
+  if (S.prog.trv.length > 200) S.prog.trv = S.prog.trv.slice(-200);
+  try { saveProg(); } catch {}
+  return n;
+}
+const trvActive = () => (S.prog.trv || []).filter(e => !e.done);
+function trvItem(e, pool) {
+  const others = pick(pool.filter(v => v.g && !trContent(v.g).some(w => trContent(e.mean).map(trStem).includes(trStem(w)))), 3).map(v => v.g);
+  return { kind: 'mc', key: 'trv|' + e.he, cid: 'trv:' + AN.hash(e.he), t: 'vocab', trv: e.he, q: `What does ${H(esc(e.he))}${PRi(e.he)} mean? <span class="small muted">(from your translations)</span>`, o: [heWrap(esc(e.mean)), ...others.map(x => heWrap(esc(x)))], a: 0, x: e.src ? `You met it in: ${esc(e.src)}` : '' };
+}
+function trvResult(it, score) {
+  if (!it.trv) return; const e = (S.prog.trv || []).find(x => x.he === it.trv); if (!e) return;
+  const d = dayKey(); e.u = Date.now();
+  if (score >= 1) { e.days = [...new Set([...(e.days || []), d])]; e.ok = e.days.length; if (e.ok >= TRV_CLEAR) e.done = Date.now(); }
+  else { e.ok = 0; e.days = []; }
+  try { saveProg(); } catch {}
 }
 
 // ===== Measurement layer: event log, exposure history, response time, assistance =====
@@ -5090,7 +5432,11 @@ function startNominal() {
 // Scored vocabulary: meaning of words from the main list (due and missed words first).
 function startVocabCheck() {
   const n = 15; const w = v => { const c = S.cards['core|' + v.h]; return c ? (c.due <= Date.now() ? 2 : .6) : 1.2; };
-  startSession({ title: 'Vocabulary check', items: weightedPick(VOCAB, w, n).map(v => vocabMC(v, VOCAB)), back: S.tab === 'today' ? 'today' : 'practice' });
+  // Up to 6 of the 15 are words you missed in translations (least practised first); the rest come from the course list,
+  // with new and due words preferred, so the quiz keeps growing instead of circling the same words.
+  const tw = trvActive().sort((a, b) => (a.ok || 0) - (b.ok || 0) || (a.u || 0) - (b.u || 0)).slice(0, 6);
+  const items = [...tw.map(e => trvItem(e, VOCAB)), ...weightedPick(VOCAB, w, n - tw.length).map(v => vocabMC(v, VOCAB))];
+  startSession({ title: tw.length ? `Vocabulary check (+${tw.length} from your translations)` : 'Vocabulary check', items: shuffle(items), back: S.tab === 'today' ? 'today' : 'practice' });
 }
 // Comprehension of a studied story: Claude chooses lines and writes questions; answers are scored against model answers.
 // Comprehension practice uses the prepared Ruth questions (the exam text): the verses are shown, then 4–6 questions.
@@ -5164,6 +5510,7 @@ const CONCEPTS = [
   { id: 'roots', name: 'Root letters vs stem letters (שֹׁרֶשׁ)', plain: 'Find the 3 root letters when one is missing or doubled: יַגִּיד (נגד, the נ assimilated), וַיִּפָּקֵד (פקד: the doubled פּ is the Niphal נ, not a root letter), וַיָּמָת (מות).', applies: e => isParse(e) && e.f.root != null && (hiddenRootEv(e) || (e.st2 === 'niphal' && ['yiqtol', 'wayyiqtol', 'weyiqtol', 'impv', 'inf'].includes(e.cj))), ok: e => e.f.root, pk: r => hiddenRoot(r[0], r[1]) || (r[2] === 'niphal' && ['yiqtol', 'wayyiqtol', 'weyiqtol', 'impv', 'inf'].includes(r[3])) },
   { id: 'lookalikes', name: 'Look-alike words (שֵׁם / שָׁם …)', plain: 'שֵׁם name / שָׁם there, לֶחֶם bread / לָהֶם to them, נָשִׁים women / בָּנִים sons, וַיֵּשֶׁב sat / וַיִּשָּׁבַע swore.', applies: e => e.t === 'lookalike', ok: e => e.s >= 1, drill: () => startLookalikes() },
   { id: 'hithpael', name: 'Hithpael: הִתְ + doubled middle letter (Ch. 24)', plain: 'הִתְפַּלֵּל, וַיִּתְפַּלֵּל, מִתְפַּלֵּל; ת swaps with a sibilant (הִשְׁתַּמֵּר) or disappears (הִטַּהֵר).', applies: e => isParse(e) && e.st2 === 'hithpael', ok: e => e.f.stem, pk: r => r[2] === 'hithpael', drill: () => startTopicDrill('hithpael', 'parse') },
+  { id: 'patterns', name: 'Pattern clues (PPP, BuMP, shapes, weak roots)', plain: 'Name the clue that tells you the stem, form or root: doubled letter, prefix vowel, ה / נ / הִתְ in front, missing root letter, ending.', applies: e => e.t === 'patterns', ok: e => e.s >= 1, drill: () => startPatternQuiz() },
   { id: 'question-words', name: 'Question words in the quizzes', plain: 'הֲ yes/no, מִי who, מָה what, מֵאַיִן from where, מָה הַפֹּעַל הַזֶּה what is this verb.', applies: e => e.t === 'terminology' || e.k === 'comp', ok: e => e.s >= 1, drill: () => startTopicDrill('terminology') },
 ];
 // A root letter that cannot be seen as such in the form (assimilated נ, weak י/ו/ה, hollow verbs).
@@ -6356,7 +6703,7 @@ async function init() {
     if (prof.exists && prof.data().about) S.about = String(prof.data().about);
     setSync('Saved');
   } catch (e) { setSync('Offline — saving on this device'); }
-  db.collection('libmeta').onSnapshot(snap => { S.lib = withBuiltins(snap.docs.map(d => ({ id: d.id, ...clone(d.data()) }))); lsSet('libmeta', S.lib); softRefresh(); loadVbc(); }, () => {});
+  db.collection('libmeta').onSnapshot(snap => { S.lib = withBuiltins(snap.docs.map(d => ({ id: d.id, ...clone(d.data()) }))); lsSet('libmeta', S.lib); softRefresh(); loadVbc(); try { storyIndexReset(); } catch {} }, () => {});
   if (typeof lexLoad === 'function') setTimeout(() => lexLoad(), 2500);
   loadExposure(); Promise.all([loadAssessments(), loadWeeks(), loadAllEvents(true)]).then(() => { if (S.tab === 'today') go('today'); }); loadForecasts();
   db.collection('insights').onSnapshot(snap => { S.insights = snap.docs.map(d => ({ id: d.id, ...clone(d.data()) })); lsSet('insights', S.insights); softRefresh(); }, () => {});
@@ -6393,5 +6740,5 @@ function guessDocMeta(title, text) {
 }
 
 </script>
-<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='795fefd591';</script>
+<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='7b5a9ff82a';</script>
 </body></html>
