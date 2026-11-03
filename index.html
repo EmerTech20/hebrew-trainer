@@ -3645,14 +3645,21 @@ async function readDocx(file) {
 
 // ---- Structured tutor reports (het-tutor-report-v1): validated without AI; supplementary only.
 const TUTOR_SCHEMA = 'het-tutor-report-v1';
-const TUTOR_PROMPT = `At the end of our session, write a diagnostic report for my Hebrew training app as ONE JSON code block, exactly in this format (no other text inside the block):
-{"schema":"het-tutor-report-v1","date":"YYYY-MM-DD","tutor":"ChatGPT","summary":"2-3 sentences","checkpoint":"where we stopped (book chapter:verse or story line)","strengths":"what I already do well",
+const TUTOR_PROMPT = `You are my Biblical Hebrew tutor. Two rules for every session:
+1. COLD CHECK FIRST. Before any teaching, give me 8–10 items closed-book and timed, from Hebrew I have not studied in the last 3 days: parsing (all 6 fields, written, no answer choices), one line to translate, and 3–4 vocabulary words. Record my exact first answer and the seconds I took, before you say anything about it.
+2. KEEP A RECORD. For every item in the session note: cold (never seen), seen before, or studied today; whether you gave me the meaning or a hint first; my first answer for each parsing field separately; and every word I did not know at first sight.
+
+When I say "close session", write ONE JSON code block, exactly in this format (no other text inside the block; send only this final version):
+{"schema":"het-tutor-report-v1","date":"YYYY-MM-DD","tutor":"ChatGPT","session":"S12 (next number)","period":"date(s) of the session","summary":"2-3 sentences","checkpoint":"where we stopped (book chapter:verse or story line)","strengths":"what I already do well",
+"cold_check":[{"he":"the Hebrew item","task":"parse|translate|vocab|question","answer":"my exact first answer","key":"the correct answer","correct":1 or 0.5 or 0,"seconds":how long I took,"cold":true if I had not studied this text in the last 3 days}],
 "weak_points":[{"area":"suffix|binyan|vowels|pgn|form|root|particles|strict|context","detail":"the specific misunderstanding, with a Hebrew example","evidence":"what I actually answered"}],
 "parse_items":[{"form":"Hebrew word with full vowels, copied exactly from the text we read","root":"3 letters","stem":"qal|niphal|piel|pual|hithpael|hiphil|hophal","conj":"qatal|yiqtol|wayyiqtol|weqatal|weyiqtol|impv|ptc|inf","pgn":"e.g. 3ms (participles: ms/fs/mp/fp; infinitives: empty)","gloss":"English meaning","explanation":"the visible evidence"}],
 "suffix_items":[{"form":"Hebrew word with a pronoun ending","meaning":"correct meaning","wrong":["two or three plausible wrong meanings"],"explain":"why"}],
 "mc_items":[{"area":"one of the areas above","q":"question","options":["…","…","…","…"],"answer":0,"explain":"why"}],
+"drills":[{"id":"D1","prompt":"a practice question for my next session, not yet given","key":"its answer"}],
+"open_items":["what is still unresolved"],
 "recommendations":["short practice recommendations"]}
-Also add a top-level field "cold_check":[{"he":"the Hebrew item","task":"parse|translate|vocab|question","answer":"my exact first answer","key":"the correct answer","correct":1 or 0.5 or 0,"seconds":how long I took,"cold":true if I had not studied this text in the last 3 days}]. Start every session with this cold check BEFORE any teaching: 8–10 timed, closed-book items. Only include Hebrew forms that appeared in our session. Do not invent scores or percentages.`;
+Only include Hebrew forms that appeared in our session. Do not invent scores or percentages. Do not count anything you explained before I answered as my own success.`;
 const pgnOK = (conj, pgn) => conj === 'inf' ? true : conj === 'ptc' ? /^[mfc][sp]$/.test(pgn) : /^[123][mfc][sp]$/.test(pgn);
 function findTutorJSON(text) {
   const tryParse = t => { try { const o = JSON.parse(t); return o && o.schema === TUTOR_SCHEMA ? o : null; } catch { return null; } };
@@ -7285,5 +7292,5 @@ function startMemoryRandom() {
 })();
 
 </script>
-<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='d8a6ca7ab2';</script>
+<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='989e5a13c9';</script>
 </body></html>
