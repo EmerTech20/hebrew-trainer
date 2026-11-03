@@ -309,7 +309,7 @@ window.__HET_STANDALONE__ = true;
     ready, mem, db, write, notify, live, clone,
     listeners: new Set(), changed(path, rec) { this.listeners.forEach(fn => { try { fn(path, rec); } catch (e) { console.error(e); } }); },
     // Apply a document that came from elsewhere (cloud or a backup file) without marking it as a new local change.
-    async applyRemote(path, rec) { mem.set(path, rec); if (idb) { try { const tx = idb.transaction(ST, 'readwrite'); tx.objectStore(ST).put(rec, path); } catch (e) { console.error(e); } } notify(path); },
+    async applyRemote(path, rec) { mem.set(path, rec); let done = null; if (idb) { try { const tx = idb.transaction(ST, 'readwrite'); tx.objectStore(ST).put(rec, path); done = new Promise(r => { tx.oncomplete = r; tx.onerror = r; tx.onabort = r; }); } catch (e) { console.error(e); } } notify(path); if (done) await done; },
     dump() { const out = {}; for (const [k, r] of mem) out[k] = r; return out; },
   };
   window.claude = { use: async name => { await ready; return name === 'db' ? db : name === 'downloads' ? downloads : null; } };
@@ -1047,7 +1047,7 @@ const TL = (() => {
         U.push({ on: '', v: 'u', kind: 'full', long: true, src: i }); continue;
       }
       if (c === 'ו' && m.includes('ֹ') && !dag && U.length && U[U.length - 1].kind === 'none') { U[U.length - 1].v = 'o'; U[U.length - 1].kind = 'full'; U[U.length - 1].long = true; continue; }
-      if (c === 'ו' && m.includes('ֹ') && !dag && i > 0 && !U[U.length - 1].v) { U[U.length - 1].v = 'o'; U[U.length - 1].kind = 'full'; continue; }
+      if (c === 'ו' && m.includes('ֹ') && !dag && i > 0 && U.length && !U[U.length - 1].v) { U[U.length - 1].v = 'o'; U[U.length - 1].kind = 'full'; continue; }
       if (c === 'י' && !m && U.length && /[ie]/.test(U[U.length - 1].v || '') && U[U.length - 1].kind === 'full') { U[U.length - 1].long = true; continue; }
       if (c === 'י' && !m && U.length && U[U.length - 1].v === 'a' && L[i + 1] && L[i + 1].c === 'ו' && i + 1 === L.length - 1) { U[U.length - 1].v = 'av'; i++; continue; }
       if (c === 'ה' && last && !dag && !vowelMark) { if (U.length && U[U.length - 1].v) U[U.length - 1].v += 'h'; continue; }
@@ -3905,7 +3905,7 @@ function askClaudeOpen(it) {
 }
 // Show the translation inside the feedback box (after an answer) or above the options (before; marked as a hint).
 async function showMeaning(it, before, hostEl) {
-  if (!hasHebrew(it)) return;
+  if (!hasHebrew(it) || it.noMeaning) return;
   const host = hostEl || (before ? $('#mean-pre') : $('#fb')); if (!host) return;
   let box = host.querySelector('.meaning-host'); if (!box) { host.insertAdjacentHTML('beforeend', '<div class="meaning-host"></div>'); box = host.querySelector('.meaning-host'); }
   const src = meaningSource(it), key = meanKey(src);
@@ -6740,5 +6740,387 @@ function guessDocMeta(title, text) {
 }
 
 </script>
-<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='7b5a9ff82a';</script>
+<script>
+// ===== Step by step: one verb, one decision at a time =====
+// Observe → root → stem → form → person/gender/number → meaning in the verse → what the form does → summary → transfer (a new verb, same rule).
+// Every answer gets its explanation at once; hints are optional and recorded separately from independent answers.
+const PA_FAMILY = c => ['yiqtol', 'wayyiqtol', 'weyiqtol'].includes(c) ? 'pre' : c === 'ptc' ? 'ptc' : ['impv', 'inf'].includes(c) ? 'impv' : 'perf';
+const PA_STEM_SIG = {
+  qal: { perf: 'no stem letters: the plain shape קָטַל plus the subject ending', pre: 'a prefix with i- or a-vowel and no doubled root letter: יִקְטֹל, וַיִּקְטֹל (weak roots: וַיֵּלֶךְ, וַיָּקָם, אֵלֵךְ)', ptc: 'o-vowel after the first root letter: קֹטֵל (passive קָטוּל)', impv: 'the short shape with no prefix: קְטֹל, לִקְטֹל' },
+  niphal: { perf: 'נִ in front of the root: נִקְטַל (PPP rule: Niphal Perfect and Participle have the נ)', pre: 'the stem נ has merged into the FIRST root letter, so that letter is doubled: יִקָּטֵל, וַיִּקָּטֵל', ptc: 'נִ in front: נִקְטָל', impv: 'הִ + doubled FIRST root letter: הִקָּטֵל' },
+  piel: { perf: 'doubled MIDDLE root letter: קִטֵּל', pre: 'shewa under the prefix + doubled MIDDLE root letter: יְקַטֵּל, וַיְקַטֵּל', ptc: 'מְ + doubled MIDDLE root letter: מְקַטֵּל', impv: 'doubled MIDDLE root letter, no prefix: קַטֵּל, לְקַטֵּל' },
+  pual: { perf: 'u-vowel + doubled middle root letter: קֻטַּל', pre: 'u-vowel + doubled middle root letter: יְקֻטַּל', ptc: 'מְ + u-vowel + doubled middle: מְקֻטָּל', impv: 'u-vowel + doubled middle root letter' },
+  hiphil: { perf: 'ה in front and usually ִי before the last root letter: הִקְטִיל', pre: 'a-vowel under the prefix and usually ִי before the last root letter: יַקְטִיל, וַיַּקְטֵל (weak roots: יוֹצִיא, וַיָּשֶׁב)', ptc: 'מַ in front + ִי: מַקְטִיל', impv: 'ה in front: הַקְטֵל, לְהַקְטִיל' },
+  hophal: { perf: 'o/u-vowel under the ה: הָקְטַל, הוּשַׁב', pre: 'o/u-vowel under the prefix: יָקְטַל', ptc: 'מָ / מוּ in front', impv: 'o/u-vowel under the ה' },
+  hithpael: { perf: 'הִתְ in front + doubled middle root letter: הִתְקַטֵּל', pre: 'יִתְ / תִּתְ in front + doubled middle root letter: יִתְקַטֵּל', ptc: 'מִתְ in front + doubled middle: מִתְקַטֵּל', impv: 'הִתְ in front + doubled middle root letter' },
+};
+const PA_CONJ_SIG = {
+  qatal: 'no prefix letter; the person is shown by an ending (ת, תִּי, וּ, נוּ…) or no ending for “he”',
+  yiqtol: 'a person prefix (א י ת נ) and no וַ in front',
+  wayyiqtol: 'וַ + a doubled person prefix (וַיִּ, וַתִּ; before א: וָאֶ)',
+  weqatal: 'וְ / וּ + a perfect with its ending',
+  weyiqtol: 'וְ + a prefix form, without the doubling of wayyiqtol',
+  impv: 'no person prefix: it looks like a yiqtol with the prefix removed, and it speaks to “you”',
+  ptc: 'a verbal adjective: Qal קֹטֵל; other stems with מְ / מַ / מִתְ or נִ; endings ִים, ָה / ֶת, וֹת',
+  inf: 'often after לְ / בְּ / כְּ; a noun-like form with no person, gender or number',
+};
+const PA_FUNC = {
+  wayyiqtol: 'Moves the story forward: the next event on the main line (“and he did…”).',
+  qatal: 'States a completed action or a fact, often background or out of the main sequence (“he did / he has done”).',
+  weqatal: 'Continues a future or an instruction: “and he will… / and you shall…”.',
+  yiqtol: 'An action not yet done or repeated: future, possibility, wish (“he will / may he…”).',
+  weyiqtol: 'Purpose or wish that follows another verb: “so that… / and let…”.',
+  impv: 'A direct command to the listener (“do!”).',
+  ptc: 'Describes an ongoing action, or names a person by what they do (“…-ing / the one who…”).',
+  inf: 'Names the action without its own subject: purpose (“to…”), time (“when…”), or completes another verb.',
+};
+const PA_CONJ_HINT = {
+  qatal: 'There is no person prefix in front. Look at the end of the word.',
+  yiqtol: 'There is a person prefix letter, but no וַ before it.',
+  wayyiqtol: 'Look at the very start: וַ followed by a doubled letter.',
+  weqatal: 'It starts with וְ (or וּ), and the rest has a perfect ending.',
+  weyiqtol: 'It starts with וְ, then a person prefix, without doubling.',
+  impv: 'No person prefix at all, and in the verse someone is being told to do something.',
+  ptc: 'Look for מ in front (or the Qal o-vowel קֹטֵל) and a noun-like ending.',
+  inf: 'Is there לְ / בְּ / כְּ in front? Can you say “to ___”?',
+};
+const PA_STEM_HINT = {
+  qal: 'Nothing is added to the root, and no root letter is doubled by the stem.',
+  niphal: 'Look for נ in front, or for a doubled FIRST root letter.',
+  piel: 'Look at the MIDDLE root letter: is it doubled?',
+  pual: 'A doubled middle letter with a u-vowel.',
+  hiphil: 'Look for ה in front, or an a-vowel under the prefix, and ִי before the last root letter.',
+  hophal: 'An o/u-vowel under the prefix.',
+  hithpael: 'Look for ת after the prefix (הִתְ / יִתְ / מִתְ).',
+};
+const paA = w => (/^[aeiou]/i.test(w) ? 'an ' : 'a ') + w;
+function paNice(r) { return String(r || '').replace(/[כמנפצ]$/, ch => ({ 'כ': 'ך', 'מ': 'ם', 'נ': 'ן', 'פ': 'ף', 'צ': 'ץ' }[ch])).split('').join('־'); }
+function paRootChoices(it) {
+  const r = normRoot(it.root), c = consOf(it.form), out = new Set();
+  const add = x => { x = normRoot(x); if (x.length === 3 && x !== r && /^[א-ת]{3}$/.test(x)) out.add(x); };
+  if (c.length >= 3) { add(c.slice(0, 3)); add(c.slice(-3)); add(c.slice(1, 4)); }
+  if (r.length === 3) {
+    if ('וי'.includes(r[1])) add(r[0] + (r[1] === 'ו' ? 'י' : 'ו') + r[2]);
+    if (r[0] === 'ה') add('י' + r.slice(1));
+    if (r[0] === 'י') { add('נ' + r.slice(1)); add('ו' + r.slice(1)); }
+    if (r[0] === 'נ') { add('י' + r.slice(1)); }
+    if (r[2] === 'ה') { add(r.slice(0, 2) + 'י'); add(r.slice(0, 2) + 'א'); }
+    if (r[2] === 'א') add(r.slice(0, 2) + 'ה');
+  }
+  const vis = [...out].filter(x => [...x].every(L => c.includes(L))), rest = [...out].filter(x => !vis.includes(x));
+  const wrong = [...shuffle(vis).slice(0, 2), ...shuffle(rest)].slice(0, 3);
+  if (wrong.length < 3) for (const x of shuffle([...out])) { if (wrong.length >= 3) break; if (!wrong.includes(x)) wrong.push(x); }
+  return shuffle([r, ...wrong]);
+}
+function paRootWhy(it, opt) {
+  const r = normRoot(it.root), c = consOf(it.form);
+  const extra = [...opt].filter(L => !r.includes(L)), missing = [...r].filter(L => !opt.includes(L));
+  const bits = [];
+  extra.forEach(L => bits.push(c.includes(L) ? `${H(L)} is in the word, but here it is not a root letter (it belongs to a prefix, an ending or the stem)` : `${H(L)} is not in this word at all`));
+  missing.forEach(L => bits.push(`it leaves out the root letter ${H(L)}${c.includes(L) ? '' : ' (which is hidden in this form)'}`));
+  return bits.join('; ');
+}
+function paHiddenNote(it) {
+  const r = normRoot(it.root), c = consOf(it.form); if (r.length !== 3) return '';
+  const hid = [...r].filter(L => !c.includes(L)); if (!hid.length) return 'All three root letters are visible in this form.';
+  const why = r === 'הלכ' ? 'הלך behaves like a I-י root: in prefix forms the ה drops out (אֵלֵךְ, וַיֵּלֶךְ, תֵּלֵךְ).'
+    : r[0] === 'נ' && hid.includes('נ') ? 'I-נ root: the נ merges into the next letter, which gets a dagesh.'
+    : r[0] === 'י' && hid.includes('י') ? 'I-י root: the י drops out or becomes a vowel letter.'
+    : 'וי'.includes(r[1]) && hid.includes(r[1]) ? `Hollow root: the middle ${r[1]} is missing or shows only as a vowel.`
+    : r[2] === 'ה' && hid.includes('ה') ? 'III-ה root: the final ה drops or changes (often to י or ת).'
+    : r[1] === r[2] ? 'Doubled (geminate) root: the two identical letters can merge into one with a dagesh.'
+    : 'One root letter is not written in this form.';
+  return `${hid.map(L => H(L)).join(', ')} not visible. ${why}`;
+}
+function paPgnBasis(it) {
+  const pgn = String(it.pgn || '').split('|')[0], a = parsePGN(pgn), conj = it.conj;
+  if (conj === 'inf') return 'An infinitive has no person, gender or number.';
+  if (conj === 'ptc') { const e = SX_PTC_END[a.g + a.n]; return `A participle has gender and number but no person. ${e ? `Ending ${H(e[1])} = ${e[2]}.` : 'No ending = masculine singular.'}`; }
+  if (['yiqtol', 'wayyiqtol', 'weyiqtol'].includes(conj)) { const p = SX_PREFIX[pgn], e = SX_PREF_END[pgn]; return `${p ? `Prefix ${H(p)} = ${SX_PREFIX_MEAN[pgn] || ''}` : ''}${e ? `; ending ${H(e[1])} = ${e[2]}` : ''}.${pgn === '1cs' || pgn === '1cp' ? ' First person is common: the form does not show masculine or feminine.' : ''}`; }
+  if (conj === 'impv') { const e = SX_PREF_END[pgn]; return `A command is always 2nd person (“you”). ${e ? `Ending ${H(e[1])} = ${e[2]}.` : 'No ending = to one man.'}`; }
+  const e = SX_QATAL_END[pgn]; return e ? `Ending ${H(e[1])} = “${e[2]}”.${/^1|3cp/.test(pgn) ? ' This ending is common: it does not show masculine or feminine.' : ''}` : pgn === '3ms' ? 'No ending = “he” (3rd masculine singular).' : '';
+}
+function paEnVariants(it) {
+  const pgn = String(it.pgn || '').split('|')[0], a = parsePGN(pgn), conj = it.conj, cands = [];
+  const fin = ['qatal', 'yiqtol', 'wayyiqtol', 'weqatal', 'weyiqtol', 'impv'];
+  if (fin.includes(conj)) {
+    ['3ms', '3fs', '3mp', '1cs', '2ms', '1cp'].filter(p => p !== pgn && !(conj === 'impv' && p[0] !== '2')).slice(0, 4).forEach(p => cands.push({ ...it, pgn: conj === 'qatal' && p === '3mp' ? '3cp' : p }));
+    ({ wayyiqtol: ['yiqtol', 'qatal'], yiqtol: ['qatal', 'wayyiqtol'], qatal: ['yiqtol', 'wayyiqtol'], weqatal: ['qatal', 'wayyiqtol'], weyiqtol: ['qatal', 'wayyiqtol'], impv: ['yiqtol', 'qatal'] }[conj] || []).forEach(c => cands.push({ ...it, conj: c, pgn: conj === 'impv' ? '3' + pgn.slice(1) : pgn }));
+  } else if (conj === 'ptc') { cands.push({ ...it, conj: 'qatal', pgn: '3' + (a.g || 'm') + (a.n || 's') }, { ...it, conj: 'inf', pgn: '' }, { ...it, conj: 'yiqtol', pgn: '3' + (a.g || 'm') + (a.n || 's') }); }
+  else if (conj === 'inf') { cands.push({ ...it, conj: 'ptc', pgn: 'ms' }, { ...it, conj: 'qatal', pgn: '3ms' }, { ...it, conj: 'yiqtol', pgn: '3ms' }); }
+  const right = paEn({ ...it, _enFixed: true }), seen = new Set([right.toLowerCase()]), out = [];
+  for (const x of shuffle(cands)) { const e = paEn(x); if (!e || seen.has(e.toLowerCase())) continue; seen.add(e.toLowerCase()); out.push({ en: e, x }); if (out.length >= 3) break; }
+  return { right, wrong: out };
+}
+function paEn(x) { try { return String(formEnglish({ ...x, en: x._enFixed ? x.en : '' }) || '').replace(/<[^>]+>/g, '').trim(); } catch { return ''; } }
+function paParseLabel(x) { const a = parsePGN(String(x.pgn || '').split('|')[0]); return `${CONJ[x.conj] ? CONJ[x.conj][1] : x.conj}${x.conj === 'inf' ? '' : ' ' + [a.p ? PERSON[a.p][1] : '', a.g ? GENDER[a.g][1] : '', a.n ? NUMBER[a.n][1] : ''].filter(Boolean).join(' ')}`; }
+function paCtxHTML(it) {
+  if (!it.ctx) return '';
+  const f = it.form.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`(^|[\\s־])(${f})(?=$|[\\s־׃,.])`);
+  return `<div class="ctx he" dir="rtl" style="font-size:1.45rem;line-height:1.9">${esc(it.ctx).replace(re, '$1<b style="color:var(--accent);text-decoration:underline">$2</b>')}</div>${it.ref ? `<div class="small muted" style="text-align:center">${esc(it.ref)}</div>` : ''}`;
+}
+function paMakeSteps(it) {
+  const stem0 = String(it.stem).split('|')[0], fam = PA_FAMILY(it.conj), steps = [];
+  steps.push({ id: 'root', q: 'What is the root (שֹׁרֶשׁ) of this verb?', opts: paRootChoices(it).map(r => ({ v: r, label: H(paNice(r)) })), right: normRoot(it.root),
+    hints: ['Set aside what marks person, form or stem: וַ / וְ in front, a person prefix (א י ת נ), ה / נ / הִתְ / מ in front, and endings (ת, תִּי, וּ, נָה, ים).', `The letters you can see: ${H(consOf(it.form).split('').join(' '))}.`, paHiddenNote(it).replace(/<[^>]+>/g, '')] });
+  const stemOpts = [stem0, ...shuffle(Object.keys(STEMS).filter(s => s !== stem0 && !String(it.stem).split('|').includes(s) && (s === 'qal' || stemLearned(s)))).slice(0, 3)];
+  steps.push({ id: 'stem', q: 'Which stem (בִּנְיָן) is it?', opts: shuffle(stemOpts).map(s => ({ v: s, label: `${H(STEMS[s][0])} ${STEMS[s][1]}` })), right: stem0, alt: String(it.stem).split('|'),
+    hints: ['Look in front of the root letters: ה, נ, הִתְ, מ, or only a person prefix?', 'Is any root letter doubled (a dot inside it)? Which one: the first or the middle?', PA_STEM_HINT[stem0] || ''] });
+  const conjPool = { pre: ['yiqtol', 'wayyiqtol', 'weyiqtol', 'impv', 'qatal'], perf: ['qatal', 'weqatal', 'yiqtol', 'impv'], ptc: ['ptc', 'inf', 'qatal', 'yiqtol'], impv: ['impv', 'inf', 'yiqtol', 'qatal'] }[fam];
+  const cOpts = [it.conj, ...shuffle(conjPool.filter(c => c !== it.conj)).slice(0, 3)];
+  steps.push({ id: 'conj', q: 'Which form (נְטִיָּה) is it?', opts: shuffle(cOpts).map(c => ({ v: c, label: `${H(CONJ[c][0])} ${CONJ[c][1]}` })), right: it.conj,
+    hints: ['Look at the very start of the word.', 'Now look at the end: is there a subject ending?', PA_CONJ_HINT[it.conj] || ''] });
+  steps.push({ id: 'pgn', q: 'Who does it? Person (גּוּף), gender (מִגְדָּר), number (מִסְפָּר).', chips: true,
+    hints: [['yiqtol', 'wayyiqtol', 'weyiqtol'].includes(it.conj) ? 'In prefix forms the prefix letter shows the person; an ending may add plural or feminine.' : it.conj === 'qatal' || it.conj === 'weqatal' ? 'In the perfect the ending shows the person.' : 'Is this a finite verb, a participle or an infinitive?', paPgnBasis(it).replace(/<[^>]+>/g, '').split('.')[0] + '.', 'Participles have no person; infinitives have no person, gender or number. First person is “common” (מְשֻׁתָּף).'] });
+  if (it.ctx) {
+    const v = paEnVariants(it);
+    if (v.right && v.wrong.length >= 2) steps.push({ id: 'tr', q: 'Here is the verse. Which English fits this verb here?', ctx: true, opts: shuffle([{ v: 'R', label: esc(v.right) }, ...v.wrong.map((w, k) => ({ v: 'W' + k, label: esc(w.en), why: `that would be ${paParseLabel(w.x)}` }))]), right: 'R',
+      hints: ['Who is doing the action in the verse?', `Root meaning: “${it.gloss || ''}”.`, `The form is ${CONJ[it.conj][1]}: ${CONJ_DEF[it.conj] || ''}`] });
+  }
+  const fOpts = [it.conj, ...shuffle(Object.keys(PA_FUNC).filter(c => c !== it.conj && !(it.conj === 'weqatal' && c === 'yiqtol') && !(it.conj === 'yiqtol' && c === 'weqatal'))).slice(0, 3)];
+  steps.push({ id: 'fn', q: 'What does this form usually do in the sentence?', opts: shuffle(fOpts).map(c => ({ v: c, label: esc(PA_FUNC[c]) })), right: it.conj, hints: [`You said it is: ${CONJ[it.conj][1]} (or check the previous step).`, 'Story main line, background fact, future, command, description, or purpose?', CONJ_DEF[it.conj] || ''] });
+  return steps;
+}
+function paExplain(it, s, chosen, ok) {
+  const stem0 = String(it.stem).split('|')[0], fam = PA_FAMILY(it.conj);
+  if (s.id === 'root') return `<div><b>Root: ${H(paNice(normRoot(it.root)))}</b>${it.gloss ? ` “${esc(it.gloss)}”` : ''}</div><div class="small">${paHiddenNote(it)}</div><div class="small" style="margin-top:4px"><b>How the word is built:</b></div>${anatomyHTML({ ...it, form: it.form })}${!ok && chosen ? `<div class="small">Why not ${H(paNice(chosen))}: ${paRootWhy(it, chosen)}.</div>` : ''}`;
+  if (s.id === 'stem') {
+    const others = s.opts.map(o => o.v).filter(v => !s.alt.includes(v));
+    return `<div><b>${H(STEMS[stem0][0])} ${STEMS[stem0][1]}</b>${s.alt.length > 1 ? ` (also possible: ${s.alt.filter(x => x !== stem0).map(x => STEMS[x][1]).join(', ')})` : ''}. Evidence in this form (${CONJ[it.conj][1]}): ${heWrap(esc(PA_STEM_SIG[stem0] ? PA_STEM_SIG[stem0][fam] : ''))}.</div>
+      <div class="small" style="margin-top:4px"><b>Why not the others</b> (in ${paA(CONJ[it.conj][1])}):</div><ul class="small" style="margin:2px 0 0;padding-left:1.2em">${others.map(o => `<li${o === chosen ? ' style="font-weight:600"' : ''}>${STEMS[o][1]} would show ${heWrap(esc(PA_STEM_SIG[o] ? PA_STEM_SIG[o][fam] : ''))}.</li>`).join('')}</ul>${paHiddenNote(it).startsWith('All') ? '' : `<div class="small muted">Weak root: some stem clues can be hidden. ${paHiddenNote(it)}</div>`}`;
+  }
+  if (s.id === 'conj') { const others = s.opts.map(o => o.v).filter(v => v !== it.conj); return `<div><b>${H(CONJ[it.conj][0])} ${CONJ[it.conj][1]}</b>: ${heWrap(esc(PA_CONJ_SIG[it.conj] || ''))}.</div><div class="small" style="margin-top:4px"><b>Why not the others:</b></div><ul class="small" style="margin:2px 0 0;padding-left:1.2em">${others.map(o => `<li${o === chosen ? ' style="font-weight:600"' : ''}>${CONJ[o][1]} would have ${heWrap(esc(PA_CONJ_SIG[o] || ''))}.</li>`).join('')}</ul><div class="small muted">Stem (בִּנְיָן) and form (נְטִיָּה) are separate questions: a verb is always both, e.g. Qal + yiqtol, Hiphil + qatal.</div>`; }
+  if (s.id === 'pgn') return `<div>${parseAnswerHTML(it).match(/<tr>.*?<\/tr>/gs).slice(3).join('').replace(/^/, '<div class="tw"><table class="mini" style="width:100%">') + '</table></div>'}</div><div class="small">${paPgnBasis(it)}</div>`;
+  if (s.id === 'tr') { const w = s.opts.find(o => o.v === chosen); return `${paCtxHTML(it)}<div style="margin-top:4px"><b>“${s.opts.find(o => o.v === 'R').label}”</b>: ${STEMS[stem0][1]} ${paParseLabel(it)} of ${H(paNice(normRoot(it.root)))} “${esc(it.gloss || '')}”.</div>${!ok && w && w.why ? `<div class="small">“${w.label}”: ${esc(w.why)}, not what this form shows.</div>` : ''}<div class="small muted">English words like “will”, “and”, “-ing” come from the form (וַ, prefix, participle), not from separate Hebrew words.</div>`; }
+  if (s.id === 'fn') return `<div><b>${esc(PA_FUNC[it.conj])}</b></div><div class="small muted">This is what ${paA(CONJ[it.conj][1])} usually signals. The verse decides the exact sense: the form is evidence for the interpretation, not the whole interpretation.</div>`;
+  return '';
+}
+function drawSteps(it) {
+  const v = $('#v-session');
+  if (!it._steps) { it._steps = paMakeSteps(it); it._si = 0; it._log = []; it._pgnSel = { p: '', g: '', n: '' }; startTimer(it); }
+  const s = it._steps[it._si];
+  if (!s) return paSummary(it);
+  s._h = s._h || 0; SES.answered = false;
+  const done = it._log.map(l => `<span class="chip ${l.ok ? (l.h ? 'warn' : 'good') : 'bad'}" title="${l.h ? 'with hint' : ''}">${{ root: 'root', stem: 'stem', conj: 'form', pgn: 'person/gender/number', tr: 'meaning', fn: 'function' }[l.id]} ${l.ok ? '✓' : '✗'}${l.h ? ' (hint)' : ''}</span>`).join(' ');
+  const chipRow = (field, map, he, en) => `<div class="prow"><div class="lab"><span class="he">${he}</span><small>${en}</small></div><div class="pchips">${Object.entries(map).map(([k, x]) => `<button class="pc" data-f="${field}" data-v="${k}" aria-pressed="false"><span class="he">${x[0]}</span><small>${x[1]}</small></button>`).join('')}<button class="pc" data-f="${field}" data-v="-" aria-pressed="false"><span>—</span><small>none</small></button></div></div>`;
+  const body = s.chips ? `<div class="pgrid">${chipRow('p', PERSON, 'גּוּף', 'person')}${chipRow('g', GENDER, 'מִגְדָּר', 'gender')}${chipRow('n', NUMBER, 'מִסְפָּר', 'number')}</div>`
+    : `<div class="opts">${s.opts.map(o => `<button class="opt" data-o="${esc(o.v)}">${o.label}</button>`).join('')}</div>`;
+  v.innerHTML = `${sessHead()}<div class="panel qbox" style="max-width:760px;width:100%;margin:0 auto">
+    <div class="row" style="justify-content:space-between"><span class="chip acc">Step by step · ${it._si + 1} of ${it._steps.length}</span>${it.ref && !s.ctx ? `<span class="small muted">${esc(it.ref)}</span>` : ''}</div>
+    <div class="form-big" lang="he">${esc(it.form)}</div>${it._si > 0 ? `<div style="text-align:center">${PR(it.form)}</div>` : ''}
+    ${done ? `<div class="row" style="gap:4px;justify-content:center">${done}</div>` : ''}
+    ${s.ctx ? paCtxHTML(it) : ''}
+    <div class="qtext">${heWrap(esc(s.q))}</div>${body}
+    <div id="pa-hint"></div><div id="fb"></div>
+    <div class="row" id="ctl">${s.chips ? '<button class="btn primary" id="pa-check">Check</button>' : ''}<button class="btn ghost" id="pa-h">Hint (1 of 3)</button><button class="btn ghost" id="b-idk">I don't know yet</button></div></div>`;
+  $('#s-exit').onclick = () => { try { savers.prog.now(); } catch {} if (SES.results.length) finishSession(true); else go(SES.back || 'practice'); };
+  $('#pa-h').onclick = () => { if (SES.answered || s._h >= 3) return; s._h++; $('#pa-hint').innerHTML = `<div class="note small">${s.hints.slice(0, s._h).map((h, k) => `<div><b>Hint ${k + 1}:</b> ${heWrap(esc(h))}</div>`).join('')}</div>`; $('#pa-h').textContent = s._h >= 3 ? 'No more hints' : `Hint (${s._h + 1} of 3)`; if (s._h >= 3) $('#pa-h').disabled = true; };
+  $('#b-idk').onclick = () => paAnswer(it, s, null);
+  if (s.chips) {
+    $$('.pc', v).forEach(b => b.onclick = () => { if (SES.answered) return; const f = b.dataset.f; $$(`.pc[data-f="${f}"]`, v).forEach(x => x.setAttribute('aria-pressed', 'false')); b.setAttribute('aria-pressed', 'true'); it._pgnSel[f] = b.dataset.v; });
+    $('#pa-check').onclick = () => { if (!it._pgnSel.n && !it._pgnSel.g && !it._pgnSel.p) { $('#fb').innerHTML = '<div class="fb part">Choose person, gender and number (or “—” where the form has none).</div>'; return; } paAnswer(it, s, { ...it._pgnSel }); };
+  } else $$('.opt', v).forEach(b => b.onclick = () => paAnswer(it, s, b.dataset.o));
+}
+function paAnswer(it, s, chosen) {
+  if (SES.answered) return; SES.answered = true;
+  let ok;
+  if (s.chips) { if (chosen) { const r = gradeParse({ ...it, stem: String(it.stem).split('|')[0] }, { ...chosen, conj: it.conj, stem: String(it.stem).split('|')[0], root: it.root }); ok = ['p', 'g', 'n'].every(k => !(k in r.res) || r.res[k]); it._pgnRes = r.res; ['p', 'g', 'n'].forEach(k => { const b = $(`.pc[data-f="${k}"][aria-pressed="true"]`); if (b && k in r.res) b.classList.add(r.res[k] ? 'right' : 'wrong'); }); } else ok = false; }
+  else { ok = chosen != null && (chosen === s.right || (s.alt && s.alt.includes(chosen))); $$('.opt').forEach(b => { const o = b.dataset.o; if (o === s.right || (s.alt && s.alt.includes(o))) b.classList.add('right'); else if (o === chosen) b.classList.add('wrong'); b.disabled = true; }); }
+  it._log.push({ id: s.id, ok: !!ok, h: s._h || 0, skip: chosen == null ? 1 : 0, ans: s.chips ? (chosen ? `${chosen.p || '-'}${chosen.g || '-'}${chosen.n || '-'}` : '') : chosen || '' });
+  $('#pa-h') && ($('#pa-h').disabled = true);
+  $('#fb').innerHTML = `<div class="fb ${ok ? 'ok' : chosen == null ? 'part' : 'no'}"><b class="t">${ok ? (s._h ? 'Correct (with a hint).' : 'Correct.') : chosen == null ? 'Here is the answer.' : 'Not this one.'}</b>${paExplain(it, s, s.chips ? null : chosen, ok)}</div>`;
+  $('#ctl').innerHTML = `<button class="btn primary" id="pa-next">${it._si + 1 >= it._steps.length ? 'See the whole analysis' : 'Next step'}</button>`;
+  $('#pa-next').onclick = () => { it._si++; drawSteps(it); }; $('#pa-next').focus();
+}
+function paSummary(it) {
+  const v = $('#v-session'); const L = id => it._log.find(l => l.id === id) || { ok: false, h: 0, skip: 1 };
+  const st = l => l.ok ? (l.h ? `<span class="chip warn">✓ with ${l.h} hint${l.h > 1 ? 's' : ''}</span>` : '<span class="chip good">✓ on your own</span>') : l.skip ? '<span class="chip">shown</span>' : '<span class="chip bad">✗ corrected</span>';
+  const rows = [['root', 'Root (שֹׁרֶשׁ)'], ['stem', 'Stem (בִּנְיָן)'], ['conj', 'Form (נְטִיָּה)'], ['pgn', 'Person, gender, number'], ['tr', 'Meaning in the verse'], ['fn', 'What the form does']].filter(([id]) => it._steps.some(s => s.id === id));
+  const right = rows.filter(([id]) => L(id).ok).length, score = right / rows.length;
+  const pr = L('pgn').ok, res = { root: L('root').ok, stem: L('stem').ok, conj: L('conj').ok };
+  if (it.conj !== 'inf') { const r = it._pgnRes || {}; ['p', 'g', 'n'].forEach(k => { if (it.conj === 'ptc' && k === 'p') return; res[k] = pr ? true : !!r[k]; }); }
+  const v2 = paEnVariants(it).right;
+  v.innerHTML = `${sessHead()}<div class="panel qbox" style="max-width:760px;width:100%;margin:0 auto">
+    <div class="row" style="justify-content:space-between"><span class="chip acc">Step by step · the whole analysis</span><span class="small muted">${right} of ${rows.length} decisions right</span></div>
+    <div class="form-big" lang="he">${esc(it.form)}</div><div style="text-align:center">${PR(it.form)}</div>${v2 ? `<div style="text-align:center"><b>“${esc(v2)}”</b></div>` : ''}
+    ${paCtxHTML(it)}
+    <div class="tw"><table class="mini" style="width:100%">${rows.map(([id, lab]) => `<tr><td>${heWrap(esc(lab))}</td><td>${st(L(id))}</td></tr>`).join('')}</table></div>
+    ${parseAnswerHTML(it)}
+    <div class="small"><b>How the word is built:</b></div>${anatomyHTML(it)}
+    <div class="small"><b>Diagnostic clues:</b> ${heWrap(esc(PA_STEM_SIG[String(it.stem).split('|')[0]] ? PA_STEM_SIG[String(it.stem).split('|')[0]][PA_FAMILY(it.conj)] : ''))}; ${heWrap(esc(PA_CONJ_SIG[it.conj] || ''))}.</div>
+    ${paHiddenNote(it).startsWith('All') ? '' : `<div class="small"><b>Irregularity:</b> ${paHiddenNote(it)}</div>`}
+    <div class="small"><b>Function:</b> ${esc(PA_FUNC[it.conj] || '')}</div>
+    ${it.note && !/^Ruth \d/.test(it.note) ? `<div class="small">${heWrap(esc(it.note))}</div>` : ''}
+    <div id="fb"></div>
+    <div class="row" id="ctl"></div></div>`;
+  $('#s-exit').onclick = () => { try { savers.prog.now(); } catch {} if (SES.results.length) finishSession(true); else go(SES.back || 'practice'); };
+  // One record for the whole verb, stored like a parse (root / stem / form / person-gender-number), with hints marked.
+  const rec = { kind: 'parse', key: it.key, form: it.form, root: it.root, stem: it.stem, conj: it.conj, pgn: it.pgn, gloss: it.gloss, t: it.t, note: it.note, ctx: it.ctx, ref: it.ref, cid: it.cid, src: 'steps', _res: res, _sel: { root: (L('root').ans || ''), stem: L('stem').ans || '', conj: L('conj').ans || '', p: (L('pgn').ans || '---')[0], g: (L('pgn').ans || '---')[1], n: (L('pgn').ans || '---')[2] }, _hint: it._log.some(l => l.h), _ms: activeMs(it) };
+  const nx = SES.items[SES.i + 1];
+  $('#ctl').innerHTML = `<button class="btn primary" id="b-next">${nx ? (nx.transferOf ? 'Transfer: try the same rule on a new verb' : 'Next verb') : 'See results'}</button>`;
+  $('#b-next').onclick = () => { SES.i++; drawItem(); };
+  logResult(rec, score);
+  // Each decision with its hint count, kept on the answer record (independent vs hint-assisted per step).
+  try { const ev = MEAS.ev[MEAS.ev.length - 1]; if (ev && ev.h === AN.normHe(it.form).slice(0, 40)) ev.pa = it._log.map(l => ({ s: l.id, ok: +l.ok, h: l.h })); } catch {}
+  try { showStoryExamples(rec); } catch (e) { console.error(e); }
+}
+// Pools: real verbs with their verse (Ruth first; other books for transfer).
+function paPool(src, stem) {
+  let l = [];
+  if (src !== 'other') l = ruthPool().map(i => { const x = ruthItem(i); return { ...x, kind: 'steps', key: 'pa|' + x.key, ref: RUTH.verbs[i][7].split(' · ')[0], cid: 'f:' + AN.hash(AN.normHe(x.form)) }; });
+  if (src !== 'ruth') l = l.concat(pkPool().map(pkItem).filter(x => x.ctx).map(x => ({ ...x, kind: 'steps', key: 'pa|' + x.key })));
+  l = l.filter(x => STEMS[String(x.stem).split('|')[0]] && CONJ[x.conj] && !isLockedItem(x));
+  if (stem === 'weak') l = l.filter(x => isWeakRoot(x.root)); else if (stem) l = l.filter(x => String(x.stem).split('|')[0] === stem);
+  return l;
+}
+function paTransfer(it, used) {
+  const base = { ...it, kind: 'parse' }; let sib = [];
+  try { sib = parseSiblings(base, used); } catch {}
+  const other = sib.filter(x => !x.ref || x.ref !== it.ref);
+  const s = pick(other.length ? other : sib, 1)[0]; if (!s) return null;
+  return { ...s, transferOf: it.form, transferRule: `${STEMS[String(it.stem).split('|')[0]][1]} ${CONJ[it.conj][1]}`, cat: 'transfer', noVary: true };
+}
+function startSteps(o = {}) {
+  let pool = paPool(o.src || 'ruth', o.stem || '');
+  if (!pool.length) pool = paPool('all', '');
+  if (!pool.length) return flash('No verbs for this choice yet.');
+  const mis = new Set(S.prog.mistakes.map(m => m.key));
+  const fresh = pool.filter(x => !expGet(x.cid)), seenMiss = pool.filter(x => mis.has(x.key.replace(/^pa\|/, '')));
+  let chosen = [];
+  if (o.first) { const f = pool.find(x => AN.normHe(x.form) === AN.normHe(o.first) && (!o.ref || x.ref === o.ref)) || paPool('all', '').find(x => AN.normHe(x.form) === AN.normHe(o.first)); if (f) chosen.push(f); }
+  for (const x of [...shuffle(seenMiss), ...shuffle(fresh), ...shuffle(pool)]) { if (chosen.length >= (o.n || 3)) break; if (!chosen.some(c => AN.normHe(c.form) === AN.normHe(x.form))) chosen.push(x); }
+  const used = new Set(chosen.map(x => AN.normHe(x.form))), items = [];
+  chosen.forEach(x => { items.push(x); const t = paTransfer(x, used); if (t) { used.add(AN.normHe(t.form)); items.push(t); } });
+  startSession({ title: 'Step by step' + (o.stem && STEMS[o.stem] ? ' · ' + STEMS[o.stem][1] : o.stem === 'weak' ? ' · weak roots' : ''), items, back: S.tab === 'today' ? 'today' : 'practice', mode: 'progressive', noVary: true });
+}
+// Description → form: read a parsing and pick the Hebrew form (reverse recognition).
+function startReverse(n = 10) {
+  const all = [];
+  try { ruthPool().forEach(i => { const p = RUTH.verbs[i]; all.push({ form: p[0], root: p[1], stem: p[2], conj: p[3], pgn: p[4], gloss: p[5], t: p[6], ref: p[7].split(' · ')[0] }); }); } catch {}
+  try { pkPool().forEach(i => { const r = PRACTICE_VERBS[i]; all.push({ form: r[0], root: r[1], stem: r[2], conj: r[3], pgn: r[4], gloss: r[5], t: PK_TOPIC(r), ref: r[6] }); }); } catch {}
+  const byRoot = {}; all.filter(x => STEMS[String(x.stem).split('|')[0]] && CONJ[x.conj]).forEach(x => { const k = normRoot(x.root); (byRoot[k] = byRoot[k] || []).push(x); });
+  const sig = x => `${String(x.stem).split('|')[0]}|${x.conj}|${String(x.pgn || '').split('|')[0]}`;
+  const items = [];
+  for (const k of shuffle(Object.keys(byRoot))) {
+    if (items.length >= n) break;
+    const g = byRoot[k]; const uniq = []; g.forEach(x => { if (!uniq.some(u => AN.normHe(u.form) === AN.normHe(x.form) || sig(u) === sig(x))) uniq.push(x); });
+    if (uniq.length < 3) continue;
+    const t = pick(uniq, 1)[0], others = pick(uniq.filter(x => x !== t), 3);
+    const desc = `${STEMS[String(t.stem).split('|')[0]][1]} ${paParseLabel(t)}`;
+    const opts = [t, ...others];
+    items.push({ kind: 'mc', noMeaning: true, key: 'rr|' + AN.normHe(t.form), cid: 'rr:' + AN.hash(AN.normHe(t.form)), t: t.t || 'qal_strong', q: `Which form is <b>${esc(desc)}</b> of ${H(paNice(normRoot(t.root)))} “${esc(t.gloss || '')}”?`, o: opts.map(x => H(esc(x.form))), a: 0,
+      x: `<div class="small">Each form:</div><ul class="small" style="margin:2px 0 0;padding-left:1.2em">${opts.map((x, i) => `<li${i === 0 ? ' style="font-weight:600"' : ''}>${H(esc(x.form))}${PRi(x.form)}: ${STEMS[String(x.stem).split('|')[0]][1]} ${esc(paParseLabel(x))}${x.ref ? ` <span class="muted">(${esc(x.ref)})</span>` : ''}</li>`).join('')}</ul>` });
+  }
+  if (!items.length) return flash('Not enough forms yet.');
+  startSession({ title: 'Description → form', items, back: S.tab === 'today' ? 'today' : 'practice' });
+}
+// Wire into the session runner and the Practice tab.
+(function () {
+  const _draw = drawItem;
+  drawItem = function () {
+    const it = SES && SES.items[SES.i];
+    if (it && it.kind === 'steps') return drawSteps(it);
+    _draw();
+    if (it && it.transferOf) { const q = document.querySelector('#v-session .qbox'); if (q) q.insertAdjacentHTML('afterbegin', `<div class="note small"><b>Transfer.</b> Same rule as ${H(esc(it.transferOf))} (${esc(it.transferRule || '')}), new verb${it.ref ? ' from ' + esc(it.ref) : ''}. Parse it on your own.</div>`); }
+  };
+  const _rp = renderPractice;
+  renderPractice = function () {
+    _rp.apply(this, arguments);
+    const g = document.querySelector('#v-practice .grid3'); if (!g || document.getElementById('pa-card')) return;
+    const stems = ['qal', 'niphal', 'piel', 'hiphil', 'hithpael', 'pual', 'hophal'].filter(s => s === 'qal' || stemLearned(s));
+    g.insertAdjacentHTML('afterbegin', `<div class="panel stack" id="pa-card" style="border-color:var(--accent)"><h3>Step by step</h3><p class="small muted">One real verb at a time, one decision at a time: root → stem → form → who → meaning in the verse → what the form does. Explanation after every answer, hints if you need them, then a new verb to test the same rule.</p>
+      <div class="row"><button class="btn primary" id="pa-go">Start</button><select id="pa-src" class="sm"><option value="ruth">Ruth</option><option value="all">Ruth + other books</option></select><select id="pa-stem" class="sm"><option value="">All stems</option>${stems.map(s => `<option value="${s}">${STEMS[s][1]}</option>`).join('')}<option value="weak">Weak roots</option></select></div>
+      <div class="row"><button class="btn sm" id="pa-ex">Example: ${H('אֵלֵךְ')} (Ruth 1:16)</button><button class="btn sm" id="pa-rev">Description → form</button></div></div>`);
+    $('#pa-go').onclick = () => startSteps({ src: $('#pa-src').value, stem: $('#pa-stem').value });
+    $('#pa-ex').onclick = () => startSteps({ src: 'ruth', first: 'אֵלֵךְ', ref: 'Ruth 1:16' });
+    $('#pa-rev').onclick = () => startReverse();
+  };
+})();
+
+// ===== Course folder on this computer =====
+// Connect the folder where the course files live (for example the Google Drive folder that Drive for desktop keeps on the PC).
+// The app remembers the folder, and when you press "Check for new files" it lists files that are new or changed since the last check.
+// Files are read only on that click: nothing runs in the background, nothing is uploaded anywhere. Works in Chrome or Edge on a computer.
+const FOLDER = { dbp: null, handle: null, list: null, msg: '' };
+const fsSupported = () => typeof window.showDirectoryPicker === 'function';
+function fsDb() { return FOLDER.dbp || (FOLDER.dbp = new Promise((res, rej) => { const r = indexedDB.open('het-folder', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); })); }
+async function fsGet(k) { const db = await fsDb(); return new Promise((res, rej) => { const q = db.transaction('kv').objectStore('kv').get(k); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); }
+async function fsPut(k, v) { const db = await fsDb(); return new Promise((res, rej) => { const tx = db.transaction('kv', 'readwrite'); if (v === undefined) tx.objectStore('kv').delete(k); else tx.objectStore('kv').put(v, k); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); }
+const FS_EXT = /\.(pdf|docx|txt|md|json)$/i;
+async function fsWalk(dir, prefix, out, depth) {
+  for await (const [name, h] of dir.entries()) {
+    if (/^[.~]|^desktop\.ini$|^thumbs\.db$/i.test(name)) continue;
+    if (h.kind === 'directory') { if (depth < 4) await fsWalk(h, prefix + name + '/', out, depth + 1); }
+    else if (FS_EXT.test(name)) out.push({ path: prefix + name, name, h });
+  }
+}
+const fsTitleKey = s => String(s || '').toLowerCase().replace(/\.[a-z0-9]+$/, '').replace(/\(\d+\)|[-_]+|\s+/g, ' ').replace(/[^a-z0-9א-ת ]/g, '').trim();
+async function fsScan() {
+  const h = FOLDER.handle; if (!h) return;
+  let perm = await h.queryPermission({ mode: 'read' });
+  if (perm !== 'granted') perm = await h.requestPermission({ mode: 'read' });
+  if (perm !== 'granted') { FOLDER.msg = 'The browser did not allow reading the folder. Press the button again and choose “Allow”.'; return; }
+  const found = []; await fsWalk(h, '', found, 0);
+  const seen = (await fsGet('seen')) || {};
+  const libKeys = new Set(S.lib.map(l => fsTitleKey(l.title)));
+  const list = [];
+  for (const f of found) {
+    let file; try { file = await f.h.getFile(); } catch { continue; }
+    const prev = seen[f.path], key = fsTitleKey(f.name);
+    const status = prev ? (prev.size === file.size && prev.mod === file.lastModified ? 'same' : 'changed') : libKeys.has(key) ? 'inlib' : 'new';
+    list.push({ path: f.path, name: f.name, size: file.size, mod: file.lastModified, file, status });
+  }
+  FOLDER.list = list.sort((a, b) => a.path.localeCompare(b.path));
+  const n = s => list.filter(x => x.status === s).length;
+  FOLDER.msg = `${list.length} course files found: ${n('new')} new, ${n('changed')} changed since the last check, ${n('inlib')} probably already in your library (same name), ${n('same')} unchanged.`;
+  await fsPut('lastScan', Date.now());
+}
+function folderPanelHTML() {
+  if (!fsSupported()) return `<div class="panel stack" id="fold-panel"><h2>Course folder on this computer</h2><p class="small muted">Connecting a folder works in Chrome or Edge on a computer (not on a phone). Here, add files with “Choose files” above.</p></div>`;
+  const L = FOLDER.list, show = L ? L.filter(x => x.status !== 'same') : [];
+  const lab = { new: '<span class="chip good">new</span>', changed: '<span class="chip warn">changed</span>', inlib: '<span class="chip">in library?</span>' };
+  return `<div class="panel stack" id="fold-panel"><h2>Course folder on this computer</h2>
+    <p class="small muted">Connect the folder where you keep your Hebrew course files (it can be your Google Drive folder on this PC). Then press “Check for new files” whenever you add something: the app lists only what is new or changed, so nothing is uploaded twice. The files stay on your computer and in this app's private library; nothing runs in the background.</p>
+    <div class="row">${FOLDER.handle ? `<span class="small">Connected: <b>${esc(FOLDER.handle.name)}</b></span><button class="btn primary sm" id="fold-scan">Check for new files</button><button class="btn ghost sm" id="fold-off">Disconnect</button>` : '<button class="btn primary sm" id="fold-on">Connect my course folder</button>'}</div>
+    ${FOLDER.msg ? `<div class="small">${esc(FOLDER.msg)}</div>` : ''}
+    ${show.length ? `<div class="stack" style="gap:4px;max-height:320px;overflow:auto">${show.map((x, i) => `<label class="row small" style="gap:8px;align-items:center"><input type="checkbox" data-fi="${L.indexOf(x)}" ${x.status === 'inlib' ? '' : 'checked'}> ${lab[x.status]} <span style="min-width:0;overflow-wrap:anywhere">${esc(x.path)}</span></label>`).join('')}</div>
+      <div class="row"><button class="btn sm primary" id="fold-use">Put the checked files in “Add material”</button><button class="btn sm ghost" id="fold-mark">Mark the unchecked ones as already added</button></div>
+      <p class="small muted">Then choose “What is it?” above and press “Add to library”. A changed file is added as a new item; delete the old copy in the list below if you no longer need it.</p>` : ''}
+  </div>`;
+}
+function wireFolderPanel() {
+  const P = $('#fold-panel'); if (!P) return;
+  const redraw = () => { P.outerHTML = folderPanelHTML(); wireFolderPanel(); };
+  $('#fold-on', P)?.addEventListener('click', async () => { try { FOLDER.handle = await window.showDirectoryPicker({ id: 'hebrew-course', mode: 'read' }); await fsPut('dir', FOLDER.handle); FOLDER.msg = 'Connected. Checking the files…'; redraw(); await fsScan(); redraw(); } catch (e) { if (e && e.name !== 'AbortError') { FOLDER.msg = 'Could not connect the folder: ' + (e.message || e); redraw(); } } });
+  $('#fold-scan', P)?.addEventListener('click', async () => { FOLDER.msg = 'Checking the files…'; redraw(); try { await fsScan(); } catch (e) { FOLDER.msg = 'Could not read the folder: ' + (e.message || e) + '. If you moved or renamed it, disconnect and connect it again.'; } redraw(); });
+  $('#fold-off', P)?.addEventListener('click', async () => { FOLDER.handle = null; FOLDER.list = null; FOLDER.msg = ''; await fsPut('dir', undefined); redraw(); });
+  $('#fold-mark', P)?.addEventListener('click', async () => { const seen = (await fsGet('seen')) || {}; $$('[data-fi]', P).forEach(c => { if (!c.checked) { const x = FOLDER.list[+c.dataset.fi]; seen[x.path] = { size: x.size, mod: x.mod, t: Date.now() }; x.status = 'same'; } }); await fsPut('seen', seen); redraw(); });
+  $('#fold-use', P)?.addEventListener('click', () => {
+    const sel = $$('[data-fi]', P).filter(c => c.checked).map(c => FOLDER.list[+c.dataset.fi]); if (!sel.length) return flash('Check at least one file.');
+    UP.files = sel.map(x => x.file); UP.fromFolder = sel.map(x => ({ path: x.path, name: x.name, size: x.size, mod: x.mod }));
+    $('#up-names').textContent = UP.files.map(f => f.name).join(', '); $('#up-title').value = UP.files.length === 1 ? UP.files[0].name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ') : '';
+    $('#up-status').textContent = `${sel.length} file${sel.length > 1 ? 's' : ''} from your folder ready. Choose “What is it?”, then press “Add to library”.`;
+    $('#up-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+}
+(function () {
+  if (typeof renderLibrary !== 'function') return;
+  const _rl = renderLibrary;
+  renderLibrary = function () { _rl.apply(this, arguments); const up = $('#up-panel'); if (up && !$('#fold-panel')) { up.insertAdjacentHTML('afterend', folderPanelHTML()); wireFolderPanel(); } };
+  // After "Add to library": remember which folder files were added, so the next check does not list them again.
+  const _du = doUpload;
+  doUpload = async function () {
+    const pend = UP.fromFolder, names = UP.files.map(f => f.name);
+    await _du.apply(this, arguments);
+    if (pend && pend.length) {
+      try { const seen = (await fsGet('seen')) || {}; pend.forEach((p, i) => { const row = document.getElementById('up-row-' + i), chip = row && row.querySelector('.chip'); if (names[i] === p.name && chip && /added|note/.test(chip.textContent)) { seen[p.path] = { size: p.size, mod: p.mod, t: Date.now() }; const x = FOLDER.list && FOLDER.list.find(y => y.path === p.path); if (x) x.status = 'same'; } }); await fsPut('seen', seen); } catch (e) { console.error(e); }
+      UP.fromFolder = null; const P = $('#fold-panel'); if (P) { P.outerHTML = folderPanelHTML(); wireFolderPanel(); }
+    }
+  };
+  if (fsSupported()) fsGet('dir').then(h => { if (h) FOLDER.handle = h; }).catch(() => {});
+})();
+
+</script>
+<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='bd090ee8e6';</script>
 </body></html>
