@@ -3652,7 +3652,7 @@ const TUTOR_PROMPT = `At the end of our session, write a diagnostic report for m
 "suffix_items":[{"form":"Hebrew word with a pronoun ending","meaning":"correct meaning","wrong":["two or three plausible wrong meanings"],"explain":"why"}],
 "mc_items":[{"area":"one of the areas above","q":"question","options":["…","…","…","…"],"answer":0,"explain":"why"}],
 "recommendations":["short practice recommendations"]}
-Only include Hebrew forms that appeared in our session. Do not invent scores or percentages.`;
+Also add a top-level field "cold_check":[{"he":"the Hebrew item","task":"parse|translate|vocab|question","answer":"my exact first answer","key":"the correct answer","correct":1 or 0.5 or 0,"seconds":how long I took,"cold":true if I had not studied this text in the last 3 days}]. Start every session with this cold check BEFORE any teaching: 8–10 timed, closed-book items. Only include Hebrew forms that appeared in our session. Do not invent scores or percentages.`;
 const pgnOK = (conj, pgn) => conj === 'inf' ? true : conj === 'ptc' ? /^[mfc][sp]$/.test(pgn) : /^[123][mfc][sp]$/.test(pgn);
 function findTutorJSON(text) {
   const tryParse = t => { try { const o = JSON.parse(t); return o && o.schema === TUTOR_SCHEMA ? o : null; } catch { return null; } };
@@ -4594,7 +4594,7 @@ function hasSuffix(it) { return !!(it.suffix || (it.kind === 'parse' && /ְךָ$
 function logEvent(it, score, o = {}) {
   try {
     const now = Date.now(); const cid = AN.contentId(it); const prev = expGet(cid);
-    const k = it.kind === 'write' ? (it.sub === 'comp' ? 'comp' : 'tr') : it.kind;
+    const k = it.kind === 'write' ? (it.sub === 'comp' ? 'comp' : it.sub === 'memory' ? 'mem' : 'tr') : it.kind;
     const ev = { ts: now, sid: o.sid || MEAS.sid, i: AN.itemId(it), c: cid, k, sk: skillOf(it), t: it.t || '', m: o.mode || (SES && SES.mode) || 'practice', cat: o.cat || it.cat || ((SES && ['mistakes', 'review', 'reinforce'].includes(SES.mode)) ? 'review' : 'instructional'),
       as: it._hint ? 'hint' : 'none', g: prev ? Math.round((now - prev[2]) / 864e5 * 1000) / 1000 : -1, x: prev ? prev[0] : 0, s: Math.round(score * 1000) / 1000, ms: o.ms !== undefined ? o.ms : activeMs(it), sc: o.sc || it._sc || 'auto', d: AN.difficulty(it), rv: o.rv || null };
     const hl = AN.normHe(it.form || it.he || (AN.heRuns(it.q || '')[0]) || (it.card ? String(it.card).split('|')[1] || '' : '')).slice(0, 40); if (hl) ev.h = hl;
@@ -4972,7 +4972,7 @@ function wireExItem(v, it, a, onChange) {
   $$('.ex-root', v).forEach(t => t.oninput = () => { a.root = t.value; onChange(); });
 }
 const exAnswered = (it, a) => !!a && (it.kind === 'mc' ? a.o != null : it.kind === 'root' ? !!(a.root || a.o != null) : it.kind === 'parse' ? !!(a.conj || a.stem || a.root) : !!((a.text || '').trim() || (a.strict || '').trim()));
-function passageHTML() { return EX.passage ? `<details class="panel" open><summary>Passage: ${esc(EX.passage.ref)} (unseen)</summary><div class="passage lines" style="--rsize:1.35rem;margin-top:8px">${EX.passage.verses.map((x, i) => `<div class="ln" style="cursor:default"><span class="no">${i + 1}</span><span>${esc(x.he)}</span></div>`).join('')}</div></details>` : ''; }
+function passageHTML() { return EX.passage ? `<details class="panel" open><summary>Passage: ${esc(EX.passage.ref)}${EX.type === 'final' ? '' : ' (unseen)'}</summary><div class="passage lines" style="--rsize:1.35rem;margin-top:8px">${EX.passage.verses.map((x, i) => `<div class="ln" style="cursor:default"><span class="no">${i + 1}</span><span>${esc(x.he)}</span></div>`).join('')}</div></details>` : ''; }
 function renderExam() {
   const v = $('#v-session'); showSection('v-session'); v.classList.add('exam');
   const bp = BLUEPRINTS[EX.type];
@@ -5087,7 +5087,7 @@ async function submitExam() {
     else if (it.kind === 'root') { const g = gradeRoot(it, a.root || '', a.o); r.score = g.score; r.f = g.f; r.sc = 'auto'; }
     else if (it.kind === 'parse') { const g = gradeParse(it, { p: a.p || '', g: a.g || '', n: a.n || '', conj: a.conj || '', stem: a.stem || '', root: a.root || '' }); r.score = r.answered ? g.score : 0; r.res = g.res; r.sc = 'auto'; }
     else if (it.kind === 'recall') { const g = AN.gradeRecall(a.text || '', it.gloss); if (g.score != null) { r.score = g.score; r.sc = 'auto'; r.how = g.method; } else r.pending = true; }
-    else r.pending = r.answered; if (it.kind === 'write' && !r.answered) { r.score = 0; r.sc = 'auto'; }
+    else if (it.kind === 'write' && it.sub === 'memory') { const g = memCompare(a.text || '', it.model); r.score = r.answered ? Math.round(g.score * 1000) / 1000 : 0; r.sc = 'auto'; r.fb = `${g.ok} of ${g.total} words right${g.near ? `, ${g.near} one letter off` : ''}`; } else r.pending = r.answered; if (it.kind === 'write' && !r.answered) { r.score = 0; r.sc = 'auto'; }
   }
   const pend = res.filter(r => r.pending);
   if (pend.length && aiAvailable()) {
@@ -5117,7 +5117,7 @@ async function finalizeExam(res) {
   const bp = BLUEPRINTS[EX.type];
   const items = res.map(r => {
     const { it, a } = r; const f = r.f || (it.kind === 'parse' && r.res ? { root: +!!r.res.root, stem: +!!r.res.stem, conj: +!!r.res.conj, ...(it.conj === 'inf' ? {} : { pgn: +['p', 'g', 'n'].every(x => !(x in r.res) || r.res[x]) }) } : null);
-    const ev = { k: it.kind === 'write' ? (it.sub === 'comp' ? 'comp' : 'tr') : it.kind, sk: skillOf(it), s: r.score || 0, f, ms: EX.paper ? null : (EX.ms[r.i] || null) };
+    const ev = { k: it.kind === 'write' ? (it.sub === 'comp' ? 'comp' : it.sub === 'memory' ? 'mem' : 'tr') : it.kind, sk: skillOf(it), s: r.score || 0, f, ms: EX.paper ? null : (EX.ms[r.i] || null) };
     const err = r.score >= 1 ? (ev.ms && AN.SLOW[ev.sk] && ev.ms > AN.SLOW[ev.sk] ? ['SL'] : []) : AN.tagErrors(ev, { root: it.root, suffix: hasSuffix(it), wp: it.wp, chosen: r.chosen, target: it.kind === 'mc' ? AN.normHe(String(it.o[it.a]).replace(/<[^>]+>/g, '')) : '', extra: r.err || [] });
     const spec = { ...it }; delete spec._t0; delete spec._h0; delete spec._order;
     return { n: r.i + 1, iid: it.iid, cid: it.cid, sec: it.sec, cat: it.cat, kind: it.kind, sub: it.sub || '', answered: r.answered ? 1 : 0, answer: a, score: Math.round((r.score || 0) * 1000) / 1000, sc: r.sc, f, crit: r.crit || null, fb: r.fb || '', err, ms: ev.ms, diff: it.diff, spec };
@@ -5148,7 +5148,7 @@ async function finalizeExam(res) {
   // Events (one per item, mode 'assessment') and exposure (flag: used in an assessment).
   for (const x of items) {
     const it = EX.items[x.n - 1];
-    pushEvent({ ts: rec.end, sid: rec.id, aid: rec.id, i: x.iid, c: x.cid, k: x.kind === 'write' ? (x.sub === 'comp' ? 'comp' : 'tr') : x.kind, sk: skillOf(it), t: it.t || '', m: 'assessment', cat: x.cat, as: 'none', g: expGet(x.cid) ? Math.round((rec.end - expGet(x.cid)[2]) / 864e5 * 1000) / 1000 : -1, x: expGet(x.cid) ? expGet(x.cid)[0] : 0, s: x.score, ms: x.ms, sc: x.sc, d: x.diff, f: x.f || undefined, h: AN.normHe(it.form || it.he || (AN.heRuns(it.q || '')[0]) || '').slice(0, 40) || undefined, env: APP_ENV, grade: x.score >= 1 ? 'correct' : x.score > 0 ? 'partial' : 'incorrect', q: exPromptText(it), exp: exExpectedText(it), ans: exAnswerText(it, x.answer), rvs: exRubric(it, x.sc), cn: [it.t, it.wp, it.stem ? String(it.stem).split('|')[0] : '', it.conj || ''].filter(Boolean), e: x.err.length ? x.err : undefined, paper: rec.paper || undefined, rv: AN.VERSION.blueprint[rec.type], att: 1, chg: (x.answer && x.answer._chg) || 0, skip: x.answered ? undefined : 1, src: itemSource(it), ...(it.root && (it.kind === 'parse' || it.kind === 'root' || it.mk) ? { wk: AN.weakRoot(it.root) ? 1 : 0, sf: hasSuffix(it) ? 1 : 0, st2: it.stem ? String(it.stem).split('|')[0] : undefined, cj: it.conj || undefined } : {}) });
+    pushEvent({ ts: rec.end, sid: rec.id, aid: rec.id, i: x.iid, c: x.cid, k: x.kind === 'write' ? (x.sub === 'comp' ? 'comp' : x.sub === 'memory' ? 'mem' : 'tr') : x.kind, sk: skillOf(it), t: it.t || '', m: 'assessment', cat: x.cat, as: 'none', g: expGet(x.cid) ? Math.round((rec.end - expGet(x.cid)[2]) / 864e5 * 1000) / 1000 : -1, x: expGet(x.cid) ? expGet(x.cid)[0] : 0, s: x.score, ms: x.ms, sc: x.sc, d: x.diff, f: x.f || undefined, h: AN.normHe(it.form || it.he || (AN.heRuns(it.q || '')[0]) || '').slice(0, 40) || undefined, env: APP_ENV, grade: x.score >= 1 ? 'correct' : x.score > 0 ? 'partial' : 'incorrect', q: exPromptText(it), exp: exExpectedText(it), ans: exAnswerText(it, x.answer), rvs: exRubric(it, x.sc), cn: [it.t, it.wp, it.stem ? String(it.stem).split('|')[0] : '', it.conj || ''].filter(Boolean), e: x.err.length ? x.err : undefined, paper: rec.paper || undefined, rv: AN.VERSION.blueprint[rec.type], att: 1, chg: (x.answer && x.answer._chg) || 0, skip: x.answered ? undefined : 1, src: itemSource(it), ...(it.root && (it.kind === 'parse' || it.kind === 'root' || it.mk) ? { wk: AN.weakRoot(it.root) ? 1 : 0, sf: hasSuffix(it) ? 1 : 0, st2: it.stem ? String(it.stem).split('|')[0] : undefined, cj: it.conj || undefined } : {}) });
     expTouch(x.cid, x.score, 2); if (it.verseCid) expTouch(it.verseCid, null, 2); if (it.formCid) expTouch(it.formCid, null, 2); (it.verseCids || []).forEach(c => expTouch(c, null, 2));
   }
   if (EX.passage) EX.passage.verses.forEach(x => expTouch(x.cid, null, 2));
@@ -5957,7 +5957,7 @@ function recordsForWeekSkill(w, k) {
   showRecords(`${weekLabel(w)} · ${SKILL_OPTS[k] || k}: ${evs.length} recorded answers`, eventsTable(evs));
 }
 function recordsForTest(a) {
-  showRecords(`${a.type === 'mock' ? 'Mock final' : 'Weekly check'} · ${dShort(a.end)} · independent ${a.indep}%`, tableHTML(['#', 'Section', 'Category', 'Item', 'Score', 'Scored by', 'Errors'], a.items.map(x => [x.n, esc(x.sec), esc(CAT_LABEL[x.cat] || x.cat), x.spec ? `<span class="he" dir="rtl">${esc(AN.normHe(x.spec.form || x.spec.he || '').slice(0, 40))}</span>` : '', Math.round(x.score * 100) + '%', esc(x.sc), esc((x.err || []).map(c => AN.ERR[c]).join('; '))])) + `<button class="btn sm" id="dw-open-test">Open the full review with explanations</button>`);
+  showRecords(`${((BLUEPRINTS[a.type] || {}).name || 'Weekly check')} · ${dShort(a.end)} · independent ${a.indep}%`, tableHTML(['#', 'Section', 'Category', 'Item', 'Score', 'Scored by', 'Errors'], a.items.map(x => [x.n, esc(x.sec), esc(CAT_LABEL[x.cat] || x.cat), x.spec ? `<span class="he" dir="rtl">${esc(AN.normHe(x.spec.form || x.spec.he || '').slice(0, 40))}</span>` : '', Math.round(x.score * 100) + '%', esc(x.sc), esc((x.err || []).map(c => AN.ERR[c]).join('; '))])) + `<button class="btn sm" id="dw-open-test">Open the full review with explanations</button>`);
   $('#dw-open-test').onclick = () => renderExamReview(a);
 }
 
@@ -5980,7 +5980,7 @@ async function renderProgress() {
   const f = AN.forecast(ser, parseDay(anSet().examDate).getTime(), Date.now());
   const xMax = Math.max(15, Math.ceil(examX)), xMin = Math.max(1, Math.min(DASH.from, ...ws.map(w => w.courseWeek), ...tests.map(a => Math.floor(xOfTs(a.end)))));
   // 1. Exam performance + forecast
-  const examPts = tests.map(a => ({ x: xOfTs(a.end), y: a.indep, n: a.nIndep, tip: `${a.type === 'mock' ? 'Mock final' : 'Weekly check'} ${dShort(a.end)}: ${a.indep} (measured on ${a.nIndep} unseen items)`, click: () => recordsForTest(a) }));
+  const examPts = tests.map(a => ({ x: xOfTs(a.end), y: a.indep, n: a.nIndep, tip: `${((BLUEPRINTS[a.type] || {}).name || 'Weekly check')} ${dShort(a.end)}: ${a.indep} (measured on ${a.nIndep} unseen items)`, click: () => recordsForTest(a) }));
   const proj = [];
   if (f.status === 'ok') { const last = examPts[examPts.length - 1]; const from = { x: last.x, y: f.fittedNow }; proj.push({ from, to: { x: examX, y: f.central }, label: `Central projection ${Math.round(f.central)}`, short: `central ${Math.round(f.central)}` }, { from, to: { x: examX, y: f.cons }, label: `Conservative ${Math.round(f.cons)}`, short: `conservative ${Math.round(f.cons)}`, dash: '2 3' }, { from, to: { x: examX, y: f.opt }, label: `Optimistic ${Math.round(f.opt)}`, short: `optimistic ${Math.round(f.opt)}`, dash: '2 3' }); }
   const band = f.status === 'ok' && f.band ? [{ x: examPts[examPts.length - 1].x, lo: f.fittedNow, hi: f.fittedNow }, { x: examX, lo: f.band[0], hi: f.band[1] }] : [];
@@ -6084,7 +6084,7 @@ async function renderProgress() {
     </div>
     <p class="small muted">Labels: <b>measured</b> = recorded answers · <b>comparison</b> = difference between two weeks · <b>estimate</b> = calculated from measurements (fitted lines) · <b>projection</b> = dashed lines toward the final. Changes on fewer than 10 answers are marked “too few answers to compare”.</p>
   </div>
-  ${chartCard('ch-exam', 'Exam performance and forecast to the final', 'Purple dots: independent scores on unseen items (click one to see the test). Dashed: projections; shaded: 95% prediction range when there are 4+ tests.', examChart, { kind: 'measured + projection', file: 'exam-forecast', table: tableHTML(['Test', 'Date', 'Course week', 'Independent', 'Unseen items', 'All items'], tests.map(a => [a.type === 'mock' ? 'Mock final' : 'Weekly check', dShort(a.end), xOfTs(a.end).toFixed(1), a.indep, a.nIndep, a.total])), note: f.status === 'ok' ? `Model ${f.model}: straight-line trend over ${f.n} tests, ${f.slope >= 0 ? '+' : ''}${f.slope.toFixed(1)} ± ${(f.seSlope || 0).toFixed(1)} points per week. Central ${Math.round(f.central)}, conservative ${Math.round(f.cons)}, optimistic ${Math.round(f.opt)}${f.band ? `, range ${Math.round(f.band[0])}–${Math.round(f.band[1])}` : ''}. Not a probability and not validated against the professor’s exam.` : `<b>Insufficient evidence for a reliable projection.</b> Needed: ${esc((f.need || []).join('; '))}.` })}
+  ${chartCard('ch-exam', 'Exam performance and forecast to the final', 'Purple dots: independent scores on unseen items (click one to see the test). Dashed: projections; shaded: 95% prediction range when there are 4+ tests.', examChart, { kind: 'measured + projection', file: 'exam-forecast', table: tableHTML(['Test', 'Date', 'Course week', 'Independent', 'Unseen items', 'All items'], tests.map(a => [((BLUEPRINTS[a.type] || {}).name || 'Weekly check'), dShort(a.end), xOfTs(a.end).toFixed(1), a.indep, a.nIndep, a.total])), note: f.status === 'ok' ? `Model ${f.model}: straight-line trend over ${f.n} tests, ${f.slope >= 0 ? '+' : ''}${f.slope.toFixed(1)} ± ${(f.seSlope || 0).toFixed(1)} points per week. Central ${Math.round(f.central)}, conservative ${Math.round(f.cons)}, optimistic ${Math.round(f.opt)}${f.band ? `, range ${Math.round(f.band[0])}–${Math.round(f.band[1])}` : ''}. Not a probability and not validated against the professor’s exam.` : `<b>Insufficient evidence for a reliable projection.</b> Needed: ${esc((f.need || []).join('; '))}.` })}
   ${chartCard('ch-targets', 'Target tracking', 'Bar = last measured independent score; thin band = projected range at the final; black tick = target.', targetChart(f.current, f, tg), { kind: 'measured + projection', file: 'targets', table: tableHTML(['Target', 'Distance', 'Needed per week', 'Status'], tg.map(t => [t.t, t.gap == null ? '—' : t.gap <= 0 ? 'reached' : '+' + Math.round(t.gap), t.req == null || t.gap <= 0 ? '—' : t.req.toFixed(1), esc(t.status)])), note: `Weeks left: ${f.weeksLeft.toFixed(1)}. “Needed per week” is arithmetic; compare it with the measured trend only when a forecast exists. Reference results (different exams, not on the chart): ${(anSet().refs || []).map(r => `${esc(r.name)} ${r.score}/${r.max}`).join(' · ')}.` })}
   <div class="grid2">${skillCharts}</div>
   <div class="grid2">
@@ -6432,7 +6432,7 @@ async function exportReport(kind, sel, cmp, anon) {
     r.h2('Plan for the next training days');
     r.table(['Activity', 'Min/day', 'Why'], plan ? plan.rows.filter(x => x.min > 0 || x.alt).map(x => [x.name, x.alt ? '5, alternate days' : x.min, (x.why || []).join('; ')]) : [['The plan is made when the week closes', '', '']], [330, 110, 640]);
     if (plan && (plan.notes || []).length) r.bullets(plan.notes);
-    if (kind === 'semester') { r.h2('Tests'); r.table(['Date', 'Type', 'Independent', 'All items', 'Unseen items', 'Mode'], S.assess.map(a => [dt(a.end), a.type === 'mock' ? 'Mock final' : 'Weekly check', a.indep ?? '—', a.total, a.nIndep, a.paper ? 'paper' : 'typed']), [180, 200, 170, 160, 170, 200]); }
+    if (kind === 'semester') { r.h2('Tests'); r.table(['Date', 'Type', 'Independent', 'All items', 'Unseen items', 'Mode'], S.assess.map(a => [dt(a.end), ((BLUEPRINTS[a.type] || {}).name || 'Weekly check'), a.indep ?? '—', a.total, a.nIndep, a.paper ? 'paper' : 'typed']), [180, 200, 170, 160, 170, 200]); }
     r.h2('Methods and limitations');
     r.bullets([`Weekly cycle ${'cycle-v2'}: Days 1–5 training, Day 6 weekly check, Day 7 recovery or completion. Evidence checklist ${AN.VERSION.coverage}: minimums chosen so each practice accuracy has a 95% interval of about ±20 points or narrower; the official report is locked until the checklist and the weekly check are complete.`,
       `Statistics ${AN.VERSION.stats}: Wilson 95% intervals with an effective n (design effect by item, because the same item can be answered several times); change intervals use the two standard errors combined. Difficulty-standardized accuracy weights easy, medium and hard equally and needs 5+ answers in each.`,
@@ -7122,5 +7122,168 @@ function wireFolderPanel() {
 })();
 
 </script>
-<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='bd090ee8e6';</script>
+<script>
+// ===== Final exam, real format (as Emerson describes it, Nov 3) =====
+// 75 minutes, about 50 items, everything in Hebrew: a random section of Ruth, Hebrew questions answered in Hebrew,
+// random words from it to parse, lines to translate into smooth English, and a section of Ruth written from memory.
+// Built on the existing test engine: no hints, no feedback until you submit, the first submission is stored once.
+const RUTH_START = { 1: '2026-10-27', 2: '2026-11-03', 3: '2026-11-10', 4: '2026-11-17' };
+const ruthChaptersStudied = () => [1, 2, 3, 4].filter(c => dayKey() >= RUTH_START[c]);
+BLUEPRINTS.final = { id: 'final-v1', name: 'Final (real format)', minutes: () => 75,
+  sections: { comp: { n: 8, w: .15, label: 'Questions on the passage (answer in Hebrew)' }, parse: { n: 24, w: .30, label: 'Parsing words from the passage' }, translation: { n: 4, w: .25, label: 'Translation into smooth English' }, syntax: { n: 10, w: .05, label: 'Grammar questions' }, memory: { n: 2, w: .25, label: 'Write from memory (Hebrew)' } } };
+INDEP_W.memory = .2;
+// ---- Comparing a text written from memory with the original: consonants only (vowels and accents ignored), word by word.
+const memNorm = w => String(w || '').normalize('NFC').replace(/[֑-ׇ]/g, '').replace(/[ךםןףץ]/g, c => ({ 'ך': 'כ', 'ם': 'מ', 'ן': 'נ', 'ף': 'פ', 'ץ': 'צ' }[c])).replace(/[^א-ת]/g, '');
+const memWords = t => String(t || '').split(/[\s־׀׃.,;:!?]+/).map(w => ({ raw: w, k: memNorm(w) })).filter(x => x.k);
+function memLev(a, b) { if (Math.abs(a.length - b.length) > 1) return 2; const d = Array.from({ length: a.length + 1 }, (_, i) => [i]); for (let j = 1; j <= b.length; j++) d[0][j] = j; for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); return d[a.length][b.length]; }
+function memCompare(typed, ref) {
+  const R = memWords(ref), T = memWords(typed), n = R.length, m = T.length;
+  const sim = (r, t) => r.k === t.k ? 1 : (r.k.length >= 3 && memLev(r.k, t.k) <= 1 ? .5 : 0);
+  const D = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+  for (let i = 1; i <= n; i++) for (let j = 1; j <= m; j++) { const s = sim(R[i - 1], T[j - 1]); D[i][j] = Math.max(D[i - 1][j], D[i][j - 1], s ? D[i - 1][j - 1] + s : 0); }
+  const st = new Array(n).fill('miss'), used = new Array(m).fill(false); let i = n, j = m;
+  while (i > 0 && j > 0) { const s = sim(R[i - 1], T[j - 1]); if (s && D[i][j] === D[i - 1][j - 1] + s) { st[i - 1] = s === 1 ? 'ok' : 'near'; used[j - 1] = true; i--; j--; } else if (D[i - 1][j] >= D[i][j - 1]) i--; else j--; }
+  const extra = T.filter((x, k) => !used[k]).map(x => x.raw), got = D[n][m];
+  const score = n ? Math.max(0, Math.min(1, got / (n + .5 * extra.length))) : 0;
+  const html = `<div class="he" dir="rtl" style="font-size:1.35rem;line-height:2">${R.map((x, k) => `<span style="${st[k] === 'ok' ? 'color:var(--good)' : st[k] === 'near' ? 'color:#b7791f;text-decoration:underline dotted' : 'color:var(--bad);text-decoration:line-through'}">${esc(x.raw)}</span>`).join(' ')}</div>
+    <div class="small"><span style="color:var(--good)">green</span> = written right · <span style="color:#b7791f">orange</span> = one letter off · <span style="color:var(--bad)">red</span> = missing${extra.length ? ` · extra words you wrote: <span class="he" dir="rtl">${extra.map(esc).join(' ')}</span>` : ''}</div>`;
+  return { score, ok: st.filter(x => x === 'ok').length, near: st.filter(x => x === 'near').length, total: n, extra, html };
+}
+// ---- On-screen Hebrew keys for any Hebrew answer box (no Hebrew keyboard needed on the computer).
+function heKeysHTML() { return `<details class="hekeys small"><summary>Hebrew keys</summary><div class="keys" style="margin-top:6px">${'אבגדהוזחטיכךלמםנןסעפףצץקרשת'.split('').map(l => `<button type="button" class="key" data-hk="${l}">${l}</button>`).join('')}<button type="button" class="key" data-hk="־">־</button><button type="button" class="key wide" data-hk=" ">space</button><button type="button" class="key wide" data-hk="⌫">⌫</button></div></details>`; }
+function wireHeKeys(root, ta) {
+  $$('[data-hk]', root).forEach(b => b.onclick = () => { const t = ta(); if (!t) return; const k = b.dataset.hk, s = t.selectionStart ?? t.value.length, e = t.selectionEnd ?? s;
+    if (k === '⌫') { const a = s === e ? Math.max(0, s - 1) : s; t.value = t.value.slice(0, a) + t.value.slice(e); t.selectionStart = t.selectionEnd = a; } else { t.value = t.value.slice(0, s) + k + t.value.slice(e); t.selectionStart = t.selectionEnd = s + k.length; }
+    t.dispatchEvent(new Event('input', { bubbles: true })); t.focus(); });
+}
+// ---- Building the real-format final
+function ruthVerse(c, v) { const x = PBANK.verses.find(y => y[0] === 'Ruth' && y[1] === c && y[2] === v); return x ? { b: 'Ruth', c, v, he: x[3], en: x[4], cid: pbVerseCid('Ruth', c, v) } : null; }
+function finalPassage() {
+  const chs = ruthChaptersStudied(); const cand = [];
+  for (const c of (chs.length ? chs : [1])) { const n = (RUTH.verses[c] || []).length; for (let s = 1; s + 9 <= n; s++) {
+    const vs = []; for (let v = s; v < s + 10; v++) { const x = ruthVerse(c, v); if (x) vs.push(x); } if (vs.length < 10) continue;
+    const refs = new Set(vs.map(x => `Ruth ${c}:${x.v}`)); const nq = COMPQ.filter(q => q.v.every(r => refs.has(r))).length;
+    const seen = vs.reduce((a, x) => a + (expGet(x.cid) ? 1 : 0), 0); cand.push({ c, vs, nq, w: (1 + nq) / (1 + seen * .3) }); } }
+  if (!cand.length) return null; const p = weightedPick(cand, x => x.w, 1)[0];
+  return { ref: `Ruth ${p.c}:${p.vs[0].v}–${p.vs[p.vs.length - 1].v}`, verses: p.vs, c: p.c };
+}
+function finalParse(n, passage, used) {
+  const inP = new Set(passage.verses.map(x => `Ruth ${x.c}:${x.v}`)), all = [];
+  RUTH.verbs.forEach((p, i) => { const st = String(p[2]).split('|')[0]; if (!STEMS[st] || !(st === 'qal' || stemLearned(st))) return; const ref = p[7].split(' · ')[0]; const it = ruthItem(i); const cid = 'f:' + AN.hash(AN.normHe(it.form)); if (used.has(cid)) return; all.push({ ...it, ref, cid, inP: inP.has(ref), sameCh: ref.startsWith(`Ruth ${passage.c}:`) }); });
+  const seenF = new Set(), out = [];
+  for (const x of [...shuffle(all.filter(x => x.inP)), ...shuffle(all.filter(x => !x.inP && x.sameCh)), ...shuffle(all.filter(x => !x.inP && !x.sameCh))]) { const k = AN.normHe(x.form); if (seenF.has(k)) continue; seenF.add(k); used.add(x.cid); out.push({ ...x, key: 'fp|' + x.key, sec: 'parse', cat: catByExposure(x.cid), noPR: true }); if (out.length >= n) break; }
+  return out.sort((a, b) => (b.inP - a.inP));
+}
+function finalComp(passage, n) {
+  const refs = new Set(passage.verses.map(x => `Ruth ${x.c}:${x.v}`)); const idx = [];
+  COMPQ.forEach((q, i) => { if (q.v.every(r => refs.has(r))) idx.push(i); });
+  return shuffle(idx).slice(0, n).sort((a, b) => a - b).map(i => { const x = COMPQ[i], cid = 'cq:' + AN.hash(x.q);
+    return { kind: 'write', sub: 'comp', heAns: 1, key: 'cqw|' + i, cid, q: x.q, model: `${x.o[0]} — ${x.y}`, lines: x.v.map(r => r.split(':')[1]).join(', '), t: 'comprehension', sec: 'comp', cat: catByExposure(cid), skill: 'reading' }; });
+}
+function memSection(len, avoid) {
+  const chs = ruthChaptersStudied(); const opts = [];
+  (chs.length ? chs : [1]).forEach(c => { const n = (RUTH.verses[c] || []).length; for (let s = 1; s + len - 1 <= n; s++) { if (avoid && avoid.has(`${c}:${s}`)) continue; const vs = []; for (let v = s; v < s + len; v++) { const x = ruthVerse(c, v); if (x) vs.push(x); } if (vs.length === len) opts.push({ c, vs }); } });
+  return opts.length ? pick(opts, 1)[0] : null;
+}
+function memItem(sec, extra = {}) {
+  const ref = `Ruth ${sec.c}:${sec.vs[0].v}${sec.vs.length > 1 ? '–' + sec.vs[sec.vs.length - 1].v : ''}`, text = sec.vs.map(x => x.he).join(' ');
+  const first = memWords(text).slice(0, 2).map(x => x.raw).join(' ');
+  return { kind: 'write', sub: 'memory', heAns: 1, key: 'mem|' + ref, cid: 'mem:' + AN.hash(ref), q: `כִּתְבוּ מִזִּכָּרוֹן: ${ref}`, cue: first, ref, model: text, en: sec.vs.map(x => x.en).join(' '), t: 'ruth', ...extra };
+}
+async function buildFinal() {
+  if (!MEAS.expLoaded) await loadExposure();
+  const bp = BLUEPRINTS.final, used = new Set(), items = [], limits = [];
+  const passage = finalPassage(); if (!passage) throw new Error('No Ruth passage available.');
+  passage.verses.forEach(x => used.add(x.cid));
+  const comp = finalComp(passage, bp.sections.comp.n); if (comp.length < bp.sections.comp.n) limits.push(`${comp.length} prepared Hebrew questions fit this passage; the grammar section is longer instead.`);
+  const tv = passage.verses.filter(x => { const w = x.he.split(/[\s־]+/).length; return w >= 6 && w <= 18; }).sort(() => Math.random() - .5).slice(0, bp.sections.translation.n).sort((a, b) => a.v - b.v);
+  const parse = finalParse(bp.sections.parse.n, passage, used);
+  const syntax = exSyntax(bp.sections.syntax.n + (bp.sections.comp.n - comp.length));
+  const avoid = new Set(passage.verses.map(x => `${x.c}:${x.v}`)); const mem = []; for (const L of [2, 3]) { const s = memSection(L, avoid); if (s) { mem.push(memItem(s, { sec: 'memory', cat: 'review' })); s.vs.forEach(x => avoid.add(`${s.c}:${x.v}`)); } }
+  items.push(...comp, ...exTranslate(tv), ...parse, ...syntax, ...mem);
+  items.forEach((x, i) => { x.n = i + 1; x.iid = AN.itemId(x); x.cid = x.cid || AN.contentId(x); x.diff = AN.difficulty(x); if (x.o) x._order = shuffle(x.o.map((o, k) => k)); });
+  return { id: 'a' + Date.now().toString(36), type: 'final', blueprint: bp.id, items, passage: { ref: passage.ref, verses: passage.verses }, limits, limitMs: bp.minutes() * 60000, created: Date.now() };
+}
+(function () {
+  const _build = buildExam; buildExam = async function (type) { return type === 'final' ? buildFinal() : _build.apply(this, arguments); };
+  const _html = exItemHTML;
+  exItemHTML = function (it, a, n) {
+    if (it.kind === 'write' && it.sub === 'memory') { const head = `<div class="row" style="justify-content:space-between"><span class="small muted">Item ${n} · ${esc((BLUEPRINTS[EX.type].sections[it.sec] || {}).label || 'Write from memory')}</span></div>`;
+      return head + `<div class="qtext he" dir="rtl" style="font-size:1.4rem">${esc(it.q)}</div><div class="small muted">It begins: <span class="he" dir="rtl" style="font-size:1.2rem">${esc(it.cue)} …</span> Vowels are optional; the words are checked letter by letter.</div><label class="f">Write it in Hebrew<textarea class="ex-txt" data-k="text" dir="rtl" lang="he" style="min-height:110px;font-family:var(--f-he);font-size:1.3rem">${esc(a.text || '')}</textarea></label>${heKeysHTML()}`; }
+    let h = _html.apply(this, arguments);
+    if (it.kind === 'write' && it.heAns) h = h.replace('Answer (Hebrew or English)', 'Answer in Hebrew (a short sentence, like on your quizzes)').replace('<textarea class="ex-txt" data-k="text" dir="auto">', '<textarea class="ex-txt" data-k="text" dir="rtl" lang="he" style="font-family:var(--f-he);font-size:1.25rem">') + heKeysHTML();
+    return h;
+  };
+  const _wire = wireExItem;
+  wireExItem = function (v, it, a, onChange) { _wire.apply(this, arguments); if (it.kind === 'write' && it.heAns) wireHeKeys(v, () => v.querySelector('textarea.ex-txt')); };
+})();
+// ---- Practice: write a section of Ruth from memory (first letters → blank), with a word-by-word check.
+function memoryDrillItems(c, from, to) {
+  const vs = []; for (let v = from; v <= to; v++) { const x = ruthVerse(c, v); if (x) vs.push(x); } if (!vs.length) return [];
+  const base = memItem({ c, vs }); return [{ ...base, kind: 'memo', mode: 'letters', key: base.key + '|L' }, { ...base, kind: 'memo', mode: 'blank', key: base.key }];
+}
+function drawMemo(it) {
+  const v = $('#v-session'); SES.answered = false; startTimer(it);
+  const W = memWords(it.model);
+  const cue = it.mode === 'letters' ? `<div class="he" dir="rtl" style="font-size:1.35rem;line-height:2;color:var(--muted)">${W.map(x => esc(x.raw.match(/[א-ת]/)[0]) + '_'.repeat(Math.min(5, Math.max(1, x.k.length - 1)))).join(' ')}</div><div class="small muted">First letter of every word.</div>` : `<div class="small muted">It begins: <span class="he" dir="rtl" style="font-size:1.25rem">${esc(it.cue)} …</span></div>`;
+  v.innerHTML = `${sessHead()}<div class="panel qbox" style="max-width:760px;width:100%;margin:0 auto">
+    <div class="row" style="justify-content:space-between"><span class="chip acc">Write from memory · ${it.mode === 'letters' ? 'with first letters' : 'no help'}</span><span class="small muted">${esc(it.ref)}</span></div>
+    <div class="qtext he" dir="rtl" style="font-size:1.4rem">${esc(it.q)}</div>
+    <details class="small"><summary>English (to remind you what it says)</summary><div>${esc(it.en)}</div></details>${cue}
+    <textarea id="mm-ta" dir="rtl" lang="he" style="min-height:120px;font-family:var(--f-he);font-size:1.35rem" placeholder="Type the Hebrew; vowels are optional"></textarea>${heKeysHTML()}
+    <div id="fb"></div>
+    <div class="row" id="ctl"><button class="btn primary" id="mm-check">Check</button><button class="btn" id="mm-paper">I wrote it on paper: show the text</button><button class="btn ghost" id="b-idk">I don't know yet</button></div></div>`;
+  wireHeKeys(v, () => $('#mm-ta'));
+  $('#s-exit').onclick = () => { try { savers.prog.now(); } catch {} if (SES.results.length) finishSession(true); else go(SES.back || 'practice'); };
+  const done = (score, html) => { SES.answered = true; it._ms = activeMs(it); $('#mm-ta').readOnly = true; $('#fb').innerHTML = `<div class="fb ${score >= .9 ? 'ok' : score >= .5 ? 'part' : 'no'}"><b class="t">${Math.round(score * 100)}% of the words</b>${html}<details class="small"><summary>The text with vowels and pronunciation</summary><div class="he" dir="rtl" style="font-size:1.3rem;line-height:1.9">${esc(it.model)}</div>${PR(it.model)}</details></div>`; nextBtn(); logResult({ ...it, kind: 'memo' }, score >= .9 ? 1 : score); };
+  $('#mm-check').onclick = () => { const t = $('#mm-ta').value; if (!memWords(t).length) { $('#fb').innerHTML = '<div class="fb part">Write the text first (or use “I wrote it on paper”).</div>'; return; } const r = memCompare(t, it.model); done(r.score, r.html); };
+  $('#mm-paper').onclick = () => { $('#fb').innerHTML = `<div class="fb part"><div class="he" dir="rtl" style="font-size:1.35rem;line-height:2">${esc(it.model)}</div><div class="row small"><span>How much did you get right?</span>${[[1, 'All'], [.75, 'Most'], [.5, 'Half'], [.25, 'A little']].map(([s, l]) => `<button class="btn sm" data-ps="${s}">${l}</button>`).join('')}</div></div>`; $$('[data-ps]').forEach(b => b.onclick = () => { it._sc = 'self'; done(+b.dataset.ps, ''); }); };
+  $('#b-idk').onclick = () => done(0, `<div class="he" dir="rtl" style="font-size:1.35rem;line-height:2">${esc(it.model)}</div>`);
+}
+function startMemory(c, from, to) {
+  const n = (RUTH.verses[c] || []).length; from = Math.max(1, Math.min(n, from | 0)); to = Math.max(from, Math.min(n, to | 0));
+  const items = memoryDrillItems(c, from, to); if (!items.length) return flash('No text for this choice.');
+  startSession({ title: `Write from memory · Ruth ${c}:${from}${to > from ? '–' + to : ''}`, items, back: S.tab === 'today' ? 'today' : 'practice', noVary: true });
+}
+function startMemoryRandom() {
+  const s = memSection(pick([2, 3], 1)[0]); if (!s) return flash('No text yet.');
+  const base = memItem(s); startSession({ title: 'Write from memory · exam style', items: [{ ...base, kind: 'memo', mode: 'blank' }], back: S.tab === 'today' ? 'today' : 'practice', noVary: true });
+}
+// ---- Cold checks from tutor reports (timed, closed-book items done before any teaching): kept apart, shown on Progress.
+(function () {
+  const _v = validateTutorReport;
+  validateTutorReport = function (o) {
+    const r = _v.apply(this, arguments);
+    if (r && r.ok && Array.isArray(o.cold_check)) r.ins.cold = o.cold_check.filter(x => x && (x.he || x.item || x.prompt)).slice(0, 40).map(x => ({ he: String(x.he || x.item || x.prompt), task: String(x.task || x.type || ''), ans: String(x.answer ?? x.first_answer ?? ''), key: String(x.key ?? x.correct_answer ?? ''), ok: typeof x.correct === 'number' ? Math.max(0, Math.min(1, x.correct)) : x.correct === true ? 1 : x.correct === false ? 0 : null, sec: Number(x.seconds) || null, cold: x.cold !== false }));
+    return r;
+  };
+  if (typeof tutorTimelineHTML === 'function') {
+    const _t = tutorTimelineHTML;
+    tutorTimelineHTML = function () {
+      const base = _t.apply(this, arguments);
+      const rows = (S.insights || []).filter(i => (i.cold || []).length).sort((a, b) => String(a.date).localeCompare(String(b.date))).map(i => { const c = i.cold.filter(x => x.ok != null); const acc = c.length ? Math.round(c.reduce((s, x) => s + x.ok, 0) / c.length * 100) : null; const secs = i.cold.map(x => x.sec).filter(Boolean).sort((a, b) => a - b); const med = secs.length ? secs[Math.floor(secs.length / 2)] : null; return [i.date, i.session || '', i.cold.length, acc == null ? '—' : acc + '%', med ? med + ' s' : '—']; });
+      return base + (rows.length ? `<div class="panel stack"><h3>Cold checks from tutor sessions</h3><p class="small muted">Timed, closed-book items done before any teaching. This is the closest thing to the final; it is still tutor-reported, so it is shown apart from your own measured tests.</p>${tableHTML(['Date', 'Session', 'Items', 'Right', 'Median time'], rows)}</div>` : '');
+    };
+  }
+})();
+// ---- Practice tab: launch buttons.
+(function () {
+  const _rp = renderPractice;
+  renderPractice = function () {
+    _rp.apply(this, arguments);
+    const g = document.querySelector('#v-practice .grid3'); if (!g || document.getElementById('mm-card')) return;
+    const chs = ruthChaptersStudied(); const c0 = chs.length ? chs[chs.length - 1] : 1;
+    g.insertAdjacentHTML('afterbegin', `<div class="panel stack" id="mm-card" style="border-color:var(--accent)"><h3>Final: real format</h3><p class="small muted">75 minutes, about 48 items, all in Hebrew, no help until you submit: a random part of Ruth, Hebrew questions you answer in Hebrew, random words to parse, lines to translate into smooth English, and two sections of Ruth written from memory.</p><div><button class="btn primary" id="fx-go">Start the timed final</button></div>
+      <h3 style="margin-top:6px">Write from memory</h3><p class="small muted">Learn a section of Ruth by heart: first with the first letter of each word, then with no help. Checked word by word (vowels optional). You can also write on paper and compare.</p>
+      <div class="row"><select id="mm-ch" class="sm">${[1, 2, 3, 4].map(c => `<option value="${c}" ${c === c0 ? 'selected' : ''}>Ruth ${c}</option>`).join('')}</select><label class="small">verses <input id="mm-from" type="number" min="1" value="1" style="width:56px"> to <input id="mm-to" type="number" min="1" value="2" style="width:56px"></label><button class="btn primary sm" id="mm-go">Start</button><button class="btn sm" id="mm-rand">Random section (exam style)</button></div></div>`);
+    $('#fx-go').onclick = () => startExam('final');
+    $('#mm-go').onclick = () => startMemory(+$('#mm-ch').value, +$('#mm-from').value, +$('#mm-to').value);
+    $('#mm-rand').onclick = () => startMemoryRandom();
+  };
+  const _d = drawItem;
+  drawItem = function () { const it = SES && SES.items[SES.i]; if (it && it.kind === 'memo') return drawMemo(it); return _d.apply(this, arguments); };
+})();
+
+</script>
+<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='d8a6ca7ab2';</script>
 </body></html>
