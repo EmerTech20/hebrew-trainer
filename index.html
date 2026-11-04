@@ -2238,7 +2238,8 @@ function gradeParse(item, sel) {
   res.stem = item.stem.split('|').includes(sel.stem);
   const ur = normRoot(sel.root), ar = normRoot(item.root);
   res.root = ur === ar || (ar.length === 3 && 'וי'.includes(ar[1]) && (ur === ar[0] + ar[2] || ur === ar[0] + (ar[1] === 'ו' ? 'י' : 'ו') + ar[2]));
-  const keys = inf ? ['conj', 'stem', 'root'] : ptc ? ['g', 'n', 'conj', 'stem', 'root'] : ['p', 'g', 'n', 'conj', 'stem', 'root'];
+  // All six boxes count for every verb. For a participle, person must be left empty or “—”; for an infinitive, person, gender and number must be empty or “—”.
+  const keys = ['p', 'g', 'n', 'conj', 'stem', 'root'];
   const score = keys.filter(k => res[k]).length / keys.length;
   return { res, score, keys };
 }
@@ -2580,7 +2581,7 @@ async function renderCards() {
   const v = $('#v-cards');
   if (!S.vbc && S.lib.some(l => l.id === 'vbc')) { loadVbc().then(() => { if (S.tab === 'cards' && S.vbc) renderCards(); }); }
   const stories = S.lib.filter(l => l.kind === 'story').sort((a, b) => (a.chapter || 0) - (b.chapter || 0));
-  const ids = ['core', 'ruth', 'terms', 'forms', ...(S.vbc ? ['pairs'] : []), ...stories.map(s => 's:' + s.id)];
+  const ids = [...(DECKS.full ? ['full', 'sem'] : []), 'core', 'ruth', 'terms', 'forms', ...(S.vbc ? ['pairs'] : []), ...stories.map(s => 's:' + s.id)];
   const rows = ids.map(id => {
     const cards = deckCards(id); const loaded = !id.startsWith('s:') || S.libText[id.slice(2)] != null;
     const st = deckStats(cards);
@@ -2815,6 +2816,13 @@ function parseAnswerHTML(it) {
     ${pgRow('p', PERSON, 'גּוּף', 'person')}${pgRow('g', GENDER, 'מִגְדָּר', 'gender')}${pgRow('n', NUMBER, 'מִסְפָּר', 'number')}
   </table></div>${sfx}`;
 }
+// What you chose, part by part, with ✓ or ✗ (shown when the parse is not perfect).
+function yourParseHTML(it, res) {
+  const sel = it._sel || {}, nm = { p: 'person', g: 'gender', n: 'number', conj: 'conjugation', stem: 'stem', root: 'root' };
+  const val = k => { const v = sel[k]; if (k === 'root') return v ? H(esc(v)) : '<i>empty</i>'; if (!v) return '<i>empty</i>'; if (v === '-') return '—'; const m = { p: PERSON, g: GENDER, n: NUMBER, conj: CONJ, stem: STEMS }[k]; return m && m[v] ? `${H(m[v][0])} ${esc(m[v][1])}` : esc(v); };
+  const why = k => { if (res[k]) return ''; if (it.conj === 'ptc' && k === 'p') return ' <span class="muted">(a participle has no person: leave it empty or choose —)</span>'; if (it.conj === 'inf' && 'pgn'.includes(k)) return ' <span class="muted">(an infinitive has no person, gender or number: leave it empty or choose —)</span>'; return ''; };
+  return `<div class="small" style="margin:6px 0"><b>Your answer:</b> ${['p', 'g', 'n', 'conj', 'stem', 'root'].map(k => `<span style="white-space:nowrap;color:${res[k] ? 'var(--good)' : 'var(--bad)'}">${res[k] ? '✓' : '✗'} ${nm[k]}: ${val(k)}</span>${why(k)}`).join(' · ')}</div>`;
+}
 function extraHTML(it) {
   const x = (typeof PARSE_EXTRA !== 'undefined' && PARSE_EXTRA[it.form]) || it.extra; if (!x) return '';
   return `<div class="small stack" style="gap:3px;margin-top:4px">${x.tr ? `<div><b>Say it:</b> ${esc(x.tr)}</div>` : ''}${x.ev ? `<div><b>Evidence:</b> ${heWrap(esc(x.ev))}</div>` : ''}${x.trap ? `<div><b>Trap:</b> ${heWrap(esc(x.trap))}</div>` : ''}${x.quiz ? `<div><b>Your quiz:</b> ${heWrap(esc(x.quiz))}</div>` : ''}</div>`;
@@ -2834,7 +2842,9 @@ function answerParse() {
   const common = it.conj !== 'inf' && (it.pgn || '').split('|').some(a => parsePGN(a).g === 'c') && ['m', 'f'].includes(it._sel.g) && res.g;
   const commonNote = common ? `<div class="small" style="margin-top:4px">Gender: “${it._sel.g === 'm' ? 'masc.' : 'fem.'}” is accepted here, but this form is <b>common</b> (${H('מְשֻׁתָּף')}: men or women). On the quiz, choose ${H('מְשֻׁתָּף')}.</div>` : '';
   const varNote = it.variedFrom ? `<div class="small muted">New word, same pattern as ${H(esc(it.variedFrom))} (which you had already seen twice).</div>` : '';
-  $('#fb').innerHTML = `<div class="fb ${cls}"><b class="t">${score === 1 ? 'Perfect parse.' : `Check: ${wrong.join(', ')}.`}</b>${commonNote}${varNote}<div>${parseAnswerHTML(it)}</div>${extraHTML(it)}${it.note ? `<div class="small">${heWrap(esc(it.note))}</div>` : ''}${score < 1 && it.t ? `<div class="small"><a href="#" id="see-topic">Review the notes: ${esc(topicName(it.t))}</a></div>` : ''}</div>`;
+  const nRight = keys.filter(k => res[k]).length, pct = Math.round(score * 100);
+  const head = score === 1 ? 'Right: perfect parse (6 of 6) · 100%.' : `Wrong: ${nRight} of 6 parts right · this answer scores ${pct}%. Wrong part${wrong.length > 1 ? 's' : ''}: ${wrong.join(', ')}.`;
+  $('#fb').innerHTML = `<div class="fb ${cls}"><b class="t">${head}</b>${score < 1 ? yourParseHTML(it, res) : ''}${commonNote}${varNote}<div>${parseAnswerHTML(it)}</div>${extraHTML(it)}${it.note ? `<div class="small">${heWrap(esc(it.note))}</div>` : ''}${score < 1 && it.t ? `<div class="small"><a href="#" id="see-topic">Review the notes: ${esc(topicName(it.t))}</a></div>` : ''}</div>`;
   $('#see-topic')?.addEventListener('click', e => { e.preventDefault(); go('topic', it.t); });
   nextBtn(); logResult(it, score);
   try { showStoryExamples(it); } catch (e) { console.error(e); }
@@ -4228,7 +4238,9 @@ function formEnglish(it) {
   return [...new Set(outs.filter(Boolean))].join(' / or: ');
 }
 function formEnglishHTML(it) {
-  const en = formEnglish(it); if (!en) return '';
+  let en = ''; try { en = formEnglish(it); } catch (e) { console.error(e); }
+  if (!en && it.gloss) en = String(it.gloss);
+  if (!en) return '';
   return `<div class="form-en" style="text-align:center;margin-top:2px"><span class="small muted">English:</span> <b>“${heWrap(esc(en))}”</b></div>`;
 }
 
@@ -5123,7 +5135,7 @@ function renderSelfScore(res, still) {
 async function finalizeExam(res) {
   const bp = BLUEPRINTS[EX.type];
   const items = res.map(r => {
-    const { it, a } = r; const f = r.f || (it.kind === 'parse' && r.res ? { root: +!!r.res.root, stem: +!!r.res.stem, conj: +!!r.res.conj, ...(it.conj === 'inf' ? {} : { pgn: +['p', 'g', 'n'].every(x => !(x in r.res) || r.res[x]) }) } : null);
+    const { it, a } = r; const f = r.f || (it.kind === 'parse' && r.res ? { root: +!!r.res.root, stem: +!!r.res.stem, conj: +!!r.res.conj, pgn: +['p', 'g', 'n'].every(x => !(x in r.res) || r.res[x]) } : null);
     const ev = { k: it.kind === 'write' ? (it.sub === 'comp' ? 'comp' : it.sub === 'memory' ? 'mem' : 'tr') : it.kind, sk: skillOf(it), s: r.score || 0, f, ms: EX.paper ? null : (EX.ms[r.i] || null) };
     const err = r.score >= 1 ? (ev.ms && AN.SLOW[ev.sk] && ev.ms > AN.SLOW[ev.sk] ? ['SL'] : []) : AN.tagErrors(ev, { root: it.root, suffix: hasSuffix(it), wp: it.wp, chosen: r.chosen, target: it.kind === 'mc' ? AN.normHe(String(it.o[it.a]).replace(/<[^>]+>/g, '')) : '', extra: r.err || [] });
     const spec = { ...it }; delete spec._t0; delete spec._h0; delete spec._order;
@@ -7292,5 +7304,76 @@ function startMemoryRandom() {
 })();
 
 </script>
-<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='989e5a13c9';</script>
+<script>
+// ===== Full course vocabulary =====
+// One deck with every word of the course, without duplicates:
+//   the main list (153) + the textbook vocabulary of chapters 1–27 (your private library copy) +
+//   every word of the semester stories (Ch. 14–22, from your library) and of Ruth 1–4 (dictionary form, with how often it occurs) +
+//   the words glossed in the margins of the stories.
+// A second deck keeps only what belongs to this semester (main list, Ch. 14–27, the stories and Ruth).
+// Cards keep the same keys as in the smaller decks, so what you already learned there counts here too.
+const FULLV = { cards: null, built: 0, busy: false, msg: '' };
+(function () { try { const c = lsGet('fullvocab'); if (c && c.v === 2 && Array.isArray(c.cards)) { FULLV.cards = c.cards; FULLV.built = c.t || 0; } } catch {} })();
+const fvKey = h => lexNorm(String(h || '').replace(/\|/g, '')).replace(/[־\s]/g, '');
+async function buildFullVocab() {
+  FULLV.busy = true; FULLV.msg = 'Loading the dictionary and your stories…';
+  try {
+    await lexLoad();
+    if (!S.vbc && S.lib.some(l => l.id === 'vbc')) await loadVbc();
+    const stories = S.lib.filter(l => l.kind === 'story' && !/^ruthT/.test(l.id) && (l.chapter || 0) >= 14 && (l.chapter || 0) < 100).sort((a, b) => (a.chapter || 0) - (b.chapter || 0));
+    for (const st of stories) { try { await getDocText(st.id); } catch {} }
+    const M = new Map(), out = [];
+    const add = (h, g, key, tag, sem, n) => {
+      const k = fvKey(h); if (!k || !/[א-ת]/.test(k) || !g) return;
+      let e = M.get(k);
+      if (!e) { e = { key, front: String(h).replace(/\|/g, ''), back: g, tags: [], sem: false, n: 0, topic: 'vocab' }; M.set(k, e); out.push(e); }
+      if (tag && !e.tags.includes(tag)) e.tags.push(tag);
+      if (sem) e.sem = true; if (n) e.n += n;
+    };
+    VOCAB.forEach(v => add(v.h, v.g, 'core|' + v.h, 'main list', true));
+    if (S.vbc) Object.keys(S.vbc).map(Number).sort((a, b) => a - b).forEach(ch => S.vbc[String(ch)].items.forEach(e => add(e.h, e.g, 'ch|' + e.h, 'Ch. ' + ch, ch >= 14)));
+    RUTH.vocab.forEach(([w, g]) => add(w, g, 'ruth|' + w + '|' + g.slice(0, 12), 'Ruth', true));
+    // Every word of the stories and of Ruth, in dictionary form.
+    const texts = [];
+    for (const c of ['1', '2', '3', '4']) texts.push({ tag: 'Ruth', text: (RUTH.verses[c] || []).map(v => v[1]).join(' ') });
+    for (const st of stories) texts.push({ tag: 'Ch. ' + st.chapter + ' story', text: S.libText[st.id] || '', id: st.id });
+    const cache = new Map(); let done = 0; const ci = courseIndex(), LM = new Map();
+    (window.LEX_L || []).forEach(e => { const k = fvKey(e[0]); if (!LM.has(k)) LM.set(k, e); });
+    const LEM_FIX = { 'יָלַךְ': 'הָלַךְ' };
+    const clean = m => String(m || '').replace(/ — subject:.*$/, '').replace(/ \(root meaning;[^)]*\)/, '').replace(/^(?:[a-z ,]+ \+ )+/i, '').replace(/(?: \+ [a-z /().]+)+$/i, '').trim();
+    for (const T of texts) {
+      if (T.id) { try { extractGlosses(T.text).forEach(gl => add(gl.he, gl.en, 's:' + T.id + '|' + gl.he, T.tag, true)); } catch {} }
+      for (const w of lexWords(T.text)) {
+        const nk = fvKey(w); let a = cache.get(nk);
+        if (a === undefined) { a = null; try { const r = analyzeWord(w); if (r && r.lemma && !/uncertain/.test(r.how || '') && !/^probably/.test(r.meaning || '') && r.meaning && r.meaning !== '—' && r.grammar !== 'letter' && r.grammar !== 'part of a word') { const h = LEM_FIX[r.lemma] || r.lemma, k = fvKey(h), crs = ci.exact.get(k), le = LM.get(k); a = { h, g: (crs && crs.g) || (k === 'יהוה' ? 'the LORD (YHWH)' : '') || (le && le[2]) || clean(r.meaning), name: !!(le && le[1] === 'Np') }; } } catch {} cache.set(nk, a); }
+        if (a) add(a.h, a.g + (a.name && !/name/i.test(a.g) ? ' (name)' : ''), 'lem|' + a.h, T.tag, true, 1);
+        if (++done % 400 === 0) { FULLV.msg = `Reading the stories… ${done} words`; await new Promise(r => setTimeout(r, 0)); }
+      }
+    }
+    FULLV.cards = out.map(e => ({ key: e.key, front: e.front, back: e.back, extra: e.tags.join(' · ') + (e.n > 1 ? ` · ${e.n}× in the texts` : ''), topic: 'vocab', sem: e.sem }));
+    FULLV.built = Date.now();
+    const nSem = FULLV.cards.filter(c => c.sem).length;
+    FULLV.msg = `${FULLV.cards.length} different words (${nSem} of them this semester). ${S.vbc ? '' : 'The textbook chapter lists are not in your library yet, so chapters 1–27 are missing. '}${stories.length ? `Stories read: ${stories.map(s => 'Ch. ' + s.chapter).join(', ')}.` : 'No semester stories found in your library.'}`;
+    lsSet('fullvocab', { v: 2, t: FULLV.built, cards: FULLV.cards });
+  } catch (e) { console.error(e); FULLV.msg = 'Could not build the list: ' + (e.message || e); }
+  FULLV.busy = false;
+}
+DECKS.full = { name: 'Full course vocabulary', sub: 'Every word: main list, textbook chapters 1–27, the semester stories and Ruth (no duplicates)', topic: 'vocab', cards: () => FULLV.cards || [] };
+DECKS.sem = { name: 'This semester’s vocabulary', sub: 'Main list, chapters 14–27, the stories of Ch. 14–22 and all of Ruth', topic: 'vocab', cards: () => (FULLV.cards || []).filter(c => c.sem) };
+(function () {
+  const _rc = renderCards;
+  renderCards = async function () {
+    await _rc.apply(this, arguments);
+    const v = $('#v-cards'); if (!v) return;
+    for (const id of ['full', 'sem']) {
+      const b = v.querySelector(`[data-review="${id}"]`), panel = b && b.closest('.deck');
+      if (!panel) continue;
+      if (!FULLV.cards) { panel.querySelector('.row:last-child').innerHTML = `<button class="btn sm primary" data-fvbuild>${FULLV.busy ? 'Building…' : 'Build the list'}</button><span class="small muted">${esc(FULLV.msg || 'Reads your stories and Ruth once (about 10 seconds).')}</span>`; }
+      else if (id === 'full') panel.insertAdjacentHTML('beforeend', `<div class="small muted">${esc(FULLV.msg || `${FULLV.cards.length} words.`)} <a href="#" data-fvbuild>Rebuild</a> (after you add a story).</div>`);
+    }
+    $$('[data-fvbuild]', v).forEach(b => b.onclick = async e => { e.preventDefault(); if (FULLV.busy) return; FULLV.cards = null; b.textContent = 'Building…'; await buildFullVocab(); if (S.tab === 'cards') renderCards(); });
+  };
+})();
+</script>
+<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='68ceade55e';</script>
 </body></html>
