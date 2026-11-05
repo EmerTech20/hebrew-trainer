@@ -1288,9 +1288,9 @@ const PART_MC = [
 
 // ---- Who is who in the story; strict translation.
 const CONTEXT_MC = [
- { q:`${H('וְרָחַץ בַּמַּיִם אֶת־בְּשָׂרוֹ')}: whose body is washed?`, o:['Aaron’s','the bull’s','the ram’s','Moses’s'], x:`The ${H('־וֹ')} points back to Aaron, who is getting ready to enter.` },
- { q:`${H('וְכִפֶּר בַּעֲדוֹ וּבְעַד בֵּיתוֹ')}: for whom does the priest atone?`, o:['for himself and for his household','only for his household','for the people','for the altar'], x:`${H('בַּעֲדוֹ')} = on his own behalf. A full answer needs BOTH parts.` },
- { q:`${H('בְּהַקְרִיבָם אֵשׁ זָרָה לִפְנֵי יְהוָה')}: who are “they”?`, o:['Nadab and Abihu, Aaron’s two sons','Moses and Aaron','the people of Israel','the priests of Egypt'], x:`They brought strange fire that the LORD had not commanded, and they died.` },
+ { q:`${H('בְּזֹאת יָבֹא אַהֲרֹן אֶל־הַקֹּדֶשׁ בְּפַר בֶּן־בָּקָר לְחַטָּאת וְאַיִל לְעֹלָה׃ בִּגְדֵי־קֹדֶשׁ יִלְבָּשׁ וְרָחַץ בַּמַּיִם אֶת־בְּשָׂרוֹ׃')}<br>In ${H('וְרָחַץ בַּמַּיִם אֶת־בְּשָׂרוֹ')}, whose body is washed?`, o:['Aaron’s','the bull’s','the ram’s','Moses’s'], x:`The ${H('־וֹ')} points back to Aaron, who is getting ready to enter.` },
+ { q:`${H('וְהִקְרִיב אַהֲרֹן אֶת־פַּר הַחַטָּאת אֲשֶׁר־לוֹ וְכִפֶּר בַּעֲדוֹ וּבְעַד בֵּיתוֹ׃')}<br>In ${H('וְכִפֶּר בַּעֲדוֹ וּבְעַד בֵּיתוֹ')}, for whom does the priest atone?`, o:['for himself and for his household','only for his household','for the people','for the altar'], x:`${H('בַּעֲדוֹ')} = on his own behalf. A full answer needs BOTH parts.` },
+ { q:`${H('וַיְדַבֵּר יְהוָה אֶל־מֹשֶׁה אַחֲרֵי מוֹת שְׁנֵי בְּנֵי אַהֲרֹן בְּהַקְרִיבָם אֵשׁ זָרָה לִפְנֵי־יְהוָה וַיָּמֻתוּ׃')}<br>In ${H('בְּהַקְרִיבָם')}, who are “they”?`, o:['Nadab and Abihu, Aaron’s two sons','Moses and Aaron','the people of Israel','the priests of Egypt'], x:`They brought strange fire that the LORD had not commanded, and they died.` },
  { q:`${H('וַיִּדֹּם אַהֲרֹן')}: what did Aaron do?`, o:['he was silent (he did not answer)','he answered Moses','he cried out','he left the tent'], x:`Question C on your quiz: ${H('אַהֲרֹן לֹא עָנָה')}. Correct!` },
 ];
 const STRICT_MC = [
@@ -2215,7 +2215,7 @@ function bankItem(i) { const p = PARSE_BANK[i]; return { kind:'parse', key:'pb' 
 function mcqItem(i) { const q = MCQ[i]; return { kind:'mc', key:'mq' + i, t:q.t, q:q.q, o:q.o, a:q.a, x:q.x }; }
 function vocabMC(v, pool) {
   const others = pick(pool.filter(x => x.g !== v.g), 3).map(x => x.g);
-  return { kind:'mc', key:'vc|' + v.h, cid:'w:' + AN.hash('core|' + v.h), t:'vocab', q:`What does ${H(v.h)}${PRi(v.h)} mean?`, o:[v.g, ...others], a:0, x: v.n ? heWrap(esc(v.n)) : '' };
+  return { kind:'mc', key:'vc|' + v.h, w:v.h, cid:'w:' + AN.hash('core|' + v.h), t:'vocab', q:`What does ${H(v.h)}${PRi(v.h)} mean?`, o:[v.g, ...others], a:0, x: v.n ? heWrap(esc(v.n)) : '' };
 }
 function gradeParse(item, sel) {
   const alts = (item.pgn || '').split('|');
@@ -2668,7 +2668,7 @@ function startMemTest(deck) {
   const items = chosen.map(c => {
     const others = pick(cards.filter(x => x.back !== c.back), 3);
     if (S.prog.settings.reverse) return { kind:'mc', key:'mt|' + c.key, card:c.key, t:c.topic || 'vocab', q:`Which Hebrew means “${esc(c.back)}”?`, o:[H(esc(c.front)) + PRi(c.front), ...others.map(o => H(esc(o.front)) + PRi(o.front))], a:0, x: c.extra ? heWrap(esc(c.extra)) : '' };
-    return { kind:'mc', key:'mt|' + c.key, card:c.key, t:c.topic || 'vocab', q:`${H(esc(c.front))}${PR(c.front)}`, o:[esc(c.back), ...others.map(o => esc(o.back))], a:0, x: c.extra ? heWrap(esc(c.extra)) : '' };
+    return { kind:'mc', key:'mt|' + c.key, card:c.key, w:c.front, t:c.topic || 'vocab', q:`${H(esc(c.front))}${PR(c.front)}`, o:[esc(c.back), ...others.map(o => esc(o.back))], a:0, x: c.extra ? heWrap(esc(c.extra)) : '' };
   });
   startSession({ title: 'Memorization test · ' + deckName(deck), items, memTest: deck, noRecordTopic: true, mode: 'memtest' });
 }
@@ -3907,7 +3907,7 @@ function builtInMeaning(it) {
   if (!he && k.startsWith('rv') && typeof RUTH_EN !== 'undefined') { const m = String(it.note || '').match(/Ruth (\d+):(\d+)/); if (m) { he = it.ctx || ''; en = RUTH_EN[m[1] + ':' + m[2]] || ''; ref = `Ruth ${m[1]}:${m[2]}`; } }
   if (he && en) return { v: 1, by: 'built-in', lines: [{ he, en: `${en} (${ref}, World English Bible)` }], words: form, why: '' };
   if (it.kind === 'write' && it.he && it.model) return { v: 1, by: 'built-in', lines: [{ he: it.he, en: it.model }], words: [], why: it.strict ? 'Strict, word for word: ' + it.strict : '' };
-  if (it.t === 'vocab' && it.o) { const h = (AN.heRuns(it.q || '')[0]) || ''; return { v: 1, by: 'built-in', lines: [], words: h ? [{ he: h, meaning: String(it.o[it.a]).replace(/<[^>]+>/g, ''), grammar: String(it.x || '').replace(/<[^>]+>/g, '') }] : [], why: '' }; }
+  if (it.t === 'vocab' && it.o) { const h = (AN.heRuns(it.q || '')[0]) || ''; return { v: 1, by: 'built-in', lines: [], words: h ? [{ he: h, meaning: String(it.o[it.a]).replace(/<[^>]+>/g, ''), grammar: [((typeof vxInfo === 'function' && vxInfo(it.w || h, String(it.o[it.a]).replace(/<[^>]+>/g, '')).a) || {}).grammar, String(it.x || '').replace(/<[^>]+>/g, '')].filter(Boolean).join(' · ') }] : [], why: '' }; }
   if (form.length && form[0].meaning) return { v: 1, by: 'built-in', lines: [], words: form, why: '' };
   return null;
 }
@@ -7292,10 +7292,11 @@ function startMemoryRandom() {
     _rp.apply(this, arguments);
     const g = document.querySelector('#v-practice .grid3'); if (!g || document.getElementById('mm-card')) return;
     const chs = ruthChaptersStudied(); const c0 = chs.length ? chs[chs.length - 1] : 1;
-    g.insertAdjacentHTML('afterbegin', `<div class="panel stack" id="mm-card" style="border-color:var(--accent)"><h3>Final: real format</h3><p class="small muted">75 minutes, about 48 items, all in Hebrew, no help until you submit: a random part of Ruth, Hebrew questions you answer in Hebrew, random words to parse, lines to translate into smooth English, and two sections of Ruth written from memory.</p><div><button class="btn primary" id="fx-go">Start the timed final</button></div>
+    g.insertAdjacentHTML('afterbegin', `<div class="panel stack" id="mm-card" style="border-color:var(--accent)"><h3>Final: real format</h3><p class="small muted">${BLUEPRINTS.final.minutes()} minutes, about 48 items, all in Hebrew, no help until you submit: a random part of Ruth, Hebrew questions you answer in Hebrew, random words to parse, lines to translate into smooth English, and two sections of Ruth written from memory.</p><div class="row"><button class="btn primary" id="fx-go">Start the timed final</button><label class="small">Exam length <input id="fx-min" type="number" min="20" max="300" step="5" value="${BLUEPRINTS.final.minutes()}" style="width:64px"> minutes</label><span class="small muted">This also sets the clock on each practice question.</span></div>
       <h3 style="margin-top:6px">Write from memory</h3><p class="small muted">Learn a section of Ruth by heart: first with the first letter of each word, then with no help. Checked word by word (vowels optional). You can also write on paper and compare.</p>
       <div class="row"><select id="mm-ch" class="sm">${[1, 2, 3, 4].map(c => `<option value="${c}" ${c === c0 ? 'selected' : ''}>Ruth ${c}</option>`).join('')}</select><label class="small">verses <input id="mm-from" type="number" min="1" value="1" style="width:56px"> to <input id="mm-to" type="number" min="1" value="2" style="width:56px"></label><button class="btn primary sm" id="mm-go">Start</button><button class="btn sm" id="mm-rand">Random section (exam style)</button></div></div>`);
     $('#fx-go').onclick = () => startExam('final');
+    $('#fx-min').onchange = e => { const m = Math.round(+e.target.value); if (m >= 20 && m <= 300) { S.prog.settings.examMin = m; saveProg(); flash(`Exam length set to ${m} minutes.`); } };
     $('#mm-go').onclick = () => startMemory(+$('#mm-ch').value, +$('#mm-from').value, +$('#mm-to').value);
     $('#mm-rand').onclick = () => startMemoryRandom();
   };
@@ -7375,5 +7376,201 @@ DECKS.sem = { name: 'This semester’s vocabulary', sub: 'Main list, chapters 14
   };
 })();
 </script>
-<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='68ceade55e';</script>
+<script>
+// ===== Word study for vocabulary + exam-pace clock =====
+// 1) Vocabulary questions and flashcards show the grammar of the word BEFORE the answer (no meaning), and a sentence from
+//    Ruth (or another Bible passage of the course) where the word is used (Hebrew only). After the answer: the meaning, the grammar with its
+//    meaning, the form in the sentence parsed and translated, and the English of the verse (Ruth).
+// 2) Exam pace: every question gets the share of time it would have in the real exam (exam length ÷ exam work).
+//    When the time runs out the screen flashes red, the question counts as wrong (it goes to your mistakes notebook)
+//    and the next one opens. It can be turned off on the question screen.
+const heFixGlyphs = s => String(s == null ? '' : s).replace(/(?<=[\u0591-\u05F4])N ?(?=[\u0591-\u05F4])|(?<![A-Za-z])N(?=[\u05D0-\u05EA])/g, 'לֹ');
+(function () {
+  // Text from the textbook PDFs used a ligature for “לֹ” that came out as the letter N (אֱNהִים = אֱלֹהִים).
+  if (typeof loadVbc === 'function') { const _lv = loadVbc; loadVbc = async function () { const r = await _lv.apply(this, arguments); try { if (S.vbc) Object.values(S.vbc).forEach(ch => (ch.items || []).forEach(e => { e.h = heFixGlyphs(e.h); })); } catch (e) { console.error(e); } return r; }; }
+  if (typeof getDocText === 'function') { const _gt = getDocText; getDocText = async function (id) { const t = await _gt.apply(this, arguments); const f = heFixGlyphs(t); if (f !== t && S.libText) S.libText[id] = f; return f; }; }
+})();
+
+// ---------- Word study ----------
+const VX = { idx: null, building: null };
+const VX_FIX = { 'יָלַךְ': 'הָלַךְ' };
+const vxKey = h => { h = String(h || '').split(' / ')[0].replace(/\|/g, ''); return fvKey(VX_FIX[h] || h); };
+const VXA = new Map();
+function vxAnalyze(w) {
+  const k = fvKey(w); if (VXA.has(k)) return VXA.get(k);
+  let a = null; try { const r = analyzeWord(w); if (r && r.grammar && !/uncertain/.test(r.how || '') && !/^probably/.test(r.meaning || '')) a = r; } catch {}
+  VXA.set(k, a); return a;
+}
+// Grammar without giving the meaning away: drop English in brackets, keep the grammar words.
+const vxGrammarOnly = g => String(g || '').replace(/\s*\(([^)]*)\)/g, (m, c) => /perfect|imperfect|“of”|construct|jussive|cohortative|pl\.|sg\./.test(c) ? m : '').replace(/\s+/g, ' ').trim();
+async function vxIndex() {
+  if (VX.idx) return VX.idx; if (VX.building) return VX.building;
+  VX.building = (async () => {
+    await lexLoad(); const idx = new Map();
+    const add = (w, ex) => { const a = vxAnalyze(w); if (!a || !a.lemma) return; const k = vxKey(a.lemma); const l = idx.get(k) || []; if (l.length < 8 && !l.some(e => e.ref === ex.ref)) l.push({ ...ex, form: w }); idx.set(k, l); };
+    const ruthEn = new Map(); (PBANK.verses || []).forEach(v => { if (v[0] === 'Ruth') ruthEn.set(v[1] + ':' + v[2], v[4]); });
+    let n = 0; const tick = async () => { if (++n % 300 === 0) await new Promise(r => setTimeout(r, 0)); };
+    for (const c of ['1', '2', '3', '4']) for (const [v, he] of (RUTH.verses[c] || [])) { const line = String(he); for (const w of lexWords(line)) { add(w, { he: line, ref: `Ruth ${c}:${v}`, en: ruthEn.get(c + ':' + v) || '' }); await tick(); } }
+    // Class-story PDFs come out with lines mixed up, so their sentences are not used: Ruth first, then the other Bible passages of the course (with English).
+    for (const v of (PBANK.verses || [])) if (v[0] !== 'Ruth') for (const w of lexWords(v[3])) { add(w, { he: v[3], ref: `${v[0]} ${v[1]}:${v[2]}`, en: v[4] || '', other: 1 }); await tick(); }
+    VX.idx = idx; return idx;
+  })();
+  return VX.building;
+}
+// Sentences for a word: class texts first, a conjugated (different) form preferred.
+// Same spelling, different word (רָעָה “evil” / רָעָה “pasture”): the card's meaning decides which analysis is right.
+const VX_STOP = new Set('the and for with from into upon also that this which who what not to of in on be is are a an his her their your my one'.split(' '));
+const vxToks = m => String(m || '').toLowerCase().replace(/\([^)]*\)/g, ' ').split(/[^a-z]+/).filter(w => w.length >= 3 && !VX_STOP.has(w)).map(w => w.slice(0, 4));
+const vxMatch = (a, meaning) => { if (!meaning || !a) return true; const A = new Set(vxToks(a.meaning)); const M = vxToks(meaning); return !M.length || !A.size || M.some(w => A.has(w)); };
+function vxInfo(word, meaning) {
+  const a = vxAnalyze(word); if (a && vxMatch(a, meaning)) return { a, g: vxGrammarOnly(a.grammar), root: a.root, lemma: a.lemma };
+  const verb = /^(to |\(to be\)|be )/.test(String(meaning || '').trim());
+  return { a: null, g: verb ? 'verb · Qal qatal (perfect) 3ms (dictionary form)' : '', root: '', lemma: word };
+}
+function vxExamples(word, idx, meaning) {
+  const a = vxAnalyze(word); const k = vxKey(a && a.lemma ? a.lemma : word);
+  let l = (idx.get(k) || []).slice(); if (!l.length && a) l = (idx.get(vxKey(word)) || []).slice();
+  l = l.filter(e => vxMatch(vxAnalyze(e.form), meaning));
+  const own = l.filter(e => !e.other), pool = own.length ? own : l;
+  const f0 = fvKey(word); return shuffle(pool).sort((x, y) => (fvKey(x.form) === f0) - (fvKey(y.form) === f0));
+}
+const vxHL = (line, form) => { const re = new RegExp(`(^|[\\s־])(${String(form).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})(?=$|[\\s־׃,.])`); return esc(line).replace(re, '$1<b style="color:var(--accent);text-decoration:underline">$2</b>'); };
+function vxPreHTML(word, ex, meaning) {
+  const I = vxInfo(word, meaning), a = I.a ? I.a : { root: I.root, lemma: I.lemma }, g = I.g;
+  const fa = ex ? vxAnalyze(ex.form) : null;
+  return `<div class="stack small" style="gap:6px;text-align:left;border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-top:8px">
+    <div><b>Grammar:</b> ${g ? esc(g) : '<span class="muted">not found</span>'}${a && a.root ? ` · root ${H(esc(a.root))}` : ''}${a && a.lemma && fvKey(a.lemma) !== fvKey(word) ? ` · dictionary form ${H(esc(a.lemma))}` : ''}</div>
+    ${ex ? `<div><b>In a sentence</b> <span class="muted">(${esc(ex.ref)})</span><div class="he" dir="rtl" style="font-size:1.25rem;line-height:1.8">${vxHL(ex.he, ex.form)}</div>${fa && fvKey(ex.form) !== fvKey(word) ? `<div>Here: ${H(esc(ex.form))} = ${esc(vxGrammarOnly(fa.grammar))}</div>` : ''}</div>` : '<div class="muted">This word does not occur in Ruth or the other course passages.</div>'}
+  </div>`;
+}
+function vxPostHTML(word, meaning, ex) {
+  const a = vxInfo(word, meaning).a, fa = ex ? vxAnalyze(ex.form) : null;
+  return `<div class="stack small" style="gap:6px;margin-top:8px;border-top:1px solid var(--line);padding-top:8px">
+    <div><b>Meaning:</b> ${esc(meaning || (a && a.meaning) || '')}</div>
+    ${a ? `<div><b>Grammar with meaning:</b> ${H(esc(word))} = ${esc(a.grammar)} → “${esc(a.meaning)}”${a.how ? ` <span class="muted">(${esc(a.how)})</span>` : ''}</div>` : ''}
+    ${ex ? `<div><b>In the sentence</b> <span class="muted">(${esc(ex.ref)})</span><div class="he" dir="rtl" style="font-size:1.2rem;line-height:1.8">${vxHL(ex.he, ex.form)}</div>${fa ? `<div>${H(esc(ex.form))} = ${esc(fa.grammar)} → “${esc(fa.meaning)}”</div>` : ''}${ex.en ? `<div class="muted">English: ${esc(ex.en)}</div>` : ''}</div>` : ''}
+  </div>`;
+}
+function vxWordOf(it) {
+  if (!it || it.kind !== 'mc' || !/^(mt|vc)\|/.test(it.key || '')) return '';
+  if (/^Which Hebrew means/.test(it.q || '')) return '';
+  return it.w || (AN.heRuns(it.q || '')[0]) || '';
+}
+async function vxFillPre(it, word) {
+  const host = document.getElementById('wi-pre'); if (!host) return;
+  host.innerHTML = '<div class="small muted">Looking up the grammar and a sentence…</div>';
+  try { const idx = await vxIndex(); if (SES.items[SES.i] !== it || !document.getElementById('wi-pre')) return; const mean = String(it.o[it.a] || '').replace(/<[^>]+>/g, ''); it._vx = vxExamples(word, idx, mean)[0] || null; host.innerHTML = vxPreHTML(word, it._vx, mean); }
+  catch (e) { console.error(e); host.innerHTML = ''; }
+}
+function vxAfter(it) {
+  const word = vxWordOf(it); if (!word) return; const fb = document.querySelector('#fb .fb'); if (!fb || fb.querySelector('.vx-post')) return;
+  const meaning = String(it.o[it.a] || '').replace(/<[^>]+>/g, '');
+  const box = document.createElement('div'); box.className = 'vx-post'; fb.appendChild(box);
+  const pre = document.getElementById('wi-pre'); if (pre) pre.remove();
+  vxIndex().then(idx => { if (it._vx === undefined) it._vx = vxExamples(word, idx, meaning)[0] || null; box.innerHTML = vxPostHTML(word, meaning, it._vx); }).catch(e => console.error(e));
+}
+
+// ---------- Exam pace ----------
+const PACE_W = { comp: 2, parse: 2, translation: 6, syntax: 1, memory: 10 };
+const paceOn = () => S.prog.settings.pace !== false;
+const examMin = () => Math.max(20, Math.min(300, +S.prog.settings.examMin || 130));
+function paceUnit() { const sec = BLUEPRINTS.final.sections; const units = Object.entries(sec).reduce((s, [k, v]) => s + (PACE_W[k] || 1) * v.n, 0) || 100; return examMin() * 60 / units; }
+function paceWeight(it) {
+  if (!it) return 1;
+  if (it.kind === 'mc') return /^(mt|vc)\|/.test(it.key || '') || it.t === 'vocab' || it.t === 'terminology' ? .5 : 1;
+  if (it.kind === 'card') return .5;
+  if (it.kind === 'parse') return 2; if (it.kind === 'root') return 1.5;
+  if (it.kind === 'memo') return Math.max(4, Math.min(20, (lexWords(it.model || '').length / 4) || 8));
+  if (it.kind === 'write') return it.sub === 'translate' || it.sub === 'translate2' ? 6 : it.sub === 'memory' ? 10 : 2;
+  return 1.5;
+}
+const paceSec = it => Math.max(15, Math.round(paceUnit() * paceWeight(it)));
+const fmtClock = s => `${Math.floor(s / 60)}:${String(Math.max(0, s % 60)).padStart(2, '0')}`;
+(function () {
+  const st = document.createElement('style');
+  st.textContent = `@keyframes paceFlash{0%,100%{opacity:0}20%,60%{opacity:1}40%,80%{opacity:.35}} .pace-flash{position:fixed;inset:0;background:rgba(220,38,38,.28);pointer-events:none;z-index:9999;animation:paceFlash 1.3s ease-in-out forwards}
+  .pace-bar{display:flex;align-items:center;gap:10px;font-size:13px}.pace-bar .trk{flex:1;height:6px;border-radius:3px;background:var(--sunk);overflow:hidden}.pace-bar .trk i{display:block;height:100%;background:var(--accent);transition:width .25s linear}.pace-bar.low .trk i{background:var(--bad)}.pace-bar.low b{color:var(--bad)}`;
+  document.head.appendChild(st);
+})();
+const PACE = { t: null, note: '' };
+function paceFlash() { const d = document.createElement('div'); d.className = 'pace-flash'; document.body.appendChild(d); setTimeout(() => d.remove(), 1400); }
+function paceBarHTML(total) {
+  return `<div class="pace-bar" id="pace-bar"><span>⏱ <b id="pace-left">${fmtClock(total)}</b></span><span class="trk"><i id="pace-trk" style="width:100%"></i></span><span class="muted">exam pace (${examMin()} min)</span><button class="btn ghost sm" id="pace-off">Turn off</button></div>`;
+}
+function paceOffBtnHTML() { return `<button class="btn ghost sm" id="pace-on" title="A countdown for each question, at the speed of the real exam">⏱ Turn on exam pace</button>`; }
+// Session questions
+function paceStart(it) {
+  clearInterval(PACE.t);
+  const box = $('#v-session .qbox'); if (!box || !it || it.kind === 'card' || it.kind === 'steps' || !box.querySelector('.row')) return; // guided step-by-step items have no clock
+  if (PACE.note) { box.insertAdjacentHTML('afterbegin', `<div class="note" id="pace-note">${PACE.note}</div>`); PACE.note = ''; }
+  if (!paceOn()) { box.querySelector('.row').insertAdjacentHTML('beforeend', paceOffBtnHTML()); $('#pace-on').onclick = () => { S.prog.settings.pace = true; saveProg(); $('#pace-on').remove(); paceStart(it); }; return; }
+  const total = paceSec(it); box.querySelector('.row').insertAdjacentHTML('afterend', paceBarHTML(total));
+  $('#pace-off').onclick = () => { S.prog.settings.pace = false; saveProg(); clearInterval(PACE.t); $('#pace-bar').remove(); box.querySelector('.row').insertAdjacentHTML('beforeend', paceOffBtnHTML()); $('#pace-on').onclick = () => { S.prog.settings.pace = true; saveProg(); $('#pace-on').remove(); paceStart(it); }; };
+  PACE.t = setInterval(() => {
+    if (!SES || SES.items[SES.i] !== it || S.tab !== 'session') return clearInterval(PACE.t);
+    if (SES.answered) { clearInterval(PACE.t); const b = $('#pace-bar'); if (b) b.style.opacity = .5; return; }
+    const left = Math.max(0, total - Math.floor((activeMs(it) || 0) / 1000));
+    const l = $('#pace-left'), tr = $('#pace-trk'), bar = $('#pace-bar'); if (l) l.textContent = fmtClock(left); if (tr) tr.style.width = (left / total * 100) + '%'; if (bar) bar.classList.toggle('low', left <= Math.min(10, total * .2));
+    if (left <= 0) {
+      clearInterval(PACE.t); paceFlash(); it._timeout = 1;
+      try { giveUp(); } catch (e) { console.error(e); }
+      PACE.note = `Time ran out on the last question (${fmtClock(total)}). It counts as wrong and is in your mistakes notebook.`;
+      setTimeout(() => { if (SES && SES.items[SES.i] === it) { SES.i++; drawItem(); } }, 1300);
+    }
+  }, 250);
+}
+(function () {
+  const _di = drawItem;
+  drawItem = function () {
+    clearInterval(PACE.t);
+    const r = _di.apply(this, arguments);
+    try {
+      const it = SES && SES.items[SES.i];
+      if (it && SES.i < SES.items.length) {
+        const word = vxWordOf(it);
+        if (word) { const q = $('#v-session .qtext'); if (q) { q.insertAdjacentHTML('afterend', '<div id="wi-pre"></div>'); vxFillPre(it, word); } }
+        paceStart(it);
+      }
+    } catch (e) { console.error(e); }
+    return r;
+  };
+  const _am = answerMC; answerMC = function () { const r = _am.apply(this, arguments); try { vxAfter(SES.items[SES.i]); } catch (e) { console.error(e); } return r; };
+  const _gu = giveUp; giveUp = function () { const r = _gu.apply(this, arguments); try { vxAfter(SES.items[SES.i]); } catch (e) { console.error(e); } return r; };
+  // Flashcards: grammar + sentence on the front, meaning + parse + English on the back; same pace clock.
+  const _dc = drawCard;
+  drawCard = function () {
+    clearInterval(PACE.t);
+    const r = _dc.apply(this, arguments);
+    try {
+      if (!FC || FC.i >= FC.queue.length) return r;
+      const c = FC.queue[FC.i], rev = S.prog.settings.reverse, fc = $('#fc'), back = $('#fc-back');
+      if (!rev && fc && back && /[א-ת]/.test(c.front || '')) {
+        const word = String(c.front).split(' / ')[0].replace(/\|/g, '');
+        back.insertAdjacentHTML('beforebegin', '<div id="wi-pre" class="small muted">Looking up the grammar and a sentence…</div>');
+        back.insertAdjacentHTML('beforeend', '<div id="wi-post"></div>');
+        vxIndex().then(idx => { if (FC.queue[FC.i] !== c) return; const ex = vxExamples(word, idx, c.back)[0] || null; const p = $('#wi-pre'), q = $('#wi-post'); if (p) { p.className = ''; p.innerHTML = vxPreHTML(word, ex, c.back); } if (q) q.innerHTML = vxPostHTML(word, c.back, ex); }).catch(e => { console.error(e); const p = $('#wi-pre'); if (p) p.remove(); });
+      }
+      // Pace clock for the card (time to answer before you turn it).
+      const stage = $('#v-session .card-stage');
+      if (stage && paceOn()) {
+        const total = paceSec({ kind: 'card' }); stage.insertAdjacentHTML('beforebegin', `<div style="max-width:560px;margin:0 auto;width:100%">${paceBarHTML(total)}</div>`);
+        if (PACE.note) { stage.insertAdjacentHTML('beforebegin', `<div class="note" style="max-width:560px;margin:0 auto">${PACE.note}</div>`); PACE.note = ''; }
+        $('#pace-off').onclick = () => { S.prog.settings.pace = false; saveProg(); clearInterval(PACE.t); $('#pace-bar').remove(); };
+        const t0 = performance.now(), me = c, idx0 = FC.i;
+        PACE.t = setInterval(() => {
+          if (!FC || FC.i !== idx0 || FC.queue[FC.i] !== me || S.tab !== 'session') return clearInterval(PACE.t);
+          if (FC.flipped) { clearInterval(PACE.t); const b = $('#pace-bar'); if (b) b.style.opacity = .5; return; }
+          const left = Math.max(0, total - Math.floor((performance.now() - t0) / 1000));
+          const l = $('#pace-left'), tr = $('#pace-trk'), bar = $('#pace-bar'); if (l) l.textContent = fmtClock(left); if (tr) tr.style.width = (left / total * 100) + '%'; if (bar) bar.classList.toggle('low', left <= Math.min(10, total * .2));
+          if (left <= 0) { clearInterval(PACE.t); paceFlash(); PACE.note = `Time ran out on the last card (${fmtClock(total)}). It counts as “Again”.`; $('#fc').click(); setTimeout(() => { const a = document.querySelector('[data-r="0"]'); if (a && FC.queue[FC.i] === me) a.click(); }, 1300); }
+        }, 250);
+      }
+    } catch (e) { console.error(e); }
+    return r;
+  };
+})();
+// The timed final uses the exam length you set.
+BLUEPRINTS.final.minutes = () => examMin();
+</script>
+<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='e5ca7825fa';</script>
 </body></html>
