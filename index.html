@@ -447,7 +447,7 @@ const SCHEDULE = [
   {d:'2026-10-30', t:'Chapter 23 + Ruth 1 quiz', sub:'Niphal (part 2)'},
   {d:'2026-11-06', t:'Chapter 24 + Ruth 2 quiz', sub:'Hithpael'},
   {d:'2026-11-13', t:'Chapter 25 + Ruth 3 quiz', sub:'Pual'},
-  {d:'2026-11-20', t:'Final exam (exam week Nov 20–24)', sub:'Cumulative · translation, parsing, questions on the text', target:'t-final', big:true},
+  {d:'2026-11-23', t:'Final exam (Monday, Nov 23)', sub:'Cumulative · translation, parsing, questions on the text', target:'t-final', big:true},
 ];
 
 // status: 'core' = already taught; date = when it becomes taught
@@ -2764,7 +2764,7 @@ function parseSiblings(it, used) {
 }
 function varyParse(it, used) {
   if (!it || it.kind !== 'parse' || it._delayed || it.noVary || it.misKey) return it;
-  const r = expGet(AN.contentId(it)); if (!r || r[0] < 2) return it;
+  const r = expGet(AN.contentId(it)); if (!r || r[0] < 1) return it; // new forms first: swap any form already seen
   const sib = parseSiblings(it, used); if (!sib.length) return it;
   const s = pick(sib, 1)[0]; const inBook = S.prog.mistakes.some(m => m.key === it.key);
   return { ...s, misKey: inBook ? it.key : undefined, variedFrom: it.form, cat: it.cat };
@@ -4803,8 +4803,9 @@ function bankStatus() {
 // ===== Independent assessments: weekly check and mock final =====
 // Exam conditions: time limit, no hints, no pronunciation, no feedback until you submit. The first submission is stored once and never changed.
 function anSet() {
-  const st = S.prog.settings; const d = { examDate: '2026-11-20', weeklyMin: 45, mockMin: 90, dailyMin: 45, refs: [], finalActual: null };
+  const st = S.prog.settings; const d = { examDate: '2026-11-23', weeklyMin: 45, mockMin: 90, dailyMin: 45, refs: [], finalActual: null };
   st.an = { ...d, ...(st.an || {}) };
+  if (!st.an.v3) { if (st.an.examDate === '2026-11-20') st.an.examDate = '2026-11-23'; st.an.v3 = 1; }
   if (!st.an.v2) { if (st.an.weeklyMin === 40) st.an.weeklyMin = 45; st.an.v2 = 1; } // weekly-v2 has 3 more short sections
   return st.an;
 }
@@ -7481,6 +7482,7 @@ function paceWeight(it) {
   if (!it) return 1;
   if (it.kind === 'mc') return /^(mt|vc)\|/.test(it.key || '') || it.t === 'vocab' || it.t === 'terminology' ? .5 : 1;
   if (it.kind === 'card') return .5;
+  if (it.kind === 'pgn') return .25; if (it.kind === 'recall') return .6; if (it.kind === 'pgngrid') return 5;
   if (it.kind === 'parse') return 2; if (it.kind === 'root') return 1.5;
   if (it.kind === 'memo') return Math.max(4, Math.min(20, (lexWords(it.model || '').length / 4) || 8));
   if (it.kind === 'write') return it.sub === 'translate' || it.sub === 'translate2' ? 6 : it.sub === 'memory' ? 10 : 2;
@@ -7575,6 +7577,362 @@ function paceStart(it) {
 BLUEPRINTS.final.minutes = () => examMin();
 </script>
 <script>
+// ===== Final-exam plan: daily session, person/gender/number trainer, typed vocabulary, root type, honest readiness =====
+// Built from Emerson's data (Nov 4): person/gender/number right only 37% in parsing; root 63% (weak roots);
+// vocabulary 88% with 4 options but 34% from memory; 57% on forms seen for the first time vs 86% on repeated ones.
+const FINAL_DAY = '2026-11-23';
+const MOCK_DAYS = ['2026-11-07', '2026-11-14', '2026-11-21'];
+const REVIEW_DAYS = ['2026-11-22', '2026-11-23'];
+
+// ---------- Person / gender / number: tables and rules ----------
+const PGN_TAB = {
+  qatal: [['3ms', 'שָׁמַר'], ['3fs', 'שָׁמְרָה'], ['2ms', 'שָׁמַרְתָּ'], ['2fs', 'שָׁמַרְתְּ'], ['1cs', 'שָׁמַרְתִּי'], ['3cp', 'שָׁמְרוּ'], ['2mp', 'שְׁמַרְתֶּם'], ['2fp', 'שְׁמַרְתֶּן'], ['1cp', 'שָׁמַרְנוּ']],
+  yiqtol: [['3ms', 'יִשְׁמֹר'], ['3fs', 'תִּשְׁמֹר'], ['2ms', 'תִּשְׁמֹר'], ['2fs', 'תִּשְׁמְרִי'], ['1cs', 'אֶשְׁמֹר'], ['3mp', 'יִשְׁמְרוּ'], ['3fp', 'תִּשְׁמֹרְנָה'], ['2mp', 'תִּשְׁמְרוּ'], ['2fp', 'תִּשְׁמֹרְנָה'], ['1cp', 'נִשְׁמֹר']],
+  wayyiqtol: [['3ms', 'וַיִּשְׁמֹר'], ['3fs', 'וַתִּשְׁמֹר'], ['2ms', 'וַתִּשְׁמֹר'], ['2fs', 'וַתִּשְׁמְרִי'], ['1cs', 'וָאֶשְׁמֹר'], ['3mp', 'וַיִּשְׁמְרוּ'], ['3fp', 'וַתִּשְׁמֹרְנָה'], ['2mp', 'וַתִּשְׁמְרוּ'], ['1cp', 'וַנִּשְׁמֹר']],
+  impv: [['2ms', 'שְׁמֹר'], ['2fs', 'שִׁמְרִי'], ['2mp', 'שִׁמְרוּ'], ['2fp', 'שְׁמֹרְנָה']],
+  ptc: [['ms', 'שֹׁמֵר'], ['fs', 'שֹׁמֶרֶת'], ['mp', 'שֹׁמְרִים'], ['fp', 'שֹׁמְרוֹת']],
+};
+const PGN_RULE = {
+  qatal: { '3ms': 'no ending', '3fs': 'ending ָה', '2ms': 'ending תָּ', '2fs': 'ending תְּ', '1cs': 'ending תִּי', '3cp': 'ending וּ', '2mp': 'ending תֶּם', '2fp': 'ending תֶּן', '1cp': 'ending נוּ' },
+  yiqtol: { '3ms': 'prefix י, no ending', '3fs': 'prefix ת, no ending (same as “you” m.: the context decides)', '2ms': 'prefix ת, no ending (same as “she”: the context decides)', '2fs': 'prefix ת + ending ִי', '1cs': 'prefix א', '3mp': 'prefix י + ending וּ', '3fp': 'prefix ת + ending נָה (same as “you” f. pl.)', '2mp': 'prefix ת + ending וּ', '2fp': 'prefix ת + ending נָה (same as “they” f.)', '1cp': 'prefix נ' },
+  impv: { '2ms': 'no prefix, no ending', '2fs': 'no prefix, ending ִי', '2mp': 'no prefix, ending וּ', '2fp': 'no prefix, ending נָה' },
+  ptc: { ms: 'no ending (no person in a participle)', fs: 'ending ֶת or ָה (no person)', mp: 'ending ִים (no person)', fp: 'ending וֹת (no person)' },
+};
+const pgnFamily = conj => ({ weqatal: 'qatal', wayyiqtol: 'yiqtol', weyiqtol: 'yiqtol', juss: 'yiqtol', coh: 'yiqtol' }[conj] || conj);
+const PGN_SAME = [['2ms', '3fs'], ['2fp', '3fp']]; // prefix forms that look identical
+function pgnAccept(conj, pgn) {
+  const fam = pgnFamily(conj), set = new Set([pgn]);
+  if (fam === 'yiqtol') PGN_SAME.forEach(g => { if (g.includes(pgn)) g.forEach(x => set.add(x)); });
+  return [...set];
+}
+const pgnLabel = c => { if (!c) return '—'; const m = String(c).match(/^([123]?)([mfc])([sp])$/); if (!m) return c; return `${m[1] ? { 1: '1st', 2: '2nd', 3: '3rd' }[m[1]] + ' ' : ''}${{ m: 'masc.', f: 'fem.', c: 'common' }[m[2]]} ${{ s: 'sing.', p: 'plural' }[m[3]]}`; };
+const pgnWho = c => ({ '3ms': 'he', '3fs': 'she', '2ms': 'you (m.)', '2fs': 'you (f.)', '1cs': 'I', '3cp': 'they', '3mp': 'they (m.)', '3fp': 'they (f.)', '2mp': 'you all (m.)', '2fp': 'you all (f.)', '1cp': 'we', ms: 'one man / m. thing', fs: 'one woman / f. thing', mp: 'men / m. things', fp: 'women / f. things' }[c] || '');
+
+// Forms for the drill: real forms from Ruth and the other course passages (never-seen first), plus look-alike pairs from the table.
+function pgnPool() {
+  const out = [], seen = new Set();
+  const add = (form, conj, pgn, ref, root, stem, gloss) => { if (!form || !pgn || conj === 'inf') return; const k = AN.normHe(form) + '|' + pgn; if (seen.has(k)) return; seen.add(k); out.push({ form, conj, pgn, ref, root, stem, gloss }); };
+  RUTH.verbs.forEach(v => add(v[0], v[3], v[4], v[7].split(' · ')[0], v[1], v[2], v[5]));
+  (PBANK.verbs || []).forEach(v => add(v[0], v[3], v[4], v[7], v[1], v[2], v[5]));
+  return out;
+}
+function pgnItem(x, extra = {}) { return { kind: 'pgn', key: 'pgn|' + AN.normHe(x.form) + '|' + x.pgn, cid: 'pgn:' + AN.hash(AN.normHe(x.form) + x.pgn), form: x.form, conj: x.conj, pgn: x.pgn, ref: x.ref || '', root: x.root || '', stem: x.stem || 'qal', gloss: x.gloss || '', t: 'qal_strong', ...extra }; }
+function pgnDrillItems(n = 20) {
+  const pool = pgnPool(), fresh = pool.filter(x => !expGet('pgn:' + AN.hash(AN.normHe(x.form) + x.pgn)));
+  // Weight the forms you confuse most: endings with ת, prefixes with ת, and participles.
+  const w = x => 1 + (/[23]/.test(x.pgn[0]) ? .6 : 0) + (x.conj === 'ptc' ? .5 : 0) + (pgnFamily(x.conj) === 'yiqtol' ? .4 : 0);
+  const real = weightedPick(fresh.length >= n ? fresh : pool, w, Math.ceil(n * .65)).map(x => pgnItem(x));
+  // Look-alike pairs from the table, back to back.
+  const pairs = [[['qatal', '2ms'], ['qatal', '2fs']], [['qatal', '3fs'], ['qatal', '3cp']], [['yiqtol', '3mp'], ['yiqtol', '2mp']], [['yiqtol', '2fs'], ['yiqtol', '2mp']], [['qatal', '1cs'], ['qatal', '1cp']], [['ptc', 'fs'], ['ptc', 'fp']], [['wayyiqtol', '3ms'], ['wayyiqtol', '1cp']], [['impv', '2fs'], ['yiqtol', '2fs']], [['qatal', '2mp'], ['qatal', '2fp']], [['wayyiqtol', '1cs'], ['yiqtol', '1cs']]];
+  const tab = (c, p) => { const r = PGN_TAB[c].find(y => y[0] === p); return r ? { form: r[1], conj: c, pgn: p, ref: 'table: שׁמר', root: 'שׁמר', stem: 'qal', gloss: 'keep' } : null; };
+  const pp = shuffle(pairs).slice(0, Math.max(1, Math.floor((n - real.length) / 2))).flatMap(pr => pr.map(([c, p]) => tab(c, p)).filter(Boolean).map(x => pgnItem(x, { pair: 1 })));
+  const out = shuffle(real); pp.forEach((x, i) => out.splice(Math.min(out.length, i * 3 + 1), 0, x));
+  return out.slice(0, n + 1);
+}
+function startPgnDrill(o = {}) { startSession({ title: 'Person · gender · number drill', items: pgnDrillItems(o.n || 20), back: S.tab === 'today' ? 'today' : 'practice', noVary: true, mode: 'practice', planBlock: o.planBlock }); }
+function drawPgn(it) {
+  const v = $('#v-session'); SES.answered = false; it._hint = false; startTimer(it);
+  const sel = { p: '', g: '', n: '' };
+  const chips = (f, map, none) => Object.entries(map).map(([k, x]) => `<button class="pc" data-f="${f}" data-v="${k}" aria-pressed="false"><span class="he">${x[0]}</span><small>${x[1]}</small></button>`).join('') + (none ? `<button class="pc" data-f="${f}" data-v="-" aria-pressed="false"><span>—</span><small>none</small></button>` : '');
+  v.innerHTML = `${sessHead()}<div class="panel qbox" style="max-width:720px;width:100%;margin:0 auto">
+    <div class="row" style="justify-content:space-between"><span class="chip acc">Person · gender · number</span><span class="small muted">${it.pair ? 'look-alike pair' : esc(it.ref)}</span></div>
+    <div class="eyebrow" style="text-align:center">${H('גּוּף · מִגְדָּר · מִסְפָּר')} · only these three</div>
+    <div class="form-big" lang="he">${esc(it.form)}</div><div style="text-align:center">${PR(it.form)}</div>
+    <div class="small muted" style="text-align:center">This form is a <b>${esc((CONJ[it.conj] || [it.conj, it.conj])[1])}</b>${it.stem && it.stem !== 'qal' ? ' · ' + esc((STEMS[String(it.stem).split('|')[0]] || ['', it.stem])[1]) : ''}. Look at the prefix and the ending.</div>
+    <div class="pgrid">
+      <div class="prow"><div class="lab"><span class="he">גּוּף</span><small>person</small></div><div class="pchips">${chips('p', PERSON, true)}</div></div>
+      <div class="prow"><div class="lab"><span class="he">מִגְדָּר</span><small>gender</small></div><div class="pchips">${chips('g', GENDER)}</div></div>
+      <div class="prow"><div class="lab"><span class="he">מִסְפָּר</span><small>number</small></div><div class="pchips">${chips('n', NUMBER)}</div></div>
+    </div>
+    <div id="fb"></div>
+    <div class="row" id="ctl"><button class="btn primary" id="b-check">Check</button><button class="btn ghost" id="b-idk">I don't know yet</button></div></div>`;
+  $('#s-exit').onclick = () => { try { savers.prog.now(); } catch {} if (SES.results.length) finishSession(true); else go(SES.back || 'practice'); };
+  $$('.pc', v).forEach(b => b.onclick = () => { if (SES.answered) return; const f = b.dataset.f; sel[f] = sel[f] === b.dataset.v ? '' : b.dataset.v; it._chg = (it._chg || 0) + 1; if (it._fa == null) it._fa = activeMs(it); $$(`.pc[data-f="${f}"]`, v).forEach(x => x.setAttribute('aria-pressed', x.dataset.v === sel[f] ? 'true' : 'false')); });
+  const finish = (score, given) => {
+    SES.answered = true; it._ms = activeMs(it);
+    const acc = pgnAccept(it.conj, it.pgn), fam = pgnFamily(it.conj), rule = (PGN_RULE[fam] || {})[it.pgn] || '';
+    $$('.pc', v).forEach(b => { const f = b.dataset.f, val = b.dataset.v; const right = acc.some(a => { const q = it.conj === 'ptc' ? { p: '-', g: a[0], n: a[1] } : parsePGN(a); return q[f] === val; }); if (right) b.classList.add('right'); else if (sel[f] === val) b.classList.add('wrong'); b.disabled = true; });
+    const alt = acc.length > 1 ? ` <span class="muted">(this spelling is also ${acc.filter(a => a !== it.pgn).map(a => `${a} = ${pgnWho(a)}`).join(', ')}: only the sentence tells which)</span>` : '';
+    $('#fb').innerHTML = `<div class="fb ${score === 1 ? 'ok' : 'no'}"><b class="t">${score === 1 ? 'Right.' : given ? 'Wrong.' : 'Here is the answer.'}</b>
+      <div>${H(esc(it.form))} = <b>${esc(it.pgn)}</b> · ${esc(pgnLabel(it.pgn))} · “${esc(pgnWho(it.pgn))}”${alt}</div>
+      <div><b>The clue:</b> ${heWrap(esc(rule))}</div>${it.gloss ? `<div class="small muted">${esc(it.root)} “${esc(it.gloss)}”${it.ref && !it.pair ? ' · ' + esc(it.ref) : ''}</div>` : ''}</div>`;
+    nextBtn(); logResult(it, score);
+  };
+  $('#b-check').onclick = () => {
+    if (!sel.g || !sel.n || (!sel.p && it.conj !== 'ptc')) { $('#fb').innerHTML = '<div class="fb part">Choose person (or “—”), gender and number.</div>'; return; }
+    const ok = pgnAccept(it.conj, it.pgn).some(a => { const q = it.conj === 'ptc' ? { p: '-', g: a[0], n: a[1] } : parsePGN(a); return (it.conj === 'ptc' ? (sel.p === '-' || sel.p === '') : sel.p === q.p) && sel.g === q.g && sel.n === q.n; });
+    it._sel = { ...sel }; finish(ok ? 1 : 0, true);
+  };
+  $('#b-idk').onclick = () => { it._skip = 1; finish(0, false); };
+}
+
+// ---------- The endings table, written from memory ----------
+function gridItem(set) {
+  const conjs = set === 'B' ? ['yiqtol', 'impv'] : ['qatal', 'ptc'];
+  return { kind: 'pgngrid', key: 'grid|' + set, cid: 'grid:' + set, conjs, t: 'qal_strong' };
+}
+const gridSetToday = () => (Math.floor(parseDay(dayKey()).getTime() / 864e5) % 2) ? 'B' : 'A';
+function drawGrid(it) {
+  const v = $('#v-session'); SES.answered = false; startTimer(it);
+  const rows = it.conjs.flatMap(c => PGN_TAB[c].filter(([p], i, a) => !(c === 'yiqtol' && (p === '3fs' || p === '2fp'))).map(([p, f]) => ({ c, p, f })));
+  // (3fs and 2fp in the yiqtol are spelled like 2ms and 3fp: asked once.)
+  it._rows = rows;
+  v.innerHTML = `${sessHead()}<div class="panel qbox" style="max-width:760px;width:100%;margin:0 auto">
+    <div class="row" style="justify-content:space-between"><span class="chip acc">Endings table from memory</span><span class="small muted">Qal of ${H('שָׁמַר')} “keep”</span></div>
+    <p class="small">Write each form of ${H('שׁמר')}. Vowels are optional: the letters are checked (prefixes and endings are what matters). Use your keyboard or the Hebrew keys.</p>
+    ${it.conjs.map(c => `<div class="stack" style="gap:6px"><b>${esc(CONJ[c] ? CONJ[c][1] : c)} ${CONJ[c] ? H(CONJ[c][0]) : ''}</b>
+      ${rows.filter(r => r.c === c).map((r, i) => `<label class="row small" style="gap:8px;align-items:center"><span style="min-width:150px">${esc(r.p)} · ${esc(pgnWho(r.p))}${c === 'yiqtol' && (r.p === '2ms' || r.p === '3fp') ? ' <span class="muted">(= ' + (r.p === '2ms' ? '3fs' : '2fp') + ')</span>' : ''}</span><input type="text" class="g-in" data-r="${rows.indexOf(r)}" dir="rtl" lang="he" autocomplete="off" style="flex:1;min-width:0;font-family:var(--f-he);font-size:1.25rem"><span class="g-mk" data-m="${rows.indexOf(r)}"></span></label>`).join('')}</div>`).join('')}
+    ${heKeysHTML()}
+    <div id="fb"></div>
+    <div class="row" id="ctl"><button class="btn primary" id="b-check">Check</button><button class="btn ghost" id="b-idk">Show the table</button></div></div>`;
+  let focus = v.querySelector('.g-in'); $$('.g-in', v).forEach(x => x.onfocus = () => { focus = x; });
+  wireHeKeys(v, () => focus);
+  $('#s-exit').onclick = () => { try { savers.prog.now(); } catch {} if (SES.results.length) finishSession(true); else go(SES.back || 'practice'); };
+  const done = (score, typed) => {
+    SES.answered = true; it._ms = activeMs(it);
+    rows.forEach((r, i) => { const inp = v.querySelector(`.g-in[data-r="${i}"]`), mk = v.querySelector(`.g-mk[data-m="${i}"]`); inp.readOnly = true; const ok = typed && memNorm(inp.value) === memNorm(r.f); mk.innerHTML = `${ok ? '<span style="color:var(--good)">✓</span>' : '<span style="color:var(--bad)">✗</span>'} ${H(esc(r.f))}`; });
+    $('#fb').innerHTML = `<div class="fb ${score >= .99 ? 'ok' : score >= .7 ? 'part' : 'no'}"><b class="t">${typed ? `${Math.round(score * rows.length)} of ${rows.length} right` : 'The table'}</b><div class="small">The right form is next to each line. ${score >= .99 ? 'Perfect: 3 perfect days in a row and this becomes a quick check.' : 'Write the wrong ones 3 times on paper now.'}</div></div>`;
+    nextBtn(); logResult(it, score);
+    if (score >= .99) { const P = planState(); if (!P.gridOK.includes(dayKey())) P.gridOK.push(dayKey()); saveProg(); }
+  };
+  $('#b-check').onclick = () => { const ins = $$('.g-in', v); if (!ins.some(x => x.value.trim())) { $('#fb').innerHTML = '<div class="fb part">Write the forms first, or press “Show the table”.</div>'; return; } const ok = ins.filter((x, i) => memNorm(x.value) === memNorm(rows[i].f)).length; done(ok / rows.length, true); };
+  $('#b-idk').onclick = () => { it._skip = 1; done(0, false); };
+}
+
+// ---------- Vocabulary: type the meaning ----------
+function recallItem(c) { return { kind: 'recall', key: 'rc|' + c.key, card: c.key, cid: 'rc:' + AN.hash(c.key), he: String(c.front).split(' / ')[0].replace(/\|/g, ''), w: c.front, gloss: c.back, extra: c.extra || '', t: 'vocab' }; }
+function recallPick(n = 20) {
+  const now = Date.now(), score = c => { const s = S.cards[c.key]; if (!s) return 1; return (s.lapses || 0) * 2 + (s.due <= now ? 3 : 0) + (s.ease < 2.2 ? 1 : 0); };
+  const core = deckCards('core'), sem = (DECKS.sem && DECKS.sem.cards().length ? DECKS.sem.cards() : deckCards('ruth')).filter(c => !c.key.startsWith('core|'));
+  const top = (list, k) => shuffle(list).sort((a, b) => score(b) - score(a)).slice(0, k);
+  const a = top(core, Math.ceil(n * .6)), have = new Set(a.map(c => fvKey(c.front)));
+  const b = top(sem.filter(c => !have.has(fvKey(c.front))), n - a.length);
+  return shuffle([...a, ...b]).map(recallItem);
+}
+function startRecall(o = {}) {
+  const items = o.deck ? pick(deckCards(o.deck), o.n || 20).map(recallItem) : recallPick(o.n || 20);
+  if (!items.length) return flash('No words in this list yet.');
+  startSession({ title: 'Vocabulary: type the meaning', items, back: S.tab === 'today' ? 'today' : S.tab === 'cards' ? 'cards' : 'practice', noVary: true, mode: 'practice', planBlock: o.planBlock });
+}
+function drawRecall(it) {
+  const v = $('#v-session'); SES.answered = false; startTimer(it);
+  v.innerHTML = `${sessHead()}<div class="panel qbox" style="max-width:720px;width:100%;margin:0 auto">
+    <div class="row" style="justify-content:space-between"><span class="chip acc">Vocabulary · from memory</span></div>
+    <div class="qtext" style="text-align:center"><div class="form-big" lang="he">${esc(it.he)}</div>${PR(it.he)}</div>
+    <div id="wi-pre"></div>
+    <label class="f">Meaning in English (type it; small spelling mistakes are fine)<input type="text" id="rc-in" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+    <div id="fb"></div>
+    <div class="row" id="ctl"><button class="btn primary" id="b-check">Check</button><button class="btn ghost" id="b-idk">I don't know yet</button></div></div>`;
+  $('#s-exit').onclick = () => { try { savers.prog.now(); } catch {} if (SES.results.length) finishSession(true); else go(SES.back || 'practice'); };
+  const host = $('#wi-pre'); host.innerHTML = '<div class="small muted">Looking up the grammar and a sentence…</div>';
+  vxIndex().then(idx => { if (SES.items[SES.i] !== it || !$('#wi-pre')) return; it._vx = vxExamples(it.he, idx, it.gloss)[0] || null; $('#wi-pre').innerHTML = vxPreHTML(it.he, it._vx, it.gloss); }).catch(() => { host.innerHTML = ''; });
+  const inp = $('#rc-in'); inp.focus(); inp.oninput = () => { if (it._fa == null) it._fa = activeMs(it); };
+  inp.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); $('#b-check') && $('#b-check').click(); } };
+  const finish = (score, how) => {
+    SES.answered = true; it._ms = it._ms || activeMs(it); inp.readOnly = true; const pre = $('#wi-pre'); if (pre) pre.remove();
+    $('#fb').innerHTML = `<div class="fb ${score === 1 ? 'ok' : 'no'}"><b class="t">${score === 1 ? 'Right.' : how === 'idk' ? 'Here is the answer.' : 'Wrong.'}</b>${it._typed ? `<div>You wrote: “${esc(it._typed)}”</div>` : ''}<div class="vx-post"></div></div>`;
+    try { if (score === 1 && it.card) rateCard(it.card, 2); } catch (e) { console.error(e); }
+    nextBtn(); logResult(it, score);
+    vxIndex().then(idx => { if (it._vx === undefined) it._vx = vxExamples(it.he, idx, it.gloss)[0] || null; const b = document.querySelector('#fb .vx-post'); if (b) b.innerHTML = vxPostHTML(it.he, it.gloss, it._vx); }).catch(() => {});
+  };
+  it._finish = finish;
+  $('#b-check').onclick = () => {
+    const t = inp.value.trim(); if (!t) { $('#fb').innerHTML = '<div class="fb part">Type the meaning first, or press “I don\'t know yet”.</div>'; return; }
+    it._typed = t; it._ms = activeMs(it); const g = AN.gradeRecall(t, it.gloss);
+    if (g.score != null) return finish(g.score, g.method);
+    const tw = t.toLowerCase().split(/[^a-z]+/).filter(w => w.length >= 3), gw = String(it.gloss).toLowerCase().replace(/\([^)]*\)/g, ' ').split(/[^a-z]+/).filter(w => w.length >= 3);
+    const near = (a, b) => a.slice(0, 4) === b.slice(0, 4) || (Math.abs(a.length - b.length) <= 2 && [...a].filter((ch, i) => ch !== b[i]).length <= 2);
+    if (!tw.some(a => gw.some(b => near(a, b)))) return finish(0, 'nomatch');
+    // Not sure automatically: you decide, honestly.
+    SES.answered = true;
+    $('#fb').innerHTML = `<div class="fb part"><b class="t">Compare:</b><div>You wrote “${esc(t)}”. The course meaning is <b>${esc(it.gloss)}</b>.</div><div class="row"><span class="small">Same meaning?</span><button class="btn sm" id="rc-yes">Yes, count it</button><button class="btn sm" id="rc-no">No</button></div></div>`;
+    $('#rc-yes').onclick = () => { it._sc = 'self'; SES.answered = false; finish(1, 'self'); };
+    $('#rc-no').onclick = () => { it._sc = 'self'; SES.answered = false; finish(0, 'self'); };
+  };
+  $('#b-idk').onclick = () => { it._skip = 1; finish(0, 'idk'); };
+}
+
+// ---------- Root type, before the root (parse questions) ----------
+const RC_OPTS = [['strong', 'Strong', 'all three letters stay'], ['I-נ', 'I-נ', 'the נ falls out and leaves a dagesh'], ['I-י', 'I-י (ו)', 'a י/ו first letter: ֵ or וֹ after the prefix'], ['hollow', 'Hollow', 'middle ו/י: long vowel under the prefix'], ['III-ה', 'III-ה', 'the final ה drops, or becomes ֶה / וֹת / ִי'], ['III-א', 'III-א', 'the final א goes quiet'], ['double', 'Double', 'second and third letters the same']];
+const RC_CLUE = Object.fromEntries(RC_OPTS.map(x => [x[0], x[2]]));
+// Left-to-right label with the Hebrew letter isolated, so “I-נ” does not flip to “נ-I”.
+const rcLab = k => `<span dir="ltr" style="unicode-bidi:isolate">${esc(((RC_OPTS.find(x => x[0] === k) || [])[1] || k)).replace(/([א-ת])/g, '<bdi>$1</bdi>')}</span>`;
+function rootClasses(root) {
+  const k = String(root || '').split('|')[0].replace(/[^א-ת]/g, '').replace(/[ךםןףץ]/g, c => ({ 'ך': 'כ', 'ם': 'מ', 'ן': 'נ', 'ף': 'פ', 'ץ': 'צ' }[c])).replace(/^ש/, 'ש');
+  const out = [];
+  if (k === 'לקח') out.push('I-נ'); if (k === 'הלכ') out.push('I-י');
+  if (k.length === 3) { if (k[0] === 'נ') out.push('I-נ'); if ('יו'.includes(k[0])) out.push('I-י'); if ('וי'.includes(k[1])) out.push('hollow'); if (k[2] === 'ה') out.push('III-ה'); if (k[2] === 'א') out.push('III-א'); if (k[1] === k[2]) out.push('double'); }
+  if (k.length === 2) out.push('hollow', 'double');
+  return out.length ? [...new Set(out)] : ['strong'];
+}
+function addRootTypeRow(it) {
+  const rootRow = $('#p-root') && $('#p-root').closest('.prow'); if (!rootRow || $('#rc-row')) return;
+  const want = rootClasses(it.root);
+  rootRow.insertAdjacentHTML('beforebegin', `<div class="prow" id="rc-row"><div class="lab"><span class="he">סוּג הַשֹּׁרֶשׁ</span><small>root type (first)</small></div><div class="stack" style="gap:4px"><div class="pchips">${RC_OPTS.map(([k]) => `<button class="pc" data-rc="${esc(k)}" aria-pressed="false">${rcLab(k)}</button>`).join('')}</div><div class="small" id="rc-fb"></div></div></div>`);
+  $$('[data-rc]').forEach(b => b.onclick = () => {
+    if (it._rc != null) return; const k = b.dataset.rc, ok = want.includes(k); it._rc = ok ? 1 : 0;
+    $$('[data-rc]').forEach(x => { if (want.includes(x.dataset.rc)) x.classList.add('right'); else if (x === b) x.classList.add('wrong'); x.disabled = true; });
+    $('#rc-fb').innerHTML = `<span style="color:var(${ok ? '--good' : '--bad'})">${ok ? '✓' : '✗ It is'} ${want.map(rcLab).join(' + ')}${ok ? ':' : '.'}</span> ${heWrap(esc(want.map(w => RC_CLUE[w]).join('; ')))}`;
+    const P = planState(); P.rc = P.rc || { n: 0, ok: 0 }; P.rc.n++; P.rc.ok += ok ? 1 : 0; saveProg();
+  });
+}
+
+// ---------- Ruth work: blind translation + Hebrew answers on one passage ----------
+function startRuthWork(o = {}) {
+  const p = finalPassage(); if (!p) return flash('No Ruth passage yet.');
+  const tv = shuffle(p.verses.filter(x => { const w = x.he.split(/[\s־]+/).length; return w >= 5 && w <= 18; })).slice(0, 3).sort((a, b) => a.v - b.v);
+  const items = [...exTranslate(tv).map(x => ({ ...x, cat: 'instructional' })), ...finalComp(p, 2).map(x => ({ ...x, q: x.q }))];
+  if (!items.length) return flash('No questions fit this passage.');
+  startSession({ title: `Ruth: translate blind and answer in Hebrew · ${p.ref}`, items, passage: { ref: p.ref, lines: p.verses.map(x => `${x.v} ${x.he}`) }, back: S.tab === 'today' ? 'today' : 'practice', noVary: true, mode: 'practice', planBlock: o.planBlock });
+}
+// New weak-root verbs from Ruth (forms never parsed before come first).
+function startWeakRoots(o = {}) {
+  const n = o.n || 10, pool = RUTH.verbs.map((v, i) => i).filter(i => { const v = RUTH.verbs[i], st = String(v[2]).split('|')[0]; return v[3] !== 'inf' && STEMS[st] && (st === 'qal' || stemLearned(st)) && AN.weakRoot(v[1]); });
+  const fresh = pool.filter(i => !expGet(AN.contentId(ruthItem(i))));
+  const seenF = new Set(), items = [];
+  for (const i of [...shuffle(fresh), ...shuffle(pool)]) { const it = ruthItem(i), k = AN.normHe(it.form); if (seenF.has(k)) continue; seenF.add(k); items.push(it); if (items.length >= n) break; }
+  startSession({ title: 'Weak roots: new verbs from Ruth (root type first)', items, back: S.tab === 'today' ? 'today' : 'practice', noVary: true, mode: 'practice', planBlock: o.planBlock });
+}
+
+// ---------- Session plumbing ----------
+(function () {
+  const _di = drawItem;
+  drawItem = function () {
+    if (SES && SES.i < SES.items.length) {
+      const it = SES.items[SES.i];
+      const own = { pgn: drawPgn, pgngrid: drawGrid, recall: drawRecall }[it.kind];
+      if (own) { clearInterval(PACE.t); own(it); try { paceStart(it); } catch (e) { console.error(e); } return; }
+    }
+    const r = _di.apply(this, arguments);
+    try { const it = SES && SES.items[SES.i]; if (it && it.kind === 'parse') addRootTypeRow(it); } catch (e) { console.error(e); }
+    return r;
+  };
+  const _gu = giveUp;
+  giveUp = function () {
+    const it = SES && SES.items[SES.i];
+    if (it && it.kind === 'recall' && it._finish) { if (!SES.answered) { it._skip = 1; it._finish(0, 'idk'); } return; }
+    if (it && (it.kind === 'pgn' || it.kind === 'pgngrid')) { const b = $('#b-idk'); if (b && !SES.answered) b.click(); return; }
+    return _gu.apply(this, arguments);
+  };
+  const _fs = finishSession;
+  finishSession = function (early) {
+    try { if (SES && SES.planBlock && SES.results.length >= Math.max(1, Math.ceil(SES.items.length * .6))) planMark(SES.planBlock); } catch (e) { console.error(e); }
+    return _fs.apply(this, arguments);
+  };
+  // The endings table is practice, not a mistake to repeat.
+  const _am = addMistake; addMistake = function (item) { if (item && item.kind === 'pgngrid') return null; return _am.apply(this, arguments); };
+})();
+
+// ---------- Daily plan ----------
+function planState() { const P = S.prog.fplan = S.prog.fplan || {}; P.days = P.days || {}; P.gridOK = P.gridOK || []; return P; }
+function planMark(id, day = dayKey()) { const P = planState(); (P.days[day] = P.days[day] || {})[id] = Date.now(); saveProg(); }
+function planDone(id, day = dayKey()) { const d = planState().days[day]; return !!(d && d[id]); }
+function gridQuick() { const ok = [...new Set(planState().gridOK)].sort(); if (ok.length < 3) return false; const t = ok.slice(-3).map(d => parseDay(d).getTime()), today = parseDay(dayKey()).getTime(); return t[2] - t[0] === 2 * 864e5 && today - t[2] <= 864e5; }
+function memoryTarget() {
+  const d = dayKey();
+  if (d < '2026-11-11') return { c: 1, from: 16, to: 17 };
+  if (d < '2026-11-17') return { c: 1, from: 1, to: 5 };
+  return { c: 4, from: 13, to: 17 };
+}
+function ruthChapterToday() { const chs = ruthChaptersStudied(); const list = chs.length ? chs : [1]; return list[Math.floor(parseDay(dayKey()).getTime() / 864e5) % list.length]; }
+function planBlocks() {
+  const d = dayKey();
+  if (REVIEW_DAYS.includes(d)) return [
+    { id: 'grid', min: 3, title: 'Endings table: one last time', sub: 'Write it from memory and check.', act: () => startSession({ title: 'Endings table from memory', items: [gridItem(gridSetToday())], back: 'today', noVary: true, planBlock: 'grid' }) },
+    { id: 'mist', min: 25, title: 'Mistakes notebook', sub: `${S.prog.mistakes.length} items. Nothing new today.`, act: () => { startMistakes(); if (SES) SES.planBlock = 'mist'; } },
+    { id: 'recall', min: 10, title: 'Vocabulary from memory: your hardest words', sub: '20 words, typed.', act: () => startRecall({ planBlock: 'recall' }) },
+    { id: 'mem', min: 10, title: 'Say your memory verses once', sub: 'No help: write them, check, done.', act: () => { const m = memoryTarget(); startMemory(m.c, m.from, m.to); if (SES) SES.planBlock = 'mem'; } },
+    { id: 'sleep', min: 0, title: 'Sleep well tonight', sub: 'Sleep fixes in memory what you practised. Mark it when you go to bed.', manual: true },
+  ];
+  if (MOCK_DAYS.includes(d)) return [
+    { id: 'mock', min: examMin(), title: `Timed final (${examMin()} minutes, closed book)`, sub: 'Real exam conditions: no notes, no breaks, phone away. This score is your real measure.', act: () => startExam('final'), check: () => (S.assess || []).some(a => a.type === 'final' && dayKey(new Date(a.end)) === d) },
+    { id: 'mist', min: 25, title: 'Then: fix today’s mistakes', sub: 'Open the review of the final and redo every miss in the mistakes notebook.', act: () => { startMistakes(); if (SES) SES.planBlock = 'mist'; } },
+  ];
+  const c = ruthChapterToday(), m = memoryTarget(), quick = gridQuick();
+  return [
+    { id: 'grid', min: quick ? 3 : 6, title: quick ? 'Endings table (quick check)' : 'Endings table from memory', sub: quick ? 'You wrote it perfectly 3 days in a row: one table only.' : `Today: ${gridSetToday() === 'A' ? 'perfect (qatal) + participle' : 'imperfect (yiqtol) + imperative'} of ${'שָׁמַר'}.`, act: () => startSession({ title: 'Endings table from memory', items: [gridItem(gridSetToday())], back: 'today', noVary: true, planBlock: 'grid' }) },
+    { id: 'pgn', min: 8, title: 'Person · gender · number drill', sub: '20 forms, about 15 seconds each. Your weakest skill (37%).', act: () => startPgnDrill({ planBlock: 'pgn' }) },
+    { id: 'roots', min: 15, title: 'Weak roots: 10 new verbs from Ruth', sub: 'Name the root type first, then parse. Forms you have never seen.', act: () => startWeakRoots({ planBlock: 'roots' }) },
+    { id: 'recall', min: 12, title: 'Vocabulary: type the meaning', sub: '20 words: main list first, then this semester’s words.', act: () => startRecall({ planBlock: 'recall' }) },
+    { id: 'read', min: 8, title: `Read Ruth ${c} aloud`, sub: 'Once, slowly, out loud. Mark it when you finish.', manual: true, act: () => { go('read'); try { renderRead('ruthT' + c); } catch {} } },
+    { id: 'ruth', min: 20, title: 'Ruth: translate 3 verses blind + 2 questions in Hebrew', sub: 'A random passage, like the final. Answer the questions in Hebrew, copying words from the text.', act: () => startRuthWork({ planBlock: 'ruth' }) },
+    { id: 'mem', min: 10, title: `Memory verses: Ruth ${m.c}:${m.from}–${m.to}`, sub: 'First with first letters, then with no help.', act: () => { startMemory(m.c, m.from, m.to); if (SES) SES.planBlock = 'mem'; } },
+  ];
+}
+function planCardHTML() {
+  const d = dayKey(), days = Math.round((parseDay(FINAL_DAY).getTime() - parseDay(d).getTime()) / 864e5);
+  if (days < 0) return '';
+  const B = planBlocks(), isDone = b => b.check ? b.check() : planDone(b.id), n = B.filter(isDone).length, tot = B.reduce((s, b) => s + b.min, 0);
+  const kind = REVIEW_DAYS.includes(d) ? 'Review day: nothing new' : MOCK_DAYS.includes(d) ? 'Saturday: timed final' : 'Training day';
+  const R = readiness();
+  return `<div class="panel stack" id="plan-card" style="border-color:var(--accent)">
+    <div class="row" style="justify-content:space-between"><h2 style="margin:0">Today’s session</h2><span class="chip ${days <= 3 ? 'warn' : 'acc'}">${days === 0 ? 'Final today' : days + ' day' + (days === 1 ? '' : 's') + ' to the final (Nov 23)'}</span></div>
+    <p class="small muted">${kind} · about ${tot} minutes · ${n} of ${B.length} done${R.est != null ? ` · first-try level so far: <b>${R.est}%</b> <span class="muted">(${esc(R.basis.join(' + '))})</span>` : ''}</p>
+    <div class="plan">${B.map((b, i) => `<div class="step ${isDone(b) ? 'done' : ''}"><span class="n">${isDone(b) ? '✓' : i + 1}</span><div><b>${esc(b.title)}</b><div class="small muted">${heWrap(esc(b.sub))} · ${b.min} min</div></div><div class="row" style="gap:6px">${b.act ? `<button class="btn sm ${isDone(b) ? '' : 'primary'}" data-pb="${b.id}">${isDone(b) ? 'Again' : 'Start'}</button>` : ''}${b.manual && !isDone(b) ? `<button class="btn sm" data-pm="${b.id}">Done</button>` : ''}</div></div>`).join('')}</div>
+  </div>`;
+}
+function wirePlanCard() {
+  const B = planBlocks();
+  $$('[data-pb]').forEach(b => b.onclick = () => { const x = B.find(y => y.id === b.dataset.pb); if (x && x.act) x.act(); });
+  $$('[data-pm]').forEach(b => b.onclick = () => { planMark(b.dataset.pm); const c = $('#plan-card'); if (c) { c.outerHTML = planCardHTML(); wirePlanCard(); } });
+}
+
+// ---------- Ready for the final: first-try answers only ----------
+const RD_SECTIONS = [['parse', 'Parsing', 24], ['comp', 'Questions in Hebrew', 8], ['translation', 'Translation', 4], ['syntax', 'Grammar questions', 10], ['memory', 'Writing from memory', 2]];
+function readiness(days = 21) {
+  const since = Date.now() - days * 864e5, E = (MEAS.all || MEAS.ev || []).filter(e => e.ts >= since && e.s != null && (e.x || 0) === 0 && !['mistakes', 'review', 'reinforce'].includes(e.m) && e.k !== 'sess' && e.k !== 'view');
+  const sec = e => e.k === 'parse' ? 'parse' : e.k === 'comp' || (e.k === 'mc' && e.t === 'comprehension') ? 'comp' : e.k === 'tr' ? 'translation' : e.k === 'mem' || e.k === 'memo' ? 'memory' : e.k === 'mc' && !['vocab', 'terminology', 'comprehension'].includes(e.t) && !/^mt\|/.test(e.i || '') ? 'syntax' : e.k === 'recall' ? 'vocab' : e.k === 'pgn' ? 'pgn' : null;
+  const acc = {}; E.forEach(e => { const s = sec(e); if (!s) return; (acc[s] = acc[s] || []).push(Math.max(0, Math.min(1, e.s))); });
+  const rows = RD_SECTIONS.map(([id, name, w]) => { const a = acc[id] || []; const p = a.length ? a.reduce((x, y) => x + y, 0) / a.length : null; const ci = a.length ? 1.96 * Math.sqrt(Math.max(p * (1 - p), .05) / a.length) : null; return { id, name, w, n: a.length, p, ci }; });
+  const use = rows.filter(r => r.n >= 5); const W = use.reduce((s, r) => s + r.w, 0);
+  const est = W >= 20 ? Math.round(use.reduce((s, r) => s + r.w * r.p, 0) / W * 100) : null;
+  const extra = ['vocab', 'pgn'].map(id => { const a = acc[id] || []; return { id, name: id === 'vocab' ? 'Vocabulary typed from memory' : 'Person · gender · number drill', n: a.length, p: a.length ? a.reduce((x, y) => x + y, 0) / a.length : null }; });
+  const finals = (S.assess || []).filter(a => a.type === 'final' && a.indep != null).map(a => ({ when: a.end, indep: a.indep }));
+  return { rows, est, extra, finals, missing: rows.filter(r => r.n < 5).map(r => r.name), basis: use.map(r => r.name) };
+}
+function readinessHTML() {
+  const R = readiness(), pc = x => x == null ? '—' : Math.round(x * 100) + '%';
+  const P = planState(), rc = P.rc && P.rc.n ? `${Math.round(P.rc.ok / P.rc.n * 100)}% of ${P.rc.n}` : '—';
+  return `<div class="panel stack" id="ready-panel"><h2 style="margin:0">Ready for the final?</h2>
+    <p class="small muted">Only answers given the first time you met a question in the last 3 weeks: repeated questions are left out, because remembering an answer is not the same as knowing it. Weighted like the final (24 parsing, 10 grammar, 8 Hebrew questions, 4 translations, 2 from memory).</p>
+    <div class="stat"><b>${R.est != null ? R.est + '%' : 'Not enough data yet'}</b><span>${R.est != null ? `estimated first-try level, from ${esc(R.basis.join(' + '))} only` : 'Do the daily session for a few days: each section needs at least 5 first-try answers.'}</span></div>
+    <div class="tw"><table class="mini" style="width:100%"><tr><th>Exam section</th><th>First-try right</th><th>Answers</th><th>Range (95%)</th></tr>
+      ${R.rows.map(r => `<tr><td>${esc(r.name)}</td><td>${pc(r.p)}</td><td>${r.n}</td><td>${r.p == null ? '—' : `${Math.max(0, Math.round((r.p - r.ci) * 100))}–${Math.min(100, Math.round((r.p + r.ci) * 100))}%`}</td></tr>`).join('')}
+      ${R.extra.map(r => `<tr><td class="muted">${esc(r.name)}</td><td>${pc(r.p)}</td><td>${r.n}</td><td></td></tr>`).join('')}
+      <tr><td class="muted">Root type named right</td><td colspan="3">${rc}</td></tr></table></div>
+    ${R.finals.length ? `<p class="small"><b>Timed finals:</b> ${R.finals.map(f => `${fmtDay(dayKey(new Date(f.when)))}: ${f.indep}%`).join(' · ')}</p>` : '<p class="small muted">No timed final yet. The plan has one on Saturdays Nov 7, 14 and 21.</p>'}
+    ${R.missing.length ? `<p class="small muted">Too few first-try answers yet for: ${esc(R.missing.join(', '))}.</p>` : ''}</div>`;
+}
+
+// ---------- Put it on the screens ----------
+(function () {
+  const _rt = renderToday;
+  renderToday = function () {
+    const r = _rt.apply(this, arguments);
+    try { const v = $('#v-today'); if (v && !$('#plan-card')) { loadAllEvents().then(() => { const c = $('#plan-card'); if (c && S.tab === 'today') { c.outerHTML = planCardHTML(); wirePlanCard(); } }).catch(() => {}); const ban = v.querySelector('.banner'); const html = planCardHTML(); if (html) { if (ban) ban.insertAdjacentHTML('afterend', html); else v.insertAdjacentHTML('afterbegin', html); wirePlanCard(); } } } catch (e) { console.error(e); }
+    return r;
+  };
+  const _rp = renderProgress;
+  renderProgress = async function () { const r = await _rp.apply(this, arguments); try { const v = $('#v-progress'); if (v && S.tab === 'progress' && !$('#ready-panel')) v.insertAdjacentHTML('afterbegin', readinessHTML()); } catch (e) { console.error(e); } return r; };
+  const _rpr = renderPractice;
+  renderPractice = function () {
+    const r = _rpr.apply(this, arguments);
+    try { const v = $('#v-practice'); if (v && !$('#fx-card')) v.insertAdjacentHTML('afterbegin', `<div class="panel stack" id="fx-card"><h2 style="margin:0">Final-exam trainers</h2><p class="small muted">Built for your weak points: person/gender/number, weak roots, and remembering meanings without options.</p><div class="row"><button class="btn primary" id="fx-pgn">Person · gender · number drill</button><button class="btn" id="fx-grid">Endings table from memory</button><button class="btn" id="fx-roots">Weak roots from Ruth</button><button class="btn" id="fx-rc">Vocabulary: type the meaning</button><button class="btn" id="fx-ruth">Ruth: translate + answer in Hebrew</button></div></div>`);
+      $('#fx-pgn').onclick = () => startPgnDrill(); $('#fx-grid').onclick = () => startSession({ title: 'Endings table from memory', items: [gridItem(gridSetToday())], back: 'practice', noVary: true }); $('#fx-roots').onclick = () => startWeakRoots(); $('#fx-rc').onclick = () => startRecall(); $('#fx-ruth').onclick = () => startRuthWork();
+    } catch (e) { console.error(e); }
+    return r;
+  };
+  // Flashcards: a “Type the meaning” button on each word list.
+  const _rc = renderCards;
+  renderCards = async function () {
+    const r = await _rc.apply(this, arguments);
+    try { $$('#v-cards [data-review]').forEach(b => { const id = b.dataset.review; if (!/^(core|ruth|full|sem)$|^s:|^ch:/.test(id) || b.parentElement.querySelector('[data-typein]')) return; b.insertAdjacentHTML('afterend', `<button class="btn sm" data-typein="${esc(id)}">Type the meaning</button>`); });
+      $$('#v-cards [data-typein]').forEach(b => b.onclick = () => { const cards = deckCards(b.dataset.typein); if (!cards.length) return flash('Build or load this list first.'); startRecall({ deck: b.dataset.typein }); }); } catch (e) { console.error(e); }
+    return r;
+  };
+})();
+</script>
+<script>
 // Colour mode: dark (default), light, or the same as the computer. Remembered on this device.
 (function () {
   const order = ['dark', 'light', 'auto'], lab = { dark: '☾ Dark', light: '☀ Light', auto: '◐ Auto' };
@@ -7584,5 +7942,5 @@ BLUEPRINTS.final.minutes = () => examMin();
   const b = document.getElementById('btn-theme'); if (b) b.onclick = () => { t = order[(order.indexOf(t) + 1) % order.length]; try { localStorage.setItem('het-theme', t); } catch {} apply(); };
 })();
 </script>
-<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='aca94ed7f7';</script>
+<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='c7ee6f199b';</script>
 </body></html>
