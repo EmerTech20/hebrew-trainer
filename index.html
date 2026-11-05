@@ -5,7 +5,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Hebrew Trainer">
-<title>Hebrew Exam Trainer</title></head><body><title>Hebrew Exam Trainer</title>
+<title>Hebrew Exam Trainer</title></head><body><script>(function(){var t='dark';try{t=localStorage.getItem('het-theme')||'dark';}catch(e){}if(t!=='auto')document.documentElement.setAttribute('data-theme',t);})();</script><title>Hebrew Exam Trainer</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=Noto+Serif+Hebrew:wght@400;500;600&family=Spectral:ital,wght@0,500;0,600;1,500&display=swap">
@@ -213,7 +213,8 @@ details summary{cursor:pointer;font-weight:600}
 #v-progress .grid2{grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr))}
 .legend i{border-radius:2px}
 @media print{.top,.sess-head,#pp-print,#pp-go,.btn,.banner{display:none!important}body{background:#fff}.panel{box-shadow:none;border:0}}
-@media (max-width:520px){#btn-focus{white-space:nowrap;font-size:.8rem;padding-left:8px;padding-right:8px}
+#btn-theme{white-space:nowrap}
+@media (max-width:520px){#btn-theme{font-size:.8rem;padding-left:8px;padding-right:8px}#btn-focus{white-space:nowrap;font-size:.8rem;padding-left:8px;padding-right:8px}
   .sync{display:none}
   .mark b{font-size:1rem}
   .prow{grid-template-columns:1fr}
@@ -235,6 +236,7 @@ table.heat th{font-size:12px;white-space:nowrap}
       <div class="mark"><span class="he" lang="he">מוֹרֶה</span><b>Hebrew Exam Trainer</b></div>
       <span class="sync" id="sync">Loading…</span>
       <button class="iconbtn" id="btn-focus" title="25 minutes of study, then a 5-minute break">Focus 25</button>
+      <button class="iconbtn" id="btn-theme" title="Dark, light, or the same as your computer">☾ Dark</button>
       <button class="iconbtn" id="btn-settings" aria-label="Settings">Settings</button>
     </div>
     <nav class="tabs" role="tablist" id="tabs">
@@ -3805,7 +3807,7 @@ function wireStandaloneSettings(v) {
 // First start on a device: one button to bring in the progress file from the old app (or a backup).
 function importBannerHTML() {
   if (!STANDALONE || S.prog.placementDone || (S.prog.history || []).length || (MEAS.all || []).some(e => e.k !== 'sess' && e.k !== 'view') || S.prog.flags.noImport) return '';
-  return `<div class="banner" style="border-color:var(--accent)"><p><b>Bring your progress into this app.</b> Press the button and choose the file <b>hebrew-trainer-my-progress-2026-10-16.json</b> (it is in your <b>Downloads</b> folder after you download it from the Claude chat). Your answers, flashcards and library come in at once.<br><span class="small muted">Traga seu progresso: aperte o botão e escolha o arquivo na pasta Downloads.</span></p>
+  return `<div class="banner" style="border-color:var(--accent)"><p><b>Bring your progress into this app.</b> Press the button and choose the file <b>hebrew-trainer-my-progress-2026-11-04.json</b> (it is in your <b>Downloads</b> folder after you download it from the Claude chat). Your answers, flashcards and library come in at once.<br><span class="small muted">Traga seu progresso: aperte o botão e escolha o arquivo na pasta Downloads.</span></p>
     <div class="row"><label class="btn primary">Choose my progress file<input type="file" id="imp-file" accept=".json,application/json" hidden></label><button class="btn ghost sm" id="imp-skip">Start fresh instead</button></div><span class="small" id="imp-msg"></span></div>`;
 }
 function wireImportBanner(v) {
@@ -7572,5 +7574,15 @@ function paceStart(it) {
 // The timed final uses the exam length you set.
 BLUEPRINTS.final.minutes = () => examMin();
 </script>
-<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='e5ca7825fa';</script>
+<script>
+// Colour mode: dark (default), light, or the same as the computer. Remembered on this device.
+(function () {
+  const order = ['dark', 'light', 'auto'], lab = { dark: '☾ Dark', light: '☀ Light', auto: '◐ Auto' };
+  let t = 'dark'; try { t = localStorage.getItem('het-theme') || 'dark'; } catch {}
+  const apply = () => { const r = document.documentElement; if (t === 'auto') r.removeAttribute('data-theme'); else r.setAttribute('data-theme', t); const b = document.getElementById('btn-theme'); if (b) b.textContent = lab[t]; };
+  apply();
+  const b = document.getElementById('btn-theme'); if (b) b.onclick = () => { t = order[(order.indexOf(t) + 1) % order.length]; try { localStorage.setItem('het-theme', t); } catch {} apply(); };
+})();
+</script>
+<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='aca94ed7f7';</script>
 </body></html>
