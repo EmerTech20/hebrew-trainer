@@ -7933,6 +7933,158 @@ function readinessHTML() {
 })();
 </script>
 <script>
+// ===== Nov 14 update: quiz retakes, stem + form drill, accents, new daily plan =====
+// From the professor (Nov 10/12 classes, via the S14/S15 reports): the final is cumulative, Monday Nov 23 (8:00 a.m. by class
+// consensus, to be confirmed), one or two stories already studied, all seven main stems possible. His first advice: retake the
+// earlier quizzes cold. The S15 report suggests 40% retakes, 35% stem + form recognition, 20% Ruth 3 forms, 5% text signs.
+// Quiz layout (Ruth 1–3 quizzes): translate a passage into smooth English + parse 1–2 words in the six-box grid.
+const FINAL_WHEN = 'Mon Nov 23, 8:00 a.m. (confirm the professor’s announcement)';
+
+// ---------- Quiz retakes (Ruth 1–3) ----------
+// Passages and target words only (the Bible text is in the app already). The “rare vocabulary” lists of the quiz sheets
+// come from your private update file (qgloss/…), never from this public code.
+const QUIZ_RETAKES = {
+  r1: { name: 'Ruth 1 quiz', c: 1, from: 20, to: 22, parse: [
+    { form: 'הַשָּׁבָה', v: 22, root: 'שוב', stem: 'qal', conj: 'qatal', pgn: '3fs', gloss: 'return', alts: [{ conj: 'ptc', pgn: 'fs' }], note: 'The article הַ + the verb = “who returned”. The accent on the first syllable (הַשָּׁ֖בָה) points to the perfect 3fs; many teachers call it a participle f.s. Both are accepted here: follow your professor’s grading.' }] },
+  r2: { name: 'Ruth 2 quiz', c: 2, from: 4, to: 7, parse: [
+    { form: 'הַנִּצָּב', v: 5, root: 'נצב', stem: 'niphal', conj: 'ptc', pgn: 'ms', gloss: 'be stationed, stand (as overseer)', note: 'The נִ is the Niphal prefix; the root’s own נ merged into צּ (dagesh). Participle: no person.' },
+    { form: 'אֲלַקֳטָה', v: 7, root: 'לקט', stem: 'piel', conj: 'yiqtol', pgn: '1cs', gloss: 'glean', note: 'Cohortative “let me glean”: prefix א (I) + extra ָה. Piel: patach under the first root letter ל after the prefix (a Qal would be אֶלְקְטָה); the doubling of ק is dropped because it has a shewa. Note: the S13 classroom report called it Qal; the standard lexicons call it Piel.' }] },
+  r3: { name: 'Ruth 3 quiz', c: 3, from: 5, to: 10, lock: 'ruth3quiz', parse: [
+    { form: 'הֵיטַבְתְּ', v: 10, root: 'יטב', stem: 'hiphil', conj: 'qatal', pgn: '2fs', gloss: 'do good, do well', note: 'Hiphil of a I-י root: הֵי at the front; perfect ending ־תְּ = you (fem. sing.).' },
+    { form: 'וַיִּלָּפֵת', v: 8, root: 'לפת', stem: 'niphal', conj: 'wayyiqtol', pgn: '3ms', gloss: 'twist, turn over', note: 'Niphal: the prefix is followed by a doubled FIRST root letter (לּ) = the merged Niphal נ; ֵ under the second letter.' }] },
+};
+const quizLocked = q => q.lock && !((S.prog.settings.submitted || {})[q.lock]);
+async function quizGloss(id) { try { if (!S.db) return null; const s = await S.db.doc('qgloss/' + id).get(); return s.exists ? s.data() : null; } catch { return null; } }
+function retakeParseItem(q, x) {
+  const vv = (RUTH.verses[String(q.c)] || []).find(y => y[0] === x.v);
+  return { kind: 'parse', key: `rq|${q.c}|${x.form}`, form: x.form, root: x.root, stem: x.stem, conj: x.conj, pgn: x.pgn, gloss: x.gloss, alts: x.alts, note: x.note, ctx: vv ? vv[1] : '', ref: `Ruth ${q.c}:${x.v}`, t: x.stem === 'qal' ? 'qal_weak' : x.stem === 'hiphil' ? 'hiphil_weak' : x.stem, sec: 'parse' };
+}
+async function startRetake(id, o = {}) {
+  const q = QUIZ_RETAKES[id]; if (!q) return;
+  if (quizLocked(q)) {
+    if (!confirm(`${q.name}: have you already submitted it to the professor? Press OK only if it is submitted. (Practising an open quiz would break the course rules.)`)) return;
+    S.prog.settings.submitted = S.prog.settings.submitted || {}; S.prog.settings.submitted[q.lock] = Date.now(); saveProg();
+  }
+  const verses = (RUTH.verses[String(q.c)] || []).filter(v => v[0] >= q.from && v[0] <= q.to).map(v => ({ c: q.c, v: v[0], he: v[1] }));
+  const en = new Map((PBANK.verses || []).filter(v => v[0] === 'Ruth' && v[1] === q.c).map(v => [v[2], v[4]]));
+  const tr = exTranslate(verses).map(x => ({ ...x, cat: 'instructional' }));
+  const g = await quizGloss(id);
+  const lines = verses.map(x => `${x.v} ${x.he}`); if (g && g.lines) lines.push('— Rare vocabulary (from the quiz sheet) —', ...g.lines);
+  startSession({ title: `Retake: ${q.name} (cold, as on the sheet)`, items: [...tr, ...q.parse.map(x => retakeParseItem(q, x))], passage: { ref: `Ruth ${q.c}:${q.from}–${q.to}`, lines }, back: S.tab === 'today' ? 'today' : 'practice', noVary: true, mode: 'retake', planBlock: o.planBlock, retake: id });
+}
+// A form with two accepted analyses (הַשָּׁבָה): grade against each and keep the better one.
+(function () { const _gp = gradeParse; gradeParse = function (item, sel) { if (!item || !item.alts) return _gp.apply(this, arguments); let best = null; for (const a of [{}, ...item.alts]) { const g = _gp({ ...item, ...a, alts: undefined }, sel); if (!best || g.score > best.score) best = g; } return best; }; })();
+
+// ---------- Stem + form recognition (binyan and netiyyah only) ----------
+const SF_STEM_CLUE = { qal: 'no stem sign: plain prefix vowel (יִ / יָ / יֵ), no doubling of the middle letter', niphal: 'נִ in the perfect and participle; elsewhere a doubled FIRST root letter right after the prefix (יִשָּׁמֵר, הִשָּׁמֵר)', piel: 'doubled MIDDLE letter; shewa under the prefix (יְ, מְ); i–e in the perfect (קִטֵּל)', pual: 'u-vowel (ֻ) under the first letter + doubled middle letter; מְ in the participle', hithpael: 'הִתְ / יִתְ / מִתְ before the root + doubled middle letter', hiphil: 'ה prefix in the perfect (הִ / הֵ); a-prefix (יַ, מַ) and often ִי before the last letter', hophal: 'o/u vowel under the prefix (הָ / הֻ, יָ / יֻ, מָ / מֻ) and a under the second letter' };
+const SF_CONJ_CLUE = { qatal: 'endings only, no prefix (־תָּ, ־תִּי, ־נוּ, ־וּ, ־ָה)', yiqtol: 'a prefix (א ת י נ), maybe also an ending', wayyiqtol: 'וַ + a prefix (וַיִּ, וַתִּ; וָאֶ for “I”)', weqatal: 'וְ + a perfect with its endings', weyiqtol: 'וְ + a prefix form', impv: 'no prefix: like the yiqtol with the prefix cut off', ptc: 'Qal ֹ…ֵ, or מְ / מַ / נִ in the other stems; gender and number only', inf: 'often after לְ / בְּ / כְּ; looks like the imperative; no person, gender or number' };
+function sfPool() {
+  const out = [], seen = new Set();
+  const add = (form, root, stem, conj, pgn, gloss, ref, src) => { stem = String(stem || '').split('|')[0]; conj = { juss: 'yiqtol', coh: 'yiqtol' }[conj] || conj; if (!form || !STEMS[stem] || !CONJ[conj]) return; if (stem !== 'qal' && !stemLearned(stem)) return; const k = AN.normHe(form); if (seen.has(k)) return; seen.add(k); out.push({ form, root, stem, conj, pgn, gloss, ref, src }); };
+  RUTH.verbs.forEach(v => add(v[0], v[1], v[2], v[3], v[4], v[5], v[7].split(' · ')[0], 'ruth'));
+  (PBANK.verbs || []).forEach(v => add(v[0], v[1], v[2], v[3], v[4], v[5], v[7], 'bank'));
+  try { (S.insights || []).forEach(ins => (ins.parse || []).filter(p => p.verified !== false).forEach(p => add(p.form, p.root, p.stem, p.conj, p.pgn, p.gloss, ins.session || 'class', 'class'))); } catch {}
+  return out;
+}
+function sfItems(n = 16) {
+  const pool = sfPool(), w = x => (x.stem !== 'qal' ? 3 : 1) + (['ptc', 'inf', 'impv'].includes(x.conj) ? 1.5 : 0) + (x.src === 'class' ? 2 : 0) + (expGet('sf:' + AN.hash(AN.normHe(x.form))) ? 0 : 1);
+  return weightedPick(pool, w, n).map(x => ({ kind: 'sf', key: 'sf|' + AN.normHe(x.form), cid: 'sf:' + AN.hash(AN.normHe(x.form)), ...x, t: x.stem === 'qal' ? 'qal_weak' : (PB_STEM_TOPIC[x.stem] || 'derived_stems') }));
+}
+function startSfDrill(o = {}) { startSession({ title: 'Stem + form drill (בִּנְיָן · נְטִיָּה)', items: sfItems(o.n || 16), back: S.tab === 'today' ? 'today' : 'practice', noVary: true, mode: 'practice', planBlock: o.planBlock }); }
+function drawSf(it) {
+  const v = $('#v-session'); SES.answered = false; startTimer(it); const sel = { stem: '', conj: '' };
+  const chips = (f, map) => Object.entries(map).filter(([k]) => f !== 'stem' || k === 'qal' || stemLearned(k)).map(([k, x]) => `<button class="pc" data-f="${f}" data-v="${k}" aria-pressed="false"><span class="he">${x[0]}</span><small>${x[1]}</small></button>`).join('');
+  v.innerHTML = `${sessHead()}<div class="panel qbox" style="max-width:760px;width:100%;margin:0 auto">
+    <div class="row" style="justify-content:space-between"><span class="chip acc">Stem + form</span><span class="small muted">${esc(it.ref || '')}</span></div>
+    <div class="eyebrow" style="text-align:center">${H('בִּנְיָן · נְטִיָּה')} · only these two</div>
+    <div class="form-big" lang="he">${esc(it.form)}</div><div style="text-align:center">${PR(it.form)}</div>
+    <div class="pgrid"><div class="prow"><div class="lab"><span class="he">בִּנְיָן</span><small>stem</small></div><div class="pchips">${chips('stem', STEMS)}</div></div>
+      <div class="prow"><div class="lab"><span class="he">נְטִיָּה</span><small>form</small></div><div class="pchips">${chips('conj', CONJ)}</div></div></div>
+    <div id="fb"></div><div class="row" id="ctl"><button class="btn primary" id="b-check">Check</button><button class="btn ghost" id="b-idk">I don't know yet</button></div></div>`;
+  $('#s-exit').onclick = () => { try { savers.prog.now(); } catch {} if (SES.results.length) finishSession(true); else go(SES.back || 'practice'); };
+  $$('.pc', v).forEach(b => b.onclick = () => { if (SES.answered) return; const f = b.dataset.f; sel[f] = sel[f] === b.dataset.v ? '' : b.dataset.v; if (it._fa == null) it._fa = activeMs(it); $$(`.pc[data-f="${f}"]`, v).forEach(x => x.setAttribute('aria-pressed', x.dataset.v === sel[f] ? 'true' : 'false')); });
+  const finish = (given) => {
+    SES.answered = true; it._ms = activeMs(it); const okS = sel.stem === it.stem, okC = sel.conj === it.conj, score = given ? ((okS ? .5 : 0) + (okC ? .5 : 0)) : 0;
+    $$('.pc', v).forEach(b => { const f = b.dataset.f, val = b.dataset.v; if (val === it[f]) b.classList.add('right'); else if (sel[f] === val) b.classList.add('wrong'); b.disabled = true; });
+    $('#fb').innerHTML = `<div class="fb ${score === 1 ? 'ok' : score > 0 ? 'part' : 'no'}"><b class="t">${score === 1 ? 'Right: stem and form (100%).' : given ? `Wrong: ${okS ? 'stem right, form wrong' : okC ? 'form right, stem wrong' : 'stem and form wrong'} · ${Math.round(score * 100)}%.` : 'Here is the answer.'}</b>
+      <div>${H(esc(it.form))} = <b>${esc(STEMS[it.stem][1])}</b> ${H(STEMS[it.stem][0])} · <b>${esc(CONJ[it.conj][1])}</b> ${H(CONJ[it.conj][0])}${it.pgn ? ' · ' + esc(it.pgn) : ''} · root ${H(esc(it.root || ''))}${it.gloss ? ` · “${esc(it.gloss)}”` : ''}</div>
+      <div><b>Stem clue:</b> ${heWrap(esc(SF_STEM_CLUE[it.stem] || ''))}</div><div><b>Form clue:</b> ${heWrap(esc(SF_CONJ_CLUE[it.conj] || ''))}</div></div>`;
+    it._sel = { ...sel }; nextBtn(); logResult(it, score);
+  };
+  $('#b-check').onclick = () => { if (!sel.stem || !sel.conj) { $('#fb').innerHTML = '<div class="fb part">Choose the stem and the form.</div>'; return; } finish(true); };
+  $('#b-idk').onclick = () => { it._skip = 1; finish(false); };
+}
+
+// ---------- Accents and text signs (the professor said the atnach in Ruth 2:5 is for the final) ----------
+const RUTH25 = 'וַיֹּ֤אמֶר בֹּ֨עַז֙ לְנַעֲר֔וֹ הַנִּצָּ֖ב עַל־הַקּֽוֹצְרִ֑ים לְמִ֖י הַנַּעֲרָ֥ה הַזֹּֽאת׃';
+const ACC_MC = [
+  { q: `${H(RUTH25)}<br>Ruth 2:5. Which word carries the <b>atnach</b> ( ֑ , the main pause in the middle of a verse)?`, o: [H('עַל־הַקּֽוֹצְרִ֑ים'), H('לְנַעֲר֔וֹ'), H('הַנַּעֲרָ֥ה'), H('בֹּ֨עַז֙')], x: 'The atnach (a small ^ under the word) is on הַקּוֹצְרִ֑ים. It divides the verse into its two halves.' },
+  { q: `${H(RUTH25)}<br>What does the atnach in Ruth 2:5 separate?`, o: ['the narrator’s frame (Boaz spoke to his servant over the reapers) from Boaz’s question “Whose young woman is this?”', 'the subject from the verb', 'two different speakers who both ask a question', 'the Hebrew text from a later addition'], x: 'Before the atnach: the narrator. After it: Boaz’s direct speech לְמִי הַנַּעֲרָה הַזֹּאת. The professor said this is needed for the final.' },
+  { q: `What does ${H('׃')} (sof pasuq) mark?`, o: ['the end of a verse', 'a question', 'a pause inside the verse', 'a word joined to the next one'], x: 'Sof pasuq = end of the verse.' },
+  { q: `What does the maqqef ( ־ ) in ${H('וַיִּצְבָּט־לָהּ')} or ${H('עַל־הַקּוֹצְרִים')} do?`, o: ['joins two words into one unit with one main accent', 'marks a plural', 'shows the words are a question', 'marks the end of a sentence'], x: 'The first word loses its own accent, and its vowel can shorten (כָּל־ instead of כֹּל).' },
+  { q: `Ruth 2:6 has ${H('וַיֹּאמַר')} instead of the usual ${H('וַיֹּאמֶר')}. Why?`, o: ['it is a pausal form: at a major pause the vowel lengthens/changes', 'it is a different root', 'it is a Niphal', 'it is plural'], x: 'Pausal form: same word, same parse (Qal wayyiqtol 3ms); only the vowel changes at the pause.' },
+  { q: 'Ketiv and Qere (כְּתִיב / קְרֵי) mark…', o: ['what is written (consonants) versus what is traditionally read', 'active versus passive', 'two stems of the same verb', 'past versus future'], x: 'A text note, not grammar: do not parse it as a new stem (Ruth 3:14, 3:17).' },
+  { q: `In ${H('עָלַיִךְ')} (Ruth 3:15) the ${H('י')} means…`, o: ['nothing plural: it is part of how עַל takes endings; ־ִךְ = you (fem. sing.)', 'many people', 'the speaker “my”', 'a Piel doubling'], x: 'עַל + 2fs suffix = “on you” (one woman). Compare עָלֶיךָ “on you” (masc.).' },
+  { q: `${H('אֵיךְ יִפֹּל דָּבָר')} (Ruth 3:18) means…`, o: ['how the matter will turn out', 'how a man fell', 'how many words', 'where the word fell'], x: 'Literally “how a matter will fall”; the idiom = how things will turn out. יִפֹּל = Qal yiqtol 3ms of נפל (the נ merged into פּ).' },
+];
+function accItems() { return shuffle(ACC_MC.map((m, i) => ({ kind: 'mc', key: 'acc|' + i, t: 'syntax', q: m.q, o: m.o, a: 0, x: m.x }))); }
+function startAccents(o = {}) { startSession({ title: 'Accents and text signs (atnach, maqqef, pause, Ketiv–Qere)', items: accItems(), back: S.tab === 'today' ? 'today' : 'practice', noVary: true, mode: 'practice', planBlock: o.planBlock }); }
+
+// ---------- Session plumbing for the new kinds ----------
+(function () {
+  const _di = drawItem;
+  drawItem = function () { if (SES && SES.i < SES.items.length && SES.items[SES.i].kind === 'sf') { clearInterval(PACE.t); drawSf(SES.items[SES.i]); try { paceStart(SES.items[SES.i]); } catch {} return; } return _di.apply(this, arguments); };
+  const _gu = giveUp; giveUp = function () { const it = SES && SES.items[SES.i]; if (it && it.kind === 'sf') { const b = $('#b-idk'); if (b && !SES.answered) b.click(); return; } return _gu.apply(this, arguments); };
+})();
+// Retakes are practice of quizzes already taken: never “first-try” answers in the readiness estimate.
+(function () { const _rd = readiness; readiness = function () { const save = MEAS.all; try { if (Array.isArray(MEAS.all)) MEAS.all = MEAS.all.filter(e => e.m !== 'retake'); return _rd.apply(this, arguments); } finally { MEAS.all = save; } }; })();
+
+// ---------- Daily plan, Nov 15–23 ----------
+function retakeToday() {
+  const order = ['r1', 'r2', 'r3', 'paper'], i = Math.floor(parseDay(dayKey()).getTime() / 864e5) % order.length; return order[i];
+}
+planBlocks = function () {
+  const d = dayKey();
+  if (REVIEW_DAYS.includes(d)) return [
+    { id: 'grid', min: 3, title: 'Endings table: one last time', sub: 'Write it from memory and check.', act: () => startSession({ title: 'Endings table from memory', items: [gridItem(gridSetToday())], back: 'today', noVary: true, planBlock: 'grid' }) },
+    { id: 'acc', min: 5, title: 'Accents and text signs', sub: 'Atnach in Ruth 2:5 (the professor said it is for the final), maqqef, pause, Ketiv–Qere.', act: () => startAccents({ planBlock: 'acc' }) },
+    { id: 'mist', min: 25, title: 'Mistakes notebook', sub: `${S.prog.mistakes.length} items. Nothing new today.`, act: () => { startMistakes(); if (SES) SES.planBlock = 'mist'; } },
+    { id: 'recall', min: 10, title: 'Vocabulary from memory: your hardest words', sub: '20 words, typed.', act: () => startRecall({ planBlock: 'recall' }) },
+    { id: 'mem', min: 10, title: 'Say your memory verses once', sub: 'No help: write them, check, done.', act: () => { const m = memoryTarget(); startMemory(m.c, m.from, m.to); if (SES) SES.planBlock = 'mem'; } },
+    { id: 'sleep', min: 0, title: 'Sleep well tonight', sub: 'Sleep fixes in memory what you practised. Mark it when you go to bed.', manual: true },
+  ];
+  if (MOCK_DAYS.includes(d)) return [
+    { id: 'mock', min: examMin(), title: `Timed final (${examMin()} minutes, closed book)`, sub: 'Real exam conditions: no notes, no breaks, phone away. This score is your real measure.', act: () => startExam('final'), check: () => (S.assess || []).some(a => a.type === 'final' && dayKey(new Date(a.end)) === d) },
+    { id: 'mist', min: 25, title: 'Then: fix today’s mistakes', sub: 'Open the review of the final and redo every miss in the mistakes notebook.', act: () => { startMistakes(); if (SES) SES.planBlock = 'mist'; } },
+  ];
+  const c = ruthChapterToday(), m = memoryTarget(), quick = gridQuick(), rt = retakeToday(), q = QUIZ_RETAKES[rt];
+  const retake = rt === 'paper' || (q && quizLocked(q))
+    ? { id: 'retake', min: 25, title: 'Retake a chapter quiz on paper (cold)', sub: 'Print one Ch. 14–22 quiz (your Drive or the Project), do it closed book with a timer, then compare with the grading video. Mark it done here.', manual: true }
+    : { id: 'retake', min: 25, title: `Retake the ${q.name} cold`, sub: `Translate Ruth ${q.c}:${q.from}–${q.to} into smooth English and parse the quiz words, exactly like the sheet. The professor’s first advice for the final.`, act: () => startRetake(rt, { planBlock: 'retake' }) };
+  return [
+    { id: 'grid', min: quick ? 3 : 5, title: quick ? 'Endings table (quick check)' : 'Endings table from memory', sub: quick ? 'Perfect 3 days in a row: one table only.' : `Today: ${gridSetToday() === 'A' ? 'perfect (qatal) + participle' : 'imperfect (yiqtol) + imperative'} of ${'שָׁמַר'}.`, act: () => startSession({ title: 'Endings table from memory', items: [gridItem(gridSetToday())], back: 'today', noVary: true, planBlock: 'grid' }) },
+    retake,
+    { id: 'sf', min: 10, title: 'Stem + form drill', sub: 'Only בִּנְיָן and נְטִיָּה, all seven stems, with the clue after each answer. Includes the Ruth 2–3 class forms.', act: () => startSfDrill({ planBlock: 'sf' }) },
+    { id: 'pgn', min: 6, title: 'Person · gender · number drill', sub: '20 forms, about 15 seconds each.', act: () => startPgnDrill({ planBlock: 'pgn' }) },
+    { id: 'roots', min: 10, title: 'Weak roots: new verbs from Ruth', sub: 'Name the root type first, then parse.', act: () => startWeakRoots({ n: 8, planBlock: 'roots' }) },
+    { id: 'recall', min: 10, title: 'Vocabulary: type the meaning', sub: '20 words: main list first, then this semester’s words.', act: () => startRecall({ planBlock: 'recall' }) },
+    { id: 'ruth', min: 15, title: `Ruth ${c}: read aloud, then translate 3 verses blind + 2 questions in Hebrew`, sub: 'A random passage, like the final.', act: () => startRuthWork({ planBlock: 'ruth' }) },
+    { id: 'mem', min: 8, title: `Memory verses: Ruth ${m.c}:${m.from}–${m.to}`, sub: 'First with first letters, then with no help.', act: () => { startMemory(m.c, m.from, m.to); if (SES) SES.planBlock = 'mem'; } },
+    ...(['2026-11-16', '2026-11-18', '2026-11-20'].includes(d) ? [{ id: 'acc', min: 5, title: 'Accents and text signs', sub: 'Atnach in Ruth 2:5 (for the final), maqqef, pausal forms, Ketiv–Qere.', act: () => startAccents({ planBlock: 'acc' }) }] : []),
+  ];
+};
+(function () {
+  const _pc = planCardHTML;
+  planCardHTML = function () { const h = _pc.apply(this, arguments); return h.replace('to the final (Nov 23)', 'to the final · ' + FINAL_WHEN); };
+  const _rpr = renderPractice;
+  renderPractice = function () {
+    const r = _rpr.apply(this, arguments);
+    try { const card = $('#fx-card .row'); if (card && !$('#fx-sf')) { card.insertAdjacentHTML('afterbegin', `<button class="btn primary" id="fx-sf">Stem + form drill</button>`); card.insertAdjacentHTML('beforeend', `<button class="btn" id="fx-acc">Accents and text signs</button>${Object.entries(QUIZ_RETAKES).map(([k, q]) => `<button class="btn" data-rq="${k}">Retake: ${esc(q.name)}${quizLocked(q) ? ' 🔒' : ''}</button>`).join('')}`); $('#fx-sf').onclick = () => startSfDrill(); $('#fx-acc').onclick = () => startAccents(); $$('[data-rq]').forEach(b => b.onclick = () => startRetake(b.dataset.rq)); } } catch (e) { console.error(e); }
+    return r;
+  };
+})();
+</script>
+<script>
 // Colour mode: dark (default), light, or the same as the computer. Remembered on this device.
 (function () {
   const order = ['dark', 'light', 'auto'], lab = { dark: '☾ Dark', light: '☀ Light', auto: '◐ Auto' };
@@ -7942,5 +8094,5 @@ function readinessHTML() {
   const b = document.getElementById('btn-theme'); if (b) b.onclick = () => { t = order[(order.indexOf(t) + 1) % order.length]; try { localStorage.setItem('het-theme', t); } catch {} apply(); };
 })();
 </script>
-<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='c7ee6f199b';</script>
+<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='a22c962e1e';</script>
 </body></html>
