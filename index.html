@@ -4180,7 +4180,7 @@ function enBase(it) {
   const tab = STEM_EN[enKey(it.root, String(it.stem || '').split('|')[0])];
   const g = String(it.gloss || '').replace(/\(.*?\)/g, ' ').split(/[,;/]/)[0].replace(/^to\s+/, '').replace(/\s+/g, ' ').trim();
   // Bible-verse forms (pk) carry root-level dictionary glosses: prefer the stem table. Curated banks: prefer their own gloss.
-  if (String(it.key || '').startsWith('pk|')) return tab || g;
+  if (/^(pk\||rv|st\||sf|pg)/.test(String(it.key || '')) || /^to\s/i.test(String(it.gloss || '').trim())) return tab || g;
   return g || tab || '';
 }
 // Conjugate one English verb phrase. pgn like "3ms"; returns "" if it cannot.
@@ -4220,7 +4220,7 @@ function formEnglish(it) {
   if (it.en) return it.en;
   const x = (typeof PARSE_EXTRA !== 'undefined' && PARSE_EXTRA[it.form]) || it.extra || {};
   if (x.en) return x.en;
-  if (isFinishedEn(it.gloss)) return it.gloss;
+  if (isFinishedEn(it.gloss) && !(/^to\s/i.test(String(it.gloss).trim()) && it.conj !== 'inf')) return it.gloss;
   // היה 3ms in the story line is impersonal: וַיְהִי “and it happened / and there was”, וְהָיָה “and it will be”.
   if (enKey(it.root, 'qal') === enKey('היה', 'qal') && String(it.stem || '').startsWith('qal') && it.pgn === '3ms') { const k = { wayyiqtol: 'and it happened / and there was', weqatal: 'and it will be / and it will happen', qatal: 'it was / he was', yiqtol: 'it will be / he will be' }[it.conj]; if (k) return k; }
   if (!it.conj || !it.stem) return '';
@@ -8192,6 +8192,373 @@ if (!MOCK_DAYS.includes('2026-11-18')) MOCK_DAYS.push('2026-11-18');
 
 </script>
 <script>
+// =====================================================================================================
+// FINAL RESCUE WEEK (Nov 17–23): one deep session a day, built only on the measured weak points
+// (Nov 16 report: person/gender/number 18%, root 47%, full parse 59%, weak roots 52%, form 62%,
+// story questions 20%, “word meaning not known” 67×). Method: short lesson with worked examples →
+// retrieval (flashcards from memory) → focused drill → interleaved mixed practice → exam-style
+// section → fix today’s misses → write 3 rules in your own words. Missed cards come back in the
+// same session and on the next days (spacing + successive relearning).
+// =====================================================================================================
+const RESCUE = { start: '2026-11-17', final: '2026-11-23' };
+const heS = s => `<span class="he" dir="rtl" lang="he" style="font-size:1.2em">${s}</span>`;
+const heBig = s => `<span class="he" dir="rtl" lang="he" style="font-size:1.35em">${s}</span>`;
+const tbl = (head, rows) => `<div class="tw"><table class="mini" style="width:100%"><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr>${rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</table></div>`;
+
+// ---------- 1. The lessons (read first; every rule has a real example) ----------
+const RL = {};
+RL.pgn = { title: 'Lesson 1 · Who does it? Person · gender · number in 3 seconds', html: () => `
+<p><b>Your data:</b> 18% right on person/gender/number (23 misses). This lesson is the biggest gain available before the final.</p>
+<p><b>Step 1: where is the person written?</b></p>
+${tbl(['Form', 'Person is written…', 'Example'], [
+  ['qatal (perfect), weqatal', 'by the <b>ending</b> only', heS('שָׁמַרְתְּ') + ' = you (f.) kept'],
+  ['yiqtol, wayyiqtol, weyiqtol', 'by the <b>prefix</b> (+ sometimes an ending)', heS('וַתִּשְׁמֹר') + ' = and she kept'],
+  ['imperative', 'always “you”: no prefix', heS('שִׁמְרִי') + ' = keep! (f.)'],
+  ['participle', 'gender + number only. <b>Person = “—”</b>', heS('שֹׁמֶרֶת') + ' = keeping (f. sg.)'],
+  ['infinitive', '<b>nothing</b>: person, gender, number = “—”', heS('לִשְׁמֹר') + ' = to keep']])}
+<p><b>Step 2: the perfect (qatal) endings.</b> Memory hook: <b>ת = you</b> (and תִּי = I), <b>נוּ = we</b>, <b>וּ = they</b>, <b>ָה = she</b>, nothing = he.</p>
+${tbl(['', 'Form', 'Ending', 'English'], [
+  ['3ms', heS('שָׁמַר'), '—', 'he kept'], ['3fs', heS('שָׁמְרָה'), heS('ָה'), 'she kept'], ['2ms', heS('שָׁמַרְתָּ'), heS('תָּ'), 'you (m.) kept'],
+  ['2fs', heS('שָׁמַרְתְּ'), heS('תְּ'), 'you (f.) kept'], ['1cs', heS('שָׁמַרְתִּי'), heS('תִּי'), 'I kept'], ['3cp', heS('שָׁמְרוּ'), heS('וּ'), 'they kept'],
+  ['2mp', heS('שְׁמַרְתֶּם'), heS('תֶּם'), 'you (m. pl.) kept'], ['2fp', heS('שְׁמַרְתֶּן'), heS('תֶּן'), 'you (f. pl.) kept'], ['1cp', heS('שָׁמַרְנוּ'), heS('נוּ'), 'we kept']])}
+<p><b>Step 3: the imperfect (yiqtol) prefixes.</b> Memory word ${heS('אֵיתָן')}: <b>א</b> = I · <b>י</b> = he / they (m.) · <b>ת</b> = you OR she · <b>נ</b> = we. Then look at the END:</p>
+${tbl(['', 'Form', 'Prefix + ending', 'English'], [
+  ['3ms', heS('יִשְׁמֹר'), heS('י'), 'he will keep'], ['3fs', heS('תִּשְׁמֹר'), heS('ת'), 'she will keep'], ['2ms', heS('תִּשְׁמֹר'), heS('ת'), 'you (m.) will keep'],
+  ['2fs', heS('תִּשְׁמְרִי'), heS('ת + ִי'), 'you (f.) will keep'], ['1cs', heS('אֶשְׁמֹר'), heS('א'), 'I will keep'], ['3mp', heS('יִשְׁמְרוּ'), heS('י + וּ'), 'they (m.) will keep'],
+  ['3fp / 2fp', heS('תִּשְׁמֹרְנָה'), heS('ת + נָה'), 'they (f.) / you (f. pl.) will keep'], ['2mp', heS('תִּשְׁמְרוּ'), heS('ת + וּ'), 'you (m. pl.) will keep'], ['1cp', heS('נִשְׁמֹר'), heS('נ'), 'we will keep']])}
+<p><b>The traps you fell into (from your tutor sessions):</b></p>
+<ul>
+<li>${heS('וְרָחַצְתְּ')} (Ruth 3:3): the ת is at the <b>end</b> → qatal → <b>2fs “you (f.)”</b>, not “she”. “She” in qatal ends in ${heS('ָה')}.</li>
+<li>${heS('וַתֹּאמֶר')} = and <b>she</b> said (ת prefix, no ending) · ${heS('תֹּאמְרִי')} = <b>you (f.)</b> say (ת prefix + ${heS('ִי')}).</li>
+<li>ת prefix with no ending = she OR you (m.): both are right on the grid unless the story decides.</li>
+<li>${heS('־נִי')} at the end of a verb = <b>me</b> (object): ${heS('הֱשִׁיבַנִי')} = he brought <b>me</b> back. ${heS('־תִּי')} = <b>I</b> (subject).</li>
+<li>${heS('ָה')} at the end of a 1st-person yiqtol is NOT “she”: ${heS('אֵלְכָה')} = let <b>me</b> go (cohortative).</li></ul>
+<p><b>The 3-second routine:</b> (1) Prefix? (2) Ending? (3) Put them together. Never decide from one letter.</p>` };
+
+RL.forms = { title: 'Lesson 2 · What each form MEANS (tense and mood)', html: () => `
+<p>The final asks you to translate. Each form has a typical English meaning:</p>
+${tbl(['Form', 'How to spot it', 'Typical English', 'Example'], [
+  ['qatal (perfect)', 'endings, no prefix', 'finished action: “he kept”', heS('שָׁמַר') + ' he kept'],
+  ['wayyiqtol', heS('וַ') + ' + prefix + doubled letter (' + heS('וַיִּ, וַתִּ, וָאֶ') + ')', 'story past: “<b>and he</b> did”', heS('וַיִּשְׁמֹר') + ' and he kept'],
+  ['yiqtol (imperfect)', 'prefix א י ת נ', 'future, repeated or possible: “he will / used to / may keep”', heS('יִשְׁמֹר') + ' he will keep'],
+  ['weqatal', heS('וְ') + ' + perfect', 'future or instructions: “and he will / and you shall”', heS('וְשָׁמַרְתָּ') + ' and you shall keep'],
+  ['weyiqtol', heS('וְ') + ' + prefix', 'purpose / wish: “so that he may”', heS('וְיִשְׁמֹר') + ' that he may keep'],
+  ['cohortative', '1st person + ' + heS('ָה'), '“let me / let us”', heS('אֵלְכָה') + ' let me go'],
+  ['jussive', 'short 3rd-person yiqtol; ' + heS('אַל') + ' + yiqtol', '“let him / may he”; “do not”', heS('יְהִי') + ' let there be · ' + heS('אַל־תִּירָא') + ' do not fear'],
+  ['imperative', 'yiqtol without the prefix', 'command: “keep!”', heS('שְׁמֹר') + ' keep!'],
+  ['infinitive construct', 'often after ' + heS('לְ / בְּ / כְּ'), '“to keep”; with ' + heS('בְּ') + ' “when …”', heS('לִשְׁמֹר') + ' to keep · ' + heS('בְּשָׁמְרוֹ') + ' when he kept'],
+  ['infinitive absolute', 'before a verb of the same root', '“surely / indeed”', heS('שָׁמוֹר תִּשְׁמְרוּ') + ' you shall surely keep'],
+  ['participle', 'Qal ' + heS('ֹ…ֵ') + '; other stems ' + heS('מְ / מַ / נִ / מִתְ'), 'ongoing: “keeping / the one who keeps”', heS('שֹׁמֵר') + ' keeping · ' + heS('הַשֹּׁמֵר') + ' the one who keeps']])}
+<p><b>Rule for the grid:</b> wayyiqtol and weqatal are their own boxes (${heS('וַיִּקְטֹל')}, ${heS('וְקָטַל')}). A ${heS('וְ')} on a yiqtol is weyiqtol; a ${heS('וַ')} + doubled prefix is wayyiqtol.</p>` };
+
+RL.stems = { title: 'Lesson 3 · Recognise every stem by its pattern (and what it means)', html: () => `
+<p>The professor: “<b>If you’ve got the name, you’ve got the game!</b>” Each stem’s name IS its pattern (on פעל). Learn the row, then the clue.</p>
+${tbl(['Stem', 'Perfect', 'Imperfect', 'Wayyiqtol', 'Inf. / Impv.', 'Participle', 'Meaning'], [
+  ['Qal ' + heS('קַל'), heS('קָטַל'), heS('יִקְטֹל'), heS('וַיִּקְטֹל'), heS('קְטֹל'), heS('קֹטֵל'), 'basic: “he killed”'],
+  ['Niphal ' + heS('נִפְעַל'), heS('נִקְטַל'), heS('יִקָּטֵל'), heS('וַיִּקָּטֵל'), heS('הִקָּטֵל'), heS('נִקְטָל'), 'passive / -self: “was killed”'],
+  ['Piel ' + heS('פִּעֵל'), heS('קִטֵּל'), heS('יְקַטֵּל'), heS('וַיְקַטֵּל'), heS('קַטֵּל'), heS('מְקַטֵּל'), 'make it so / from a noun / strong: “he massacred”'],
+  ['Pual ' + heS('פֻּעַל'), heS('קֻטַּל'), heS('יְקֻטַּל'), heS('וַיְקֻטַּל'), '—', heS('מְקֻטָּל'), 'passive of Piel: “was massacred”'],
+  ['Hithpael ' + heS('הִתְפַּעֵל'), heS('הִתְקַטֵּל'), heS('יִתְקַטֵּל'), heS('וַיִּתְקַטֵּל'), heS('הִתְקַטֵּל'), heS('מִתְקַטֵּל'), '-self / each other / to and fro: “killed himself”'],
+  ['Hiphil ' + heS('הִפְעִיל'), heS('הִקְטִיל'), heS('יַקְטִיל'), heS('וַיַּקְטֵל'), heS('הַקְטֵל / הַקְטִיל'), heS('מַקְטִיל'), 'cause: “he caused to kill”'],
+  ['Hophal ' + heS('הָפְעַל'), heS('הָקְטַל'), heS('יָקְטַל'), heS('וַיָּקְטַל'), '—', heS('מָקְטָל'), 'passive of Hiphil: “was caused to…”'],
+  ['Hishtaphel', heS('הִשְׁתַּחֲוָה'), heS('יִשְׁתַּחֲוֶה'), heS('וַיִּשְׁתַּחוּ'), heS('לְהִשְׁתַּחֲוֹת'), heS('מִשְׁתַּחֲוֶה'), 'only חוה: “bow down, worship”']])}
+<p><b>Decision order (stop at the first “yes”):</b></p>
+<ol>
+<li>${heS('הִתְ / יִתְ / מִתְ / וַיִּתְ')} before the root? → <b>Hithpael</b> (ONE shape in every form). With ס ש צ the ת swaps place: ${heS('הִשְׁתַּמֵּר')}.</li>
+<li>${heS('הִשְׁתַּ / יִשְׁתַּ')} + ח־ו? → <b>Hishtaphel</b> (only “bow down”).</li>
+<li>${heS('נִ')} at the start of a perfect or participle, OR the <b>first</b> root letter doubled right after the prefix (${heS('יִקָּטֵל, וַיִּלָּפֵת')})? → <b>Niphal</b>.</li>
+<li>${heS('ה')} prefix in the perfect, or a prefix with <b>a</b> (${heS('יַ תַּ מַ')}), often ${heS('ִי')} before the last letter? → <b>Hiphil</b>.</li>
+<li><b>o / u</b> under the prefix (${heS('הָ הֻ יָ יֻ מָ מֻ')}) + <b>a</b> under the 2nd letter? → <b>Hophal</b>.</li>
+<li>${heS('ֻ')} (u) under the first letter + doubled middle? → <b>Pual</b>.</li>
+<li><b>Middle</b> letter doubled + shewa under the prefix (${heS('יְ מְ')}), or i–e (${heS('קִטֵּל')})? → <b>Piel</b>.</li>
+<li>None of these → <b>Qal</b>.</li></ol>
+<p><b>The professor’s “shapes” (slides, Nov 15):</b> Qal has 3 shapes (${heS('קָטַל')} perfect/weqatal · ${heS('יִקְטֹל')} imperfect/wayyiqtol/imperative/infinitive · ${heS('קֹטֵל')} participle). Hiphil 2 (long ${heS('הִקְטִיל')}, short ${heS('הַקְטֵל')}). Niphal 2 (${heS('נִקְטַל')} perfect + participle · ${heS('הִקָּטֵל')} everything else). Piel 2 (${heS('קִטֵּל')} perfect · ${heS('קַטֵּל')} everything else). Hithpael 1.</p>
+<p><b>Your traps:</b> ${heS('יַגִּיד')} is Hiphil (יַ + ${heS('ִי')}); the dot in ג is the lost נ of נגד, not Piel. ${heS('וַיְכַהֲנוּ')} is Piel: ה cannot double, but the shewa under the prefix (${heS('יְ')}) still says Piel. ${heS('וַיִּלָּפֵת')} is Niphal: the first root letter ל is doubled.</p>` };
+
+RL.weak = { title: 'Lesson 4 · Weak roots: find the hidden letter', html: () => `
+<p><b>Your data:</b> root 47%, weak-root parses 52%. Most misses come from a letter that disappears. Learn the 6 “fingerprints”:</p>
+${tbl(['Type', 'What happens', 'Examples (root)'], [
+  ['I-נ (first letter נ)', 'נ disappears → <b>dot (dagesh) in the next letter</b>', heS('יִפֹּל') + ' (נפל) · ' + heS('יַגִּיד') + ' (נגד) · ' + heS('יִתֵּן') + ' (נתן) · ' + heS('וַיִּקַּח') + ' (לקח acts like I-נ)'],
+  ['I-י / I-ו', 'Qal prefix with <b>ֵ</b> (' + heS('יֵ') + '); Hiphil/Niphal with <b>וֹ</b>', heS('וַיֵּשֶׁב') + ' (ישׁב) · ' + heS('הוֹלִיד') + ' (ילד) · ' + heS('יוֹצִיא') + ' (יצא) · ' + heS('לָשֶׁבֶת') + ' (ישׁב)'],
+  ['Hollow (II-ו / II-י)', 'only 2 letters visible → put <b>ו</b> in the middle', heS('קָם, יָקוּם, וַיָּקָם') + ' (קום) · ' + heS('שָׁבָה, וַתָּשָׁב, הֵשִׁיב') + ' (שׁוב) · ' + heS('יָמוּת') + ' (מות)'],
+  ['III-ה (last letter ה)', 'ends in ' + heS('ָה / ֶה') + '; before endings ה → ' + heS('י') + '; wayyiqtol cut short; infinitive ' + heS('־וֹת'), heS('בָּנָה, יִבְנֶה, וַיִּבֶן, לִבְנוֹת') + ' (בנה) · ' + heS('עָשִׂיתִי, וַיַּעַשׂ') + ' (עשׂה) · ' + heS('וַיְהִי') + ' (היה)'],
+  ['Gutturals א ה ח ע ר', 'cannot be doubled → the vowel before gets longer; they take ' + heS('אֲ חֲ עֲ'), heS('בֵּרַךְ, וַיְבָרֶךְ') + ' (ברך, Piel) · ' + heS('וַיְכַהֲנוּ') + ' (כהן, Piel)'],
+  ['Double (geminate)', 'the 2nd and 3rd letters are the same; short forms', heS('סַבּוֹתָ, וַיָּסָב') + ' (סבב)']])}
+<p><b>Root-finding routine (in this order):</b> 1. Remove the little words: ${heS('וְ / וַ / הַ / בְּ / לְ / כְּ / מִ')}. 2. Remove the verb prefix (${heS('א י ת נ')}, ${heS('הִ / הִתְ / נִ / מְ')}). 3. Remove the endings (${heS('ָה תָּ תְּ תִּי וּ נוּ תֶם ִי נָה')}, pronoun endings). 4. Only 2 letters left? Try: I-נ (dot in a letter) → add נ in front · ${heS('ֵ')} or ${heS('וֹ')} after the prefix → add י in front · otherwise hollow → add ו in the middle · ending ${heS('ָה/ֶה')} or a short wayyiqtol → add ה at the end.</p>
+<p><b>Spelling:</b> write ת (tav) not ט (tet) in מות. Check every root letter against the word.</p>` };
+
+RL.nonfin = { title: 'Lesson 5 · Infinitives, participles and the little endings', html: () => `
+<p><b>Infinitive construct</b> = the action without a person (“to keep / keeping”). On the grid: person, gender, number all “—”.</p>
+<ul><li>${heS('לִשְׁמֹר')} to keep · ${heS('לְהָמִית')} to put to death (Hiphil) · ${heS('לְכַפֵּר')} to atone (Piel)</li>
+<li>With ${heS('בְּ / כְּ')} = “when”: ${heS('בְּבֹאֲכֶם')} when you come · ${heS('כְּשָׁמְעוֹ')} when he heard.</li>
+<li>The ending tells <b>who does it</b>: ${heS('כַּלֹּתוֹ')} = his finishing → “until <b>he</b> finishes” (Ruth 3:3). Do not confuse with ${heS('כַּלָּתוֹ')} his daughter-in-law.</li></ul>
+<p><b>Participle</b> = ongoing action or “the one who”. Gender + number only, <b>person “—”</b>:</p>
+${tbl(['Stem', 'm. sg.', 'f. sg.', 'm. pl.'], [['Qal', heS('שֹׁמֵר'), heS('שֹׁמֶרֶת'), heS('שֹׁמְרִים')], ['Piel', heS('מְדַבֵּר'), heS('מְדַבֶּרֶת'), heS('מְדַבְּרִים')], ['Hiphil', heS('מַצִּיל'), heS('מַצִּילָה'), heS('מַצִּילִים')], ['Niphal', heS('נִצָּב'), heS('נִצֶּבֶת'), heS('נִצָּבִים')], ['Hithpael', heS('מִתְהַלֵּךְ'), heS('מִתְהַלֶּכֶת'), heS('מִתְהַלְּכִים')]])}
+<p>${heS('הַ')} + participle = “the one who”: ${heS('הַנִּצָּב')} the one standing (Ruth 2:5). Hollow-root trap: ${heS('בָּא')} can be “he came” or “coming”; ${heS('הַשָּׁבָה')} (Ruth 1:22) the accent says “who returned” (perfect), the class also accepts participle.</p>
+<p><b>Pronoun endings</b> (on nouns = whose; on prepositions = to/with whom; on verbs = object “me, him…”):</p>
+${tbl(['Ending', 'Means', 'Example'], [[heS('־ִי / ־נִי'), 'my / me', heS('לִי') + ' to me · ' + heS('הֱשִׁיבַנִי') + ' he brought me back'], [heS('־ךָ'), 'your (m.)', heS('אָזְנְךָ') + ' your ear'], [heS('־ךְ'), 'your (f.)', heS('שִׂמְלֹתֵךְ') + ' your clothes · ' + heS('עָלַיִךְ') + ' on you'], [heS('־וֹ / ־ָיו / ־הוּ'), 'his / him', heS('בְּנוֹ') + ' his son · ' + heS('מַרְגְּלֹתָיו') + ' his feet'], [heS('־הּ / ־ֶיהָ'), 'her', heS('עִמָּהּ') + ' with her · ' + heS('כַּלָּתָהּ') + ' her daughter-in-law'], [heS('־נוּ'), 'our / us', heS('לָנוּ') + ' to us'], [heS('־כֶם'), 'your (pl.)', heS('עִמָּכֶם') + ' with you'], [heS('־הֶם / ־ָם'), 'their / them (m.)', heS('לָהֶם') + ' to them'], [heS('־הֶן / ־ָן'), 'their / them (f.)', heS('לָהֶן') + ' to them (f.)']])}
+<p>Trap from Ruth 1: ${heS('לָהֶם')} = to them (not ${heS('לֶחֶם')} bread). A ${heS('מ')} at the start of a noun is often part of the noun (${heS('מִקְדָּשׁ, מַרְגְּלֹתָיו')}), not “from”.</p>` };
+
+RL.exam = { title: 'Lesson 6 · How to take the final (strategy)', html: () => `
+<ol><li><b>Read the passage once, slowly, before any question.</b> Underline every verb.</li>
+<li><b>Parsing (half the exam):</b> about 90 seconds per word. Order: <b>form → who (prefix + ending) → stem (decision order) → root (routine)</b>. Participle: person “—”. Infinitive: “—” three times.</li>
+<li><b>Translation:</b> first strict, word by word in Hebrew order; then smooth English. Every Hebrew word must appear; add nothing that is not in the Hebrew.</li>
+<li><b>Questions in Hebrew:</b> the answer is in the passage: <b>copy the words</b> from the text (e.g. Q: ${heS('מִי הָלַךְ?')} → A: ${heS('אֱלִימֶלֶךְ הָלַךְ')}).</li>
+<li><b>Writing from memory:</b> write the verses first while your memory is fresh, then do the rest.</li>
+<li><b>Do not get stuck:</b> mark it, move on, come back at the end. An empty box gets 0; a reasoned guess often gets half.</li>
+<li><b>Check at the end:</b> participle/infinitive dashes; ת at the start vs. at the end; root letters ת/ט, כ/ק, ס/שׂ.</li>
+<li><b>The night before:</b> sleep. Sleep fixes in memory what you practised.</li></ol>` };
+
+// ---------- 2. Pattern flashcards (front = form; back = analysis + English) ----------
+function rescueCards() {
+  const C = [];
+  const add = (set, front, ask, back, t) => C.push({ set, front, ask, back, t, key: 'rc|' + set + '|' + front + '|' + ask });
+  // person/gender/number
+  [['שָׁמַר', '3ms · he kept (no ending)'], ['שָׁמְרָה', '3fs · she kept (ending ָה)'], ['שָׁמַרְתָּ', '2ms · you (m.) kept (ending תָּ)'], ['שָׁמַרְתְּ', '2fs · you (f.) kept (ending תְּ)'], ['שָׁמַרְתִּי', '1cs · I kept (ending תִּי)'], ['שָׁמְרוּ', '3cp · they kept (ending וּ)'], ['שְׁמַרְתֶּם', '2mp · you (m. pl.) kept (ending תֶּם)'], ['שָׁמַרְנוּ', '1cp · we kept (ending נוּ)'],
+   ['יִשְׁמֹר', '3ms · he will keep (prefix י)'], ['תִּשְׁמֹר', '3fs she will keep OR 2ms you will keep (prefix ת, no ending)'], ['תִּשְׁמְרִי', '2fs · you (f.) will keep (ת + ִי)'], ['אֶשְׁמֹר', '1cs · I will keep (prefix א)'], ['יִשְׁמְרוּ', '3mp · they will keep (י + וּ)'], ['תִּשְׁמְרוּ', '2mp · you (pl.) will keep (ת + וּ)'], ['תִּשְׁמֹרְנָה', '3fp / 2fp · they (f.) / you (f. pl.) will keep (ת + נָה)'], ['נִשְׁמֹר', '1cp · we will keep (prefix נ)'],
+   ['שִׁמְרִי', 'imperative 2fs · keep! (f.)'], ['שִׁמְרוּ', 'imperative 2mp · keep! (pl.)'], ['שֹׁמֶרֶת', 'participle f. sg. · keeping — person “—”'], ['שֹׁמְרִים', 'participle m. pl. · keeping — person “—”'],
+   ['וְרָחַצְתְּ', 'weqatal 2fs · and you (f.) shall wash — ת at the END = you (Ruth 3:3)'], ['וַתֹּאמֶר', 'wayyiqtol 3fs · and she said'], ['תֹּאמְרִי', 'yiqtol 2fs · you (f.) say'], ['הֱשִׁיבַנִי', 'Hiphil qatal 3ms + ־נִי · he brought ME back (object “me”)'], ['אֵלְכָה', 'cohortative 1cs · let me go (ָה here is NOT “she”)'], ['וַתֵּלַכְנָה', 'wayyiqtol 3fp · and they (f.) went (ת + נָה)']]
+    .forEach(([f, b]) => add('pgn', f, 'Who does it? (person · gender · number)', b, 'qal_weak'));
+  // forms + meaning
+  [['וַיִּשְׁמֹר', 'wayyiqtol · story past: “and he kept”'], ['וְשָׁמַרְתָּ', 'weqatal · “and you shall keep” (future / instruction)'], ['וְיִשְׁמֹר', 'weyiqtol · “so that he may keep”'], ['יְהִי', 'jussive · “let there be / may it be”'], ['אַל־תִּירְאִי', 'אַל + yiqtol 2fs · “do not fear” (to a woman)'], ['שָׁמוֹר תִּשְׁמְרוּ', 'infinitive absolute + yiqtol · “you shall surely keep”'], ['בְּשָׁמְרוֹ', 'infinitive construct + ־וֹ · “when he kept”'], ['לִשְׁמֹר', 'infinitive construct · “to keep”'], ['הַשֹּׁמֵר', 'participle + הַ · “the one who keeps”'], ['שְׁמֹר', 'imperative 2ms · “keep!”']]
+    .forEach(([f, b]) => add('forms', f, 'Which form? What does it mean in English?', b, 'weqatal'));
+  // stems
+  const ST = [['qal', 'Qal', ['קָטַל', 'perfect 3ms · he killed'], ['יִקְטֹל', 'imperfect 3ms · he will kill'], ['קֹטֵל', 'participle · killing']],
+    ['niphal', 'Niphal', ['נִקְטַל', 'perfect 3ms · he was killed (נִ)'], ['יִקָּטֵל', 'imperfect 3ms · he will be killed (doubled FIRST letter)'], ['הִקָּטֵל', 'infinitive / imperative · to be killed'], ['נִקְטָל', 'participle · being killed']],
+    ['piel', 'Piel', ['קִטֵּל', 'perfect 3ms · he massacred (i–e + doubled middle)'], ['יְקַטֵּל', 'imperfect 3ms (shewa under prefix + doubled middle)'], ['מְקַטֵּל', 'participle (מְ)'], ['קַטֵּל', 'imperative / infinitive']],
+    ['pual', 'Pual', ['קֻטַּל', 'perfect 3ms · he was massacred (u-vowel + doubled middle)'], ['מְקֻטָּל', 'participle · massacred']],
+    ['hithpael', 'Hithpael', ['הִתְקַטֵּל', 'perfect 3ms / infinitive / imperative · he killed himself'], ['יִתְקַטֵּל', 'imperfect 3ms'], ['מִתְקַטֵּל', 'participle'], ['מִתְהַלֵּךְ', 'participle of הלך · walking to and fro'], ['וַיִּתְפַּלֵּל', 'wayyiqtol 3ms of פלל · and he prayed']],
+    ['hiphil', 'Hiphil', ['הִקְטִיל', 'perfect 3ms · he caused to kill (הִ + ִי)'], ['יַקְטִיל', 'imperfect 3ms (יַ + ִי)'], ['וַיַּקְטֵל', 'wayyiqtol 3ms (short: ֵ)'], ['מַקְטִיל', 'participle (מַ)'], ['יַגִּיד', 'imperfect 3ms of נגד · he will tell (the dot = lost נ)'], ['הוֹלִיד', 'perfect 3ms of ילד · he fathered (וֹ = I-י Hiphil)'], ['הֵשִׁיב', 'perfect 3ms of שׁוב · he brought back (hollow Hiphil)']],
+    ['hophal', 'Hophal', ['הָקְטַל', 'perfect 3ms · he was caused to kill (o-vowel under ה)'], ['יָקְטַל', 'imperfect 3ms']],
+    ['hishtaphel', 'Hishtaphel', ['וַיִּשְׁתַּחוּ', 'wayyiqtol 3ms of חוה · and he bowed down'], ['לְהִשְׁתַּחֲוֹת', 'infinitive · to worship']]];
+  ST.forEach(([id, name, ...fs]) => fs.forEach(([f, b]) => add('stems', f, 'Which stem and form?', `${name} · ${b}`, PB_STEM_TOPIC[id] || 'derived_stems')));
+  [['קַל', 'Qal: the basic action'], ['נִפְעַל', 'Niphal: passive or “-self” (was done / did to himself)'], ['פִּעֵל', 'Piel: make something so, verb from a noun, strong action'], ['פֻּעַל', 'Pual: passive of Piel'], ['הִתְפַּעֵל', 'Hithpael: “-self”, each other, to and fro, pretend'], ['הִפְעִיל', 'Hiphil: cause someone to do'], ['הָפְעַל', 'Hophal: passive of Hiphil'], ['הִשְׁתַּפְעֵל', 'Hishtaphel: only חוה “bow down, worship”']]
+    .forEach(([f, b]) => add('stems', f, 'What does this stem mean?', b, 'derived_stems'));
+  // weak roots
+  [['יִפֹּל', 'root נפל · I-נ (dot in פּ = lost נ) · he will fall'], ['יִתֵּן', 'root נתן · I-נ · he will give'], ['וַיִּקַּח', 'root לקח · acts like I-נ · and he took'], ['וַיֵּשֶׁב', 'root ישׁב · I-י (ֵ after the prefix) · and he sat'], ['יוֹצִיא', 'root יצא · I-י Hiphil (וֹ) · he will bring out'], ['וַיָּקָם', 'root קום · hollow · and he arose'], ['יָמוּת', 'root מות (ת, not ט!) · hollow · he will die'], ['וַתָּשָׁב', 'root שׁוב · hollow · and she returned'], ['וַיַּעַשׂ', 'root עשׂה · III-ה, wayyiqtol cut short · and he did'], ['עָשִׂיתִי', 'root עשׂה · III-ה (ה → י before the ending) · I did'], ['וַיְהִי', 'root היה · III-ה short wayyiqtol · and it happened'], ['לִבְנוֹת', 'root בנה · III-ה infinitive ־וֹת · to build'], ['וַיְבָרֶךְ', 'root ברך · Piel with guttural ר (cannot double) · and he blessed'], ['וַיְכַהֲנוּ', 'root כהן · Piel (shewa under prefix), ה cannot double · and they served as priests'], ['וַיָּסָב', 'root סבב · double letter · and he turned']]
+    .forEach(([f, b]) => add('weak', f, 'Root? Which weak type?', b, 'qal_weak'));
+  // endings
+  [['לָהֶם', 'to them (m.) — NOT לֶחֶם bread'], ['לָהֶן', 'to them (f.)'], ['עִמָּהּ', 'with her'], ['אֵלֶיהָ', 'to her'], ['בְּנוֹ', 'his son'], ['מַרְגְּלֹתָיו', 'his feet (מ belongs to the noun)'], ['שִׂמְלֹתֵךְ', 'your (f.) clothes'], ['עָלַיִךְ', 'on you (f.)'], ['לִי', 'to me'], ['כַּלֹּתוֹ', 'his finishing → until he finishes (infinitive + subject)'], ['כַּלָּתָהּ', 'her daughter-in-law'], ['עִמָּכֶם', 'with you (pl.)']]
+    .forEach(([f, b]) => add('endings', f, 'What does it mean? (whose / to whom)', b, 'pronouns'));
+  return C;
+}
+const RC_SETS = { pgn: 'Person · gender · number', forms: 'Forms and their English meaning', stems: 'Stems by pattern', weak: 'Weak roots', endings: 'Pronoun endings' };
+DECKS.patterns = { name: 'Patterns to memorise (final rescue)', sub: 'Endings, prefixes, stem patterns, weak-root fingerprints, pronoun endings, and what each form means in English', topic: 'derived_stems', cards: () => rescueCards().map(c => ({ key: c.key, front: c.front, back: `${c.ask}\n→ ${c.back}`, extra: RC_SETS[c.set], topic: c.t })) };
+
+// ---------- 3. New session item kinds: lesson + flashcard (retrieval, self-rated, missed ones come back) ----------
+function lessonItem(id) { const L = RL[id]; return { kind: 'lesson', key: 'rl|' + id, title: L.title, html: L.html(), t: 'lesson' }; }
+function flashItem(c) { return { kind: 'flash', key: c.key, form: c.front, he: c.front, q: `${c.ask}`, back: c.back, set: c.set, t: c.t, noPR: false }; }
+function rescueFlashItems(sets, n) {
+  const all = rescueCards().filter(c => sets.includes(c.set));
+  const mis = new Set(S.prog.mistakes.map(m => m.key));
+  return weightedPick(all, c => (mis.has(c.key) ? 4 : 1) * (expGet(AN.contentId({ he: c.front, q: c.ask })) ? .6 : 1.4), Math.min(n, all.length)).map(flashItem);
+}
+function drawLesson(it) {
+  const v = $('#v-session');
+  v.innerHTML = `${sessHead()}<div class="panel stack lesson" style="max-width:860px;width:100%;margin:0 auto"><div class="eyebrow">Read carefully · then say the rules aloud</div><h2 style="margin:0">${esc(it.title)}</h2><div class="stack" style="gap:10px;line-height:1.55">${it.html}</div></div><div class="row" id="ctl" style="justify-content:center;margin-top:12px"><button class="btn primary" id="b-lesson">I read it. Continue</button></div>`;
+  $('#b-lesson').onclick = () => { SES.i++; drawItem(); }; window.scrollTo({ top: 0 });
+}
+function drawFlash(it) {
+  const v = $('#v-session'); SES.answered = false; startTimer(it);
+  v.innerHTML = `${sessHead()}<div class="panel qbox" style="max-width:720px;width:100%;margin:0 auto;text-align:center">
+    <div class="row" style="justify-content:space-between"><span class="chip acc">${esc(RC_SETS[it.set] || 'Pattern card')}</span><span class="small muted">${it.again ? 'again: you missed it earlier' : 'say the answer aloud first'}</span></div>
+    <div class="form-big" lang="he">${esc(it.front || it.form)}</div><div style="text-align:center">${PR(it.form)}</div>
+    <p><b>${esc(it.q)}</b></p><div id="fl-back" hidden class="panel" style="text-align:left"><b>${heWrap(esc(it.back))}</b></div></div>
+    <div class="row" id="ctl" style="justify-content:center;margin-top:12px"><button class="btn primary" id="fl-show">Show the answer</button></div>`;
+  $('#fl-show').onclick = () => {
+    $('#fl-back').hidden = false;
+    $('#ctl').innerHTML = `<button class="btn" id="fl-no">I did not know it</button><button class="btn primary" id="fl-yes">I knew it</button>`;
+    const done = ok => { if (SES.answered) return; SES.answered = true; logResult(it, ok ? 1 : 0); if (!ok && !it.again && !it.isMistake) SES.items.push({ ...it, again: true }); nextBtn(); };
+    $('#fl-no').onclick = () => done(false); $('#fl-yes').onclick = () => done(true);
+  };
+}
+
+// ---------- 4. Fixes the student asked for ----------
+// (a) English translation under the pronunciation after EVERY answer, also in the stem+form and person drills.
+// (b) Comprehension questions always show the sentences they ask about.
+(function () {
+  const _di = drawItem;
+  drawItem = function () {
+    if (SES && SES.i < SES.items.length) { const it = SES.items[SES.i]; if (it && it.kind === 'lesson') return drawLesson(it); if (it && it.kind === 'flash') return drawFlash(it); }
+    const r = _di.apply(this, arguments);
+    try {
+      const it = SES && SES.items[SES.i]; if (!it) return r;
+      const v = $('#v-session');
+      if (!$('#form-en') && it.form) { const fb = v.querySelector('.form-big'); if (fb) { const nx = fb.nextElementSibling; (nx && nx.querySelector && nx.querySelector('.pr') ? nx : fb).insertAdjacentHTML('afterend', '<div id="form-en"></div>'); } }
+      const lines = it.ctxLines || ruthCtxFor(it);
+      if (lines && lines.length && !v.querySelector('.ctx-box')) {
+        const q = v.querySelector('.qtext') || v.querySelector('.form-big') || v.querySelector('.qbox');
+        const html = `<div class="ctx-box panel" style="margin-bottom:10px"><div class="small muted">${esc(it.ctxRef || 'The text the question is about')}</div>${lines.map(l => `<div class="he" dir="rtl" lang="he" style="font-size:1.2rem;line-height:1.9">${esc(l)}</div>`).join('')}</div>`;
+        if (q) q.insertAdjacentHTML('beforebegin', html);
+      }
+    } catch (e) { console.error(e); }
+    return r;
+  };
+})();
+function ruthCtxFor(it) {
+  if (!it || it.kind !== 'mc' || (SES && SES.passage)) return null;
+  const m = String((it.q || '') + ' ' + (it.qe || '')).replace(/<[^>]+>/g, ' ').match(/Ruth\s+(\d):(\d+)(?:\s*[–-]\s*(\d+))?/);
+  if (!m) return null;
+  const vs = (RUTH.verses[m[1]] || []).filter(v => v[0] >= +m[2] && v[0] <= +(m[3] || m[2]));
+  it.ctxRef = `Ruth ${m[1]}:${m[2]}${m[3] ? '–' + m[3] : ''}`;
+  return vs.map(v => `${v[0]} ${v[1]}`);
+}
+// Story questions (Ch. 14–22): show the story lines the question is about (from the clean story text).
+(function () {
+  const _sq = startStoryQuestions;
+  startStoryQuestions = async function (ch, n = 10) {
+    _sq.apply(this, arguments);
+    try {
+      const d = await storyDoc(ch); if (!d || !SES) return;
+      const L = d.lines, norm = s => AN.normHe(s).replace(/[^א-ת ]/g, '').replace(/\s+/g, ' ');
+      const NL = L.map(norm);
+      for (const it of SES.items) {
+        const x = STORYQ[+String(it.key).split('|')[1]]; if (!x) continue;
+        const quote = (String(x.y).match(/[א-תְ-ׇ־ ]{6,}/g) || []).map(norm).sort((a, b) => b.length - a.length);
+        let best = -1, bs = 0;
+        for (const qt of quote) { const ws = qt.split(' ').filter(w => w.length > 1); NL.forEach((l, i) => { const win = NL.slice(i, i + 3).join(' '); const s = ws.filter(w => win.includes(w)).length; if (s > bs) { bs = s; best = i; } }); if (bs >= Math.min(3, ws.length)) break; }
+        if (best < 0) continue;
+        const a = Math.max(0, best - 3), b = Math.min(L.length, best + 5);
+        it.ctxLines = [L.slice(a, b).join('\n').replace(/־\n/g, '־').replace(/\n/g, ' ')]; it.ctxRef = `Ch. ${ch} story (lines ${a + 1}–${b}). The answer is in these lines: copy the Hebrew words.`;
+        it.x = (it.x || '') + (x.qe ? `<div class="small muted">Question in English: ${esc(x.qe)}</div>` : '');
+      }
+      drawItem();
+    } catch (e) { console.error(e); }
+  };
+})();
+// (c) “Not in your course lists” for names and story words: use the dictionary, then the professor’s story glosses.
+const RX_GLOSS = new Map();
+async function loadStoryGlosses() { for (const ch of STORY_CHS) { const d = await storyDoc(ch); (d && d.gloss || []).forEach(g => { const m = String(g).match(/^([^‘'A-Za-z]*?[א-ת][^‘'A-Za-z]*?)\s*[‘']([^’']+)[’']/); if (m) RX_GLOSS.set(AN.normHe(m[1].split('→').pop()).replace(/[^א-ת]/g, ''), m[2]); }); } }
+(function () {
+  const _lm = localMeaning;
+  localMeaning = function (src) {
+    const m = _lm.apply(this, arguments);
+    try {
+      m.words.forEach(w => {
+        if (!/not in your course lists/.test(w.meaning)) return;
+        let a = null; try { a = analyzeWord(w.he); } catch { }
+        if (a && a.meaning && a.meaning !== '—') { w.meaning = a.meaning + (a.name && !/name/i.test(a.meaning) ? ' (name)' : ''); w.grammar = a.grammar || ''; return; }
+        const k = AN.normHe(w.he).replace(/[^א-ת]/g, ''); const g = RX_GLOSS.get(k) || RX_GLOSS.get(k.replace(/^[והבלכמ]/, '')) || RX_GLOSS.get(k.replace(/^(ו?ה|ו)/, ''));
+        if (g) { w.meaning = g + ' (professor’s story notes)'; return; }
+        w.meaning = '— (not found in the course lists or the dictionary)';
+      });
+    } catch (e) { console.error(e); }
+    return m;
+  };
+  setTimeout(() => { try { lexLoad(); loadStoryGlosses(); } catch { } }, 4000);
+})();
+// (d) The Hithpael slide items carry the professor’s own English.
+try { HITH_SLIDES.forEach(v => { v.en = v[5]; }); const _hs = startHithSlides; startHithSlides = function (o) { _hs.apply(this, arguments); if (SES) SES.items.forEach(it => { const h = HITH_SLIDES.find(v => v[0] === it.form); if (h) it.en = h[5]; }); drawItem(); }; } catch (e) { console.error(e); }
+
+// English “-ing” of short verbs doubles the last letter (stun → stunning).
+(function () { const DBL = /\b(stun|run|sit|set|cut|put|get|hit|beg|stop|plan|shut|swim|dig|rob|wed|grab|trap|drop|step|slip|strip|spin|win|begin|forget|split|ship|chop|tap|nod|sob|rub|pat|bat|knit)ing\b/g; const _fe = formEnglish; formEnglish = function () { const r = _fe.apply(this, arguments); return typeof r === 'string' ? r.replace(DBL, (m, v) => v + v.slice(-1) + 'ing') : r; }; })();
+// ---------- 5. Item builders for the rescue days ----------
+function rxParse(x, tag) { return { kind: 'parse', key: `rx|${tag}|${x.form}`, form: x.form, root: x.root, stem: x.stem, conj: x.conj, pgn: x.conj === 'inf' ? '' : x.pgn, gloss: x.gloss, ref: x.ref, t: x.stem === 'qal' ? 'qal_weak' : x.stem === 'hiphil' ? 'hiphil_weak' : (PB_STEM_TOPIC[x.stem] || x.stem), sec: 'parse' }; }
+function rxPool(filter) { return sfPool().filter(x => x.pgn != null && x.root && filter(x)); }
+const rxWeak = r => { r = String(r || ''); return /^[ני]/.test(r) || /^.[וי]/.test(r) || /[הא]$/.test(r) || /[אהחע]/.test(r) || (r.length === 3 && r[1] === r[2]); };
+function rxMixed(n, focus) {
+  const mis = new Set(S.prog.mistakes.map(m => m.key));
+  const w = x => 1 + (x.stem !== 'qal' ? 1.5 : 0) + (rxWeak(x.root) ? 1.2 : 0) + (['inf', 'ptc', 'weqatal', 'impv'].includes(x.conj) ? 1 : 0) + (/^[23]/.test(x.pgn || '') && x.pgn !== '3ms' ? .8 : 0) + (focus ? focus(x) : 0) + (expGet(AN.contentId({ form: x.form })) ? 0 : .8);
+  return weightedPick(rxPool(() => true), w, n).map(x => rxParse(x, 'mix'));
+}
+function rxNonfinite(n) { return weightedPick(rxPool(x => ['inf', 'ptc'].includes(x.conj)), x => 1 + (x.stem !== 'qal' ? 1 : 0), n).map(x => rxParse(x, 'nf')); }
+function rxCheck(qs) { return qs.map((q, i) => ({ kind: 'mc', key: 'rxq|' + q[0].slice(0, 40), t: q[4] || 'derived_stems', q: q[0], o: q[1], a: 0, x: q[2] || '', cat: 'instructional' })); }
+const RX_CHECK = {
+  pgn: [[`${H('שָׁמַרְתְּ')}: who?`, ['you (f. sg.)', 'she', 'I', 'you (m. sg.)'], 'Ending ־תְּ on a perfect = you (f.).', 0, 'qal_weak'], [`${H('תִּשְׁמְרִי')}: who?`, ['you (f. sg.)', 'she', 'they (f.)', 'I'], 'ת + ִי = you (f.).', 0, 'qal_weak'], [`${H('שֹׁמֶרֶת')}: which person do you mark on the grid?`, ['“—” (a participle has no person)', '3rd', '2nd', '1st'], 'Participle: gender and number only.', 0, 'participles'], [`${H('לִשְׁמֹר')}: person, gender, number?`, ['“—” for all three', '3ms', '2ms', '1cs'], 'Infinitive: nothing.', 0, 'inf_construct'], [`${H('וַתֹּאמֶר')} means…`, ['and she said', 'and you (f.) said', 'and they said', 'say! (f.)'], 'ת prefix, no ending, in a story = she.', 0, 'qal_weak']],
+  stems: [[`${H('יַגִּיד')}: stem?`, ['Hiphil', 'Piel', 'Qal', 'Niphal'], 'יַ + ִי = Hiphil; the dot in ג is the lost נ (root נגד).', 0, 'hiphil_weak'], [`${H('וַיִּלָּפֵת')}: stem?`, ['Niphal', 'Qal', 'Hithpael', 'Piel'], 'First root letter ל doubled right after the prefix = Niphal.', 0, 'niphal'], [`${H('מִתְהַלֵּךְ')}: stem?`, ['Hithpael', 'Hiphil', 'Piel', 'Niphal'], 'מִתְ + doubled middle = Hithpael (one shape everywhere).', 0, 'hithpael'], [`${H('וַיְכַהֲנוּ')}: stem?`, ['Piel', 'Hiphil', 'Qal', 'Pual'], 'Shewa under the prefix (יְ) = Piel; ה cannot double.', 0, 'piel'], [`${H('הָקְטַל')}: stem?`, ['Hophal', 'Hiphil', 'Qal', 'Pual'], 'o-vowel under the ה = Hophal (passive of Hiphil).', 0, 'hophal']],
+  weak: [[`${H('יִפֹּל')}: root?`, ['נפל', 'פלל', 'יפל', 'פול'], 'Dot in פּ = lost נ.', 0, 'qal_weak'], [`${H('וַיָּקָם')}: root?`, ['קום', 'יקם', 'קמם', 'נקם'], 'Only 2 letters: hollow root, add ו in the middle.', 0, 'qal_weak'], [`${H('עָשִׂיתִי')}: root?`, ['עשׂה', 'עשׂי', 'עשׂת', 'שׂית'], 'III-ה: the ה becomes י before the ending.', 0, 'qal_weak'], [`${H('הוֹלִיד')}: root?`, ['ילד', 'הלד', 'ולד', 'לוד'], 'וֹ after the ה = I-י Hiphil.', 0, 'hiphil_weak']],
+  nonfin: [[`${H('בְּבֹאֲכֶם')} means…`, ['when you (pl.) come', 'in your houses', 'you came', 'they came'], 'בְּ + infinitive + ־כֶם (subject) = when you come.', 0, 'inf_construct'], [`${H('כַּלֹּתוֹ')} (Ruth 3:3) means…`, ['his finishing: until he finishes', 'his daughter-in-law', 'he finished', 'all of it'], 'Infinitive + ־וֹ = who does it.', 0, 'inf_construct'], [`${H('הַנִּצָּב')} means…`, ['the one standing (in charge)', 'he stood', 'stand!', 'to stand'], 'הַ + participle = the one who.', 0, 'participles'], [`${H('לָהֶם')} means…`, ['to them', 'bread', 'to her', 'their bread'], 'לְ + ־הֶם.', 0, 'pronouns']]
+};
+
+// ---------- 6. The day plans ----------
+const RX_DAY = { '2026-11-17': 1, '2026-11-18': 2, '2026-11-19': 3, '2026-11-20': 4, '2026-11-21': 5, '2026-11-22': 6, '2026-11-23': 7 };
+function rxSession(title, items, planBlock, extra = {}) { startSession({ title, items: items.filter(Boolean), back: 'today', noVary: true, mode: 'practice', planBlock, rescue: true, ...extra }); }
+function rxLesson(ids, checks, planBlock) { rxSession('Today’s lesson + quick check', [...ids.map(lessonItem), ...rxCheck(checks)], planBlock); }
+function rxCards(sets, n, planBlock) { rxSession('Pattern flashcards: say it, then check', rescueFlashItems(sets, n), planBlock); }
+function rescueBlocks() {
+  const d = dayKey(), day = RX_DAY[d]; if (!day) return null;
+  const B = [];
+  const add = (id, min, title, sub, act, x = {}) => B.push({ id, min, title, sub, act, ...x });
+  const story = () => add('story', 20, 'Exam section: a class story, cold', 'Read 8 lines aloud, then parse 8 of its verbs on the quiz grid. The English appears after each answer.', () => startStoryDrill({ planBlock: 'story', n: 8 }));
+  const ruth = () => add('ruth', 20, 'Exam section: Ruth, translate blind + answer in Hebrew', 'Strict translation first, then smooth English. Answer by copying the Hebrew words from the passage.', () => startRuthWork({ planBlock: 'ruth' }));
+  const vocab = () => add('recall', 12, 'Vocabulary: type the meaning of your hardest words', '“Word meaning not known” is your most frequent error (67 times).', () => startRecall({ planBlock: 'recall' }));
+  const mist = () => add('mist', 15, 'Fix today’s mistakes', 'Redo every miss of today. A miss you fix now is one you will not make on Monday.', () => { startMistakes(); if (SES) SES.planBlock = 'mist'; });
+  const reflect = () => add('reflect', 3, 'Write the 3 rules you learned today (on paper, in your words)', 'Explaining a rule in your own words fixes it in memory. Tick when done.', null, { manual: true });
+  if (day === 1) {
+    add('lesson', 15, 'Lesson: person · gender · number + what each form means', 'Your weakest skill (18%). Read the tables, then 5 quick questions.', () => rxLesson(['pgn', 'forms'], RX_CHECK.pgn, 'lesson'));
+    add('cards', 12, 'Flashcards: endings, prefixes and form meanings', 'Say the answer before you turn the card. Missed cards come back.', () => rxCards(['pgn', 'forms'], 26, 'cards'));
+    add('pgn', 15, 'Drill: person · gender · number (40 forms)', 'Prefix AND ending together, every time.', () => startPgnDrill({ n: 40, planBlock: 'pgn' }));
+    add('mix', 20, 'Full parses, mixed (12 verbs)', 'All six boxes. The forms are chosen where you lose points: other persons than “he”, weqatal, imperatives, participles.', () => rxSession('Full parses, mixed', rxMixed(12, x => /^[123]/.test(x.pgn || '') && x.pgn !== '3ms' ? 1.5 : 0), 'mix'));
+    story(); vocab(); mist(); reflect();
+  } else if (day === 2 || day === 5) {
+    add('cards', 10, 'Warm-up: 20 pattern cards', 'All sets, your missed cards first.', () => rxCards(['pgn', 'forms', 'stems', 'weak', 'endings'], 20, 'cards'));
+    add('lesson', 5, 'Read: how to take the final', 'The strategy, before the timed test.', () => rxLesson(['exam'], [], 'lesson'));
+    add('mock', examMin(), `Timed final (${examMin()} min, closed book)`, day === 2 ? 'Your first independent score (you have none yet). Real conditions: no notes, phone away.' : 'Second measure. Compare with Wednesday.', () => startExam('final'), { check: () => (S.assess || []).some(a => a.type === 'final' && a.end && dayKey(new Date(a.end)) === d) });
+    mist(); reflect();
+  } else if (day === 3) {
+    add('lesson', 15, 'Lesson: stems by pattern + weak roots', 'The professor’s “shapes”, the decision order, and the 6 weak-root fingerprints.', () => rxLesson(['stems', 'weak'], [...RX_CHECK.stems, ...RX_CHECK.weak], 'lesson'));
+    add('cards', 12, 'Flashcards: stem patterns and weak roots', 'Say stem + form + root before you turn the card.', () => rxCards(['stems', 'weak'], 28, 'cards'));
+    add('sf', 15, 'Drill: stem + form (30 forms)', 'Only בִּנְיָן and נְטִיָּה, with the clue after each answer.', () => rxSession('Stem + form drill (30)', sfItems(30), 'sf'));
+    add('roots', 15, 'Drill: weak roots (10 verbs)', 'Name the root type first, then parse.', () => startWeakRoots({ n: 10, planBlock: 'roots' }));
+    add('hith', 8, 'The professor’s Hithpael + Hishtaphel slide forms', '13 forms with his answers.', () => { startHithSlides(); if (SES) SES.planBlock = 'hith'; });
+    story(); vocab(); mist(); reflect();
+  } else if (day === 4) {
+    add('lesson', 12, 'Lesson: infinitives, participles and pronoun endings', 'Who does it in an infinitive; “the one who”; whose / to whom.', () => rxLesson(['nonfin'], RX_CHECK.nonfin, 'lesson'));
+    add('cards', 12, 'Flashcards: endings + forms + weak roots (review)', 'Your missed cards from Tuesday and Thursday come first.', () => rxCards(['endings', 'forms', 'weak'], 26, 'cards'));
+    add('nf', 15, 'Drill: infinitives and participles (12 verbs)', 'Full parses. Infinitive = “—” ×3; participle = person “—”.', () => rxSession('Infinitives and participles', rxNonfinite(12), 'nf'));
+    add('suffix', 10, 'Drill: pronoun endings', 'On nouns, prepositions and verbs.', () => { startNominal(); if (SES) SES.planBlock = 'suffix'; });
+    ruth(); story(); vocab(); mist(); reflect();
+  } else if (day === 6) {
+    add('lesson', 15, 'Re-read all six lessons (no new material)', 'Read them aloud. Tomorrow you only review.', () => rxLesson(['pgn', 'forms', 'stems', 'weak', 'nonfin', 'exam'], [], 'lesson'));
+    add('cards', 15, 'All pattern cards you ever missed', 'Until each one is right once.', () => rxCards(['pgn', 'forms', 'stems', 'weak', 'endings'], 40, 'cards'));
+    add('mix', 20, 'Full parses, mixed (15 verbs)', 'Interleaved: every weakness at once, like the exam.', () => rxSession('Full parses, mixed', rxMixed(15), 'mix'));
+    ruth();
+    add('acc', 5, 'Accents and text signs', 'Atnach in Ruth 2:5 (for the final).', () => startAccents({ planBlock: 'acc' }));
+    add('mem', 10, 'Memory verses once, no help', 'Write them, check, done.', () => { const m = memoryTarget(); startMemory(m.c, m.from, m.to); if (SES) SES.planBlock = 'mem'; });
+    mist();
+    add('sleep', 0, 'Go to bed early', 'Sleep fixes in memory what you practised. No studying after dinner.', null, { manual: true });
+  } else if (day === 7) {
+    add('lesson', 5, 'Morning: read “How to take the final”', 'Five minutes, nothing new.', () => rxLesson(['exam'], [], 'lesson'));
+    add('cards', 10, 'Warm-up: 15 pattern cards', 'Just to wake the patterns up.', () => rxCards(['pgn', 'stems', 'weak'], 15, 'cards'));
+    add('warm', 8, 'Warm-up: 5 full parses', 'Easy rhythm: form → who → stem → root.', () => rxSession('Warm-up parses', rxMixed(5), 'warm'));
+  }
+  return B;
+}
+(function () {
+  const _pb = planBlocks;
+  planBlocks = function () { const r = rescueBlocks(); return r || _pb.apply(this, arguments); };
+  const _pc = planCardHTML;
+  planCardHTML = function () {
+    let h = _pc.apply(this, arguments); const day = RX_DAY[dayKey()];
+    if (!h || !day) return h;
+    const names = { 1: 'Person · gender · number + form meanings', 2: 'Baseline timed final', 3: 'Stems by pattern + weak roots', 4: 'Infinitives, participles, endings', 5: 'Second timed final', 6: 'Consolidation (nothing new)', 7: 'Final day: warm-up only' };
+    return h.replace('Today’s session', `Final rescue · Day ${Math.min(day, 6)} of 6${day === 7 ? ' (exam morning)' : ''}: ${names[day]}`).replace(/Training day|Saturday: timed final|Review day: nothing new/, day === 2 || day === 5 ? 'Timed-final day' : 'One deep session: do the steps in order');
+  };
+  // After each step: a button straight to the next one.
+  const _fs = finishSession;
+  finishSession = function () {
+    const ses = SES, early = arguments[0]; const r = _fs.apply(this, arguments);
+    try {
+      if (ses && ses.rescue && ses.planBlock && !early) planMark(ses.planBlock);
+      if (ses && ses.items.length && ses.items.every(x => x.kind === 'lesson')) { const h = $('#v-session h1'); if (h) h.textContent = 'Lesson read ✓'; }
+      if (ses && ses.planBlock && RX_DAY[dayKey()]) {
+        const B = planBlocks(), isDone = b => b.check ? b.check() : planDone(b.id), nx = B.find(b => !isDone(b) && b.act);
+        const v = $('#v-session'); if (nx && v) { v.insertAdjacentHTML('afterbegin', `<div class="panel row" style="max-width:640px;margin:0 auto 12px;justify-content:space-between;border-color:var(--accent)"><div><div class="small muted">Next step of today’s rescue session</div><b>${esc(nx.title)}</b> · ${nx.min} min</div><button class="btn primary" id="rx-next">Continue</button></div>`); $('#rx-next').onclick = () => nx.act(); }
+      }
+    } catch (e) { console.error(e); }
+    return r;
+  };
+  // Practice tab: the lessons and the pattern cards are always available.
+  const _rpr = renderPractice;
+  renderPractice = function () {
+    const r = _rpr.apply(this, arguments);
+    try { const card = $('#fx-card .row'); if (card && !$('#fx-rx')) { card.insertAdjacentHTML('afterbegin', `<button class="btn primary" id="fx-rx">Pattern lessons (all 6)</button><button class="btn" id="fx-rxc">Pattern flashcards</button>`); $('#fx-rx').onclick = () => rxSession('Pattern lessons', ['pgn', 'forms', 'stems', 'weak', 'nonfin', 'exam'].map(lessonItem), null); $('#fx-rxc').onclick = () => rxSession('Pattern flashcards', rescueFlashItems(Object.keys(RC_SETS), 30), null); } } catch (e) { console.error(e); }
+    return r;
+  };
+})();
+
+</script>
+<script>
 // Colour mode: dark (default), light, or the same as the computer. Remembered on this device.
 (function () {
   const order = ['dark', 'light', 'auto'], lab = { dark: '☾ Dark', light: '☀ Light', auto: '◐ Auto' };
@@ -8201,5 +8568,5 @@ if (!MOCK_DAYS.includes('2026-11-18')) MOCK_DAYS.push('2026-11-18');
   const b = document.getElementById('btn-theme'); if (b) b.onclick = () => { t = order[(order.indexOf(t) + 1) % order.length]; try { localStorage.setItem('het-theme', t); } catch {} apply(); };
 })();
 </script>
-<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='c6d7a4df04';</script>
+<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='bfd861ca66';</script>
 </body></html>
