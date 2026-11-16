@@ -8085,6 +8085,113 @@ planBlocks = function () {
 })();
 </script>
 <script>
+// ---------- Class stories Ch. 14–22, exam style: read a cold section, then parse its verbs ----------
+// The clean story texts and their verb list come only from the private update file (docs stories/14 … stories/22).
+// Each verb was parsed by the Hebrew Bible database (only forms with one possible stem, form and root).
+const STORYX = { cache: {} };
+const STORY_CHS = [14, 15, 16, 17, 18, 19, 20, 21, 22];
+async function storyDoc(ch) {
+  if (STORYX.cache[ch] !== undefined) return STORYX.cache[ch];
+  let d = null; try { if (S.db) { const s = await S.db.doc('stories/' + ch).get(); d = s.exists ? s.data() : null; } } catch { }
+  return (STORYX.cache[ch] = d && Array.isArray(d.lines) ? d : null);
+}
+async function storyChsAvailable() { const out = []; for (const ch of STORY_CHS) if (await storyDoc(ch)) out.push(ch); return out; }
+// Weight: the stems and forms that cost you points (non-Qal, weak roots, nonfinite forms), but always a mix.
+function storyVerbWeight(v) {
+  const [form, root, stem, conj] = v; let w = 1;
+  if (stem !== 'qal') w += 2.5; if (conj === 'inf' || conj === 'ptc') w += 1.5; if (conj === 'weqatal' || conj === 'impv') w += 1;
+  if (/[אהוחיעננ]/.test(root[0]) || /[וי]/.test(root[1] || '') || /[אה]/.test(root[2] || '')) w += 1;
+  if (!expGet(AN.contentId({ form }))) w += 1;
+  return w;
+}
+// Prefix forms that look the same for two persons (תִּקְטֹל = you m.s. OR she; תִּקְטֹלְנָה = you f.pl. OR they f.): accept both.
+function storyPgn(conj, pgn) {
+  const set = new Set(String(pgn || '').split('|').filter(Boolean));
+  if (['yiqtol', 'wayyiqtol', 'weyiqtol'].includes(conj)) { if (set.has('2ms') || set.has('3fs')) { set.add('2ms'); set.add('3fs'); } if (set.has('2fp') || set.has('3fp')) { set.add('2fp'); set.add('3fp'); } }
+  return [...set].join('|');
+}
+async function startStoryDrill(o = {}) {
+  const chs = await storyChsAvailable();
+  if (!chs.length) return flash('The class-story texts are not in this app yet: import hebrew-update-2026-11-16.json (Library → Add material).');
+  const ch = o.ch || chs[Math.floor(parseDay(dayKey()).getTime() / 864e5 + (o.shift || 0)) % chs.length];
+  const d = await storyDoc(ch); const L = d.lines;
+  // Start at a sentence start (after a line that ends with ׃), take about 8 lines.
+  const starts = [0, ...L.map((l, i) => /׃\s*$/.test(l) ? i + 1 : -1).filter(i => i > 0 && i < L.length - 6)];
+  const n = o.lines || 8; let s = o.start ?? starts[Math.floor(Math.random() * starts.length)]; s = Math.min(s, Math.max(0, L.length - n));
+  const pool = (d.verbs || []).filter(v => v[5] >= s && v[5] < s + n && (v[2] === 'qal' || stemLearned(v[2]) || v[2] === 'hishtaphel'));
+  const seen = new Set();
+  const cand = pool.filter(v => { const k = AN.normHe(v[0]); if (seen.has(k)) return false; seen.add(k); return true; });
+  const pick = weightedPick(cand, storyVerbWeight, Math.min(o.n || 8, cand.length)).sort((a, b) => a[5] - b[5]);
+  const items = pick.map(v => ({ kind: 'parse', key: `st|${ch}|${v[0]}`, form: v[0], root: String(v[1]).replace(/[כמנפצ]$/, c => ({ 'כ': 'ך', 'מ': 'ם', 'נ': 'ן', 'פ': 'ף', 'צ': 'ץ' }[c])), stem: v[2], conj: v[3], pgn: storyPgn(v[3], v[4]), gloss: '', ctx: L[v[5]], ref: `Ch. ${ch} story, line ${v[5] + 1}`, t: v[2] === 'qal' ? 'qal_weak' : v[2] === 'hiphil' ? 'hiphil_weak' : v[2] === 'hishtaphel' ? 'hithpael' : v[2], sec: 'parse', note: 'Parsed by the Hebrew Bible database (this exact form, in the Bible).' }));
+  if (!items.length) return flash('No verbs found in that section. Try again.');
+  const lines = L.slice(s, s + n);
+  startSession({ title: `Class story Ch. ${ch}: ${d.title} (cold section)`, items, passage: { ref: `Ch. ${ch} · ${d.title} · lines ${s + 1}–${s + n}`, lines }, back: S.tab === 'today' ? 'today' : 'practice', noVary: true, mode: 'practice', planBlock: o.planBlock });
+}
+// The professor's margin words for the section are shown after the session in the review (not before: the final gives no help).
+
+// ---------- Hishtaphel (the professor's slides: “the only Hishtaphel in Biblical Hebrew”, root חוה) ----------
+STEMS.hishtaphel = ['הִשְׁתַּפְעֵל', 'Hishtaphel'];
+STEM_DEF.hishtaphel = 'only one verb: חוה “bow down, worship” (הִשְׁתַּחֲוָה); the שְׁתַּ comes before the root';
+try { SF_STEM_CLUE.hishtaphel = 'הִשְׁתַּ / יִשְׁתַּ / מִשְׁתַּ before ח־ו־ה: only the verb “bow down, worship” (וַיִּשְׁתַּחוּ)'; } catch { }
+PB_STEM_TOPIC.hishtaphel = 'hithpael';
+LEX_STEM.v = 'hishtaphel';
+// The older dictionaries call these forms Hithpael of שחה; the professor teaches Hishtaphel of חוה. Use his analysis everywhere.
+(function () {
+  const fix = a => { if (a && a[1] === 'שחה' && String(a[2]).split('|')[0] === 'hithpael') { a[1] = 'חוה'; a[2] = 'hishtaphel'; } };
+  try { RUTH.verbs.forEach(fix); } catch { } try { (PBANK.verbs || []).forEach(fix); } catch { }
+  const _gp = gradeParse;
+  gradeParse = function (item, sel) {
+    const g = _gp.apply(this, arguments);
+    if (item && item.stem === 'hishtaphel' && sel && normRoot(sel.root) === 'שחה' && !g.res.root) { g.res.root = true; g.score = g.keys.filter(k => g.res[k]).length / g.keys.length; }
+    return g;
+  };
+  const _lc = lexCheckParse;
+  lexCheckParse = function (p) { if (p && p.stem === 'hishtaphel') { const a = _lc(p), h = _lc({ ...p, stem: 'hithpael' }); return a && a.ok ? a : h && h.ok ? h : a || h; } return _lc(p); };
+})();
+// Practice forms from the professor's Hithpael slides (Nov 15), with his answers.
+const HITH_SLIDES = [
+  ['מִתְהַלֵּךְ', 'הלך', 'hithpael', 'ptc', 'ms', 'the one going to and fro'],
+  ['וַיִּתְהַלֵּךְ', 'הלך', 'hithpael', 'wayyiqtol', '3ms', 'and he went to and fro'],
+  ['לְהִשְׁתַּחֲוֹת', 'חוה', 'hishtaphel', 'inf', '', 'to worship, bow down'],
+  ['הִתְהַלֵּךְ', 'הלך', 'hithpael', 'inf', '', 'to walk to and fro', [{ conj: 'qatal', pgn: '3ms' }, { conj: 'impv', pgn: '2ms' }]],
+  ['וְיִתְפַּלֵּל', 'פלל', 'hithpael', 'weyiqtol', '3ms', 'that he may pray'],
+  ['וְהִתְבָּרֲכוּ', 'ברך', 'hithpael', 'weqatal', '3cp', 'they will bless themselves / be blessed'],
+  ['וַיִּשְׁתַּחוּ', 'חוה', 'hishtaphel', 'wayyiqtol', '3ms', 'and he worshipped, bowed down'],
+  ['הִתְהַלַּכְתִּי', 'הלך', 'hithpael', 'qatal', '1cs', 'I have walked to and fro'],
+  ['וַתִּתְכַּס', 'כסה', 'hithpael', 'wayyiqtol', '3fs', 'and she covered herself'],
+  ['וַתִּשְׁתַּחֲוֶינָה', 'חוה', 'hishtaphel', 'wayyiqtol', '3fp', 'and they (f.) bowed down'],
+  ['תִּתְרָאוּ', 'ראה', 'hithpael', 'yiqtol', '2mp', 'you (will) look at each other'],
+  ['וָאֶתְחַזֵּק', 'חזק', 'hithpael', 'wayyiqtol', '1cs', 'and I strengthened myself'],
+  ['תִּשְׁתַּחֲוֶה', 'חוה', 'hishtaphel', 'yiqtol', '3fs|2ms', 'she / you will bow down'],
+];
+function startHithSlides(o = {}) {
+  const items = shuffle(HITH_SLIDES.slice()).map(v => ({ kind: 'parse', key: 'hs|' + v[0], form: v[0], root: v[1], stem: v[2], conj: v[3], pgn: v[4], gloss: v[5], alts: v[6], ref: 'Hithpael slides (Nov 15)', t: 'hithpael', sec: 'parse', note: v[2] === 'hishtaphel' ? 'Hishtaphel: הִשְׁתַּ + ח־ו־ה. The professor: “the only Hishtaphel in Biblical Hebrew”. Hithpael has ONE shape in every form: הִתְ / יִתְ / מִתְ + doubled middle letter.' : 'Hithpael has ONE shape in every form: הִתְ / יִתְ / מִתְ + doubled middle letter (a guttural or ר cannot double: וְהִתְבָּרֲכוּ).' }));
+  startSession({ title: 'Hithpael + Hishtaphel: the professor’s slide practice', items, back: S.tab === 'today' ? 'today' : 'practice', noVary: true, mode: 'practice', planBlock: o.planBlock });
+}
+
+// ---------- Plan: a baseline timed final on Nov 18 (no independent test yet), class-story sections, longer PGN drill ----------
+if (!MOCK_DAYS.includes('2026-11-18')) MOCK_DAYS.push('2026-11-18');
+(function () {
+  const _pb = planBlocks;
+  planBlocks = function () {
+    const b = _pb.apply(this, arguments); const d = dayKey();
+    if (REVIEW_DAYS.includes(d) || MOCK_DAYS.includes(d)) return b;
+    const i = b.findIndex(x => x.id === 'pgn');
+    if (i >= 0) b[i] = { ...b[i], min: 10, title: 'Person · gender · number drill (30 forms)', sub: 'Your weakest skill in the data (18% on 28 parses). Prefix AND ending together.', act: () => startPgnDrill({ n: 30, planBlock: 'pgn' }) };
+    const j = b.findIndex(x => x.id === 'retake');
+    b.splice(j >= 0 ? j + 1 : b.length, 0, { id: 'story', min: 15, title: 'Class story: a cold section + parse its verbs', sub: 'Chapters 14–22 in turn: read 8 lines aloud, then parse 8 verbs on the quiz grid. The final may use a class story.', act: () => startStoryDrill({ planBlock: 'story' }) });
+    return b;
+  };
+  const _rpr = renderPractice;
+  renderPractice = function () {
+    const r = _rpr.apply(this, arguments);
+    try { const card = $('#fx-card .row'); if (card && !$('#fx-story')) { card.insertAdjacentHTML('beforeend', `<button class="btn" id="fx-story">Class story section + parsing (Ch. 14–22)</button><button class="btn" id="fx-hith">Hithpael + Hishtaphel (slides)</button>`); $('#fx-story').onclick = () => startStoryDrill(); $('#fx-hith').onclick = () => startHithSlides(); } } catch (e) { console.error(e); }
+    return r;
+  };
+})();
+
+</script>
+<script>
 // Colour mode: dark (default), light, or the same as the computer. Remembered on this device.
 (function () {
   const order = ['dark', 'light', 'auto'], lab = { dark: '☾ Dark', light: '☀ Light', auto: '◐ Auto' };
@@ -8094,5 +8201,5 @@ planBlocks = function () {
   const b = document.getElementById('btn-theme'); if (b) b.onclick = () => { t = order[(order.indexOf(t) + 1) % order.length]; try { localStorage.setItem('het-theme', t); } catch {} apply(); };
 })();
 </script>
-<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='a22c962e1e';</script>
+<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='c6d7a4df04';</script>
 </body></html>
