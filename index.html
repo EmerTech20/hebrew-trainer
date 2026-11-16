@@ -8353,10 +8353,11 @@ function rescueFlashItems(sets, n) {
   const mis = new Set(S.prog.mistakes.map(m => m.key));
   return weightedPick(all, c => (mis.has(c.key) ? 4 : 1) * (expGet(AN.contentId({ he: c.front, q: c.ask })) ? .6 : 1.4), Math.min(n, all.length)).map(flashItem);
 }
+function rxWireExit() { const x = $('#s-exit'); if (x) x.onclick = () => { try { savers.prog.now(); } catch { } if (SES.results.length) finishSession(true); else go(SES.back || 'practice'); }; }
 function drawLesson(it) {
   const v = $('#v-session');
   v.innerHTML = `${sessHead()}<div class="panel stack lesson" style="max-width:860px;width:100%;margin:0 auto"><div class="eyebrow">Read carefully · then say the rules aloud</div><h2 style="margin:0">${esc(it.title)}</h2><div class="stack" style="gap:10px;line-height:1.55">${it.html}</div></div><div class="row" id="ctl" style="justify-content:center;margin-top:12px"><button class="btn primary" id="b-lesson">I read it. Continue</button></div>`;
-  $('#b-lesson').onclick = () => { SES.i++; drawItem(); }; window.scrollTo({ top: 0 });
+  $('#b-lesson').onclick = () => { SES.i++; drawItem(); }; window.scrollTo({ top: 0 }); rxWireExit();
 }
 function drawFlash(it) {
   const v = $('#v-session'); SES.answered = false; startTimer(it);
@@ -8365,6 +8366,7 @@ function drawFlash(it) {
     <div class="form-big" lang="he">${esc(it.front || it.form)}</div><div style="text-align:center">${PR(it.form)}</div>
     <p><b>${esc(it.q)}</b></p><div id="fl-back" hidden class="panel" style="text-align:left"><b>${heWrap(esc(it.back))}</b></div></div>
     <div class="row" id="ctl" style="justify-content:center;margin-top:12px"><button class="btn primary" id="fl-show">Show the answer</button></div>`;
+  rxWireExit();
   $('#fl-show').onclick = () => {
     $('#fl-back').hidden = false;
     $('#ctl').innerHTML = `<button class="btn" id="fl-no">I did not know it</button><button class="btn primary" id="fl-yes">I knew it</button>`;
@@ -8559,6 +8561,77 @@ function rescueBlocks() {
 
 </script>
 <script>
+// ---------- “Final rescue” tab: the whole week in one place (lessons to study, their cards and drills, today's session) ----------
+const RX_LESSONS = [
+  { id: 'pgn', sets: ['pgn'], check: 'pgn', drills: [['Person · gender · number drill (30 forms)', () => startPgnDrill({ n: 30 })], ['Full parses: persons other than “he” (12)', () => rxSession('Full parses: who does it?', rxMixed(12, x => /^[123]/.test(x.pgn || '') && x.pgn !== '3ms' ? 2 : 0), null)]] },
+  { id: 'forms', sets: ['forms'], check: null, drills: [['Full parses: weqatal, imperatives, infinitives (12)', () => rxSession('Forms and their meaning', rxMixed(12, x => ['weqatal', 'impv', 'inf', 'weyiqtol'].includes(x.conj) ? 2.5 : 0), null)]] },
+  { id: 'stems', sets: ['stems'], check: 'stems', drills: [['Stem + form drill (30 forms)', () => rxSession('Stem + form drill (30)', sfItems(30), null)], ['Hithpael + Hishtaphel: the professor’s slides', () => startHithSlides()], ['Full parses: derived stems (12)', () => rxSession('Full parses: derived stems', rxMixed(12, x => x.stem !== 'qal' ? 3 : 0), null)]] },
+  { id: 'weak', sets: ['weak'], check: 'weak', drills: [['Weak roots: name the type, then parse (10)', () => startWeakRoots({ n: 10 })], ['Full parses: weak roots (12)', () => rxSession('Full parses: weak roots', rxMixed(12, x => rxWeak(x.root) ? 3 : 0), null)]] },
+  { id: 'nonfin', sets: ['endings'], check: 'nonfin', drills: [['Infinitives and participles (12)', () => rxSession('Infinitives and participles', rxNonfinite(12), null)], ['Pronoun endings drill', () => startNominal()]] },
+  { id: 'exam', sets: [], check: null, drills: [['Exam section: a class story, cold (read + parse 8)', () => startStoryDrill({ n: 8 })], ['Exam section: Ruth, translate blind + answer in Hebrew', () => startRuthWork({})], ['Full timed final', () => startExam('final')]] },
+];
+const RX_DAYS = [['2026-11-17', 'Tue 17', 'Person · gender · number + what each form means'], ['2026-11-18', 'Wed 18', 'First timed final (baseline) + fix the misses'], ['2026-11-19', 'Thu 19', 'Stems by pattern + weak roots + Hithpael slides'], ['2026-11-20', 'Fri 20', 'Infinitives, participles, pronoun endings'], ['2026-11-21', 'Sat 21', 'Second timed final + fix the misses'], ['2026-11-22', 'Sun 22', 'Nothing new: re-read, missed cards, mixed parses, sleep'], ['2026-11-23', 'Mon 23', 'Exam morning: 20-minute warm-up only']];
+function rxCardStats(set) {
+  const cs = rescueCards().filter(c => c.set === set), mis = new Set(S.prog.mistakes.filter(m => !m.ok).map(m => m.key));
+  return { n: cs.length, seen: cs.filter(c => expGet(AN.contentId({ he: c.front, q: c.ask }))).length, missed: cs.filter(c => mis.has(c.key)).length };
+}
+async function rxFrom(fn) { await fn(); if (SES) SES.back = 'rescue'; }
+function renderRescue() {
+  const v = $('#v-rescue'); if (!v) return;
+  const d = dayKey(), days = Math.round((parseDay(RESCUE.final).getTime() - parseDay(d).getTime()) / 864e5);
+  const B = RX_DAY[d] ? planBlocks() : null, isDone = b => b.check ? b.check() : planDone(b.id);
+  const nx = B && B.find(b => !isDone(b) && b.act);
+  const today = B ? `<div class="panel stack" style="border-color:var(--accent)">
+      <div class="row" style="justify-content:space-between"><h2 style="margin:0">Today’s deep session</h2><span class="chip warn">${days === 0 ? 'Final today' : days + ' day' + (days === 1 ? '' : 's') + ' to the final'}</span></div>
+      <p class="small muted">${B.filter(isDone).length} of ${B.length} steps done · about ${B.reduce((s, b) => s + b.min, 0)} minutes · do the steps in order; after each one, “Continue” takes you to the next.</p>
+      ${nx ? `<button class="btn primary" id="rx-go">${B.some(isDone) ? 'Continue' : 'Start'}: ${esc(nx.title)}</button>` : '<p><b>Today’s session is complete. ✓</b></p>'}
+      <div class="plan">${B.map((b, i) => `<div class="step ${isDone(b) ? 'done' : ''}"><span class="n">${isDone(b) ? '✓' : i + 1}</span><div><b>${esc(b.title)}</b><div class="small muted">${heWrap(esc(b.sub))} · ${b.min} min</div></div><div class="row" style="gap:6px">${b.act ? `<button class="btn" data-rxb="${b.id}">${isDone(b) ? 'Again' : 'Start'}</button>` : ''}${b.manual && !isDone(b) ? `<button class="btn" data-rxm="${b.id}">Done</button>` : ''}</div></div>`).join('')}</div></div>`
+    : `<div class="panel stack" style="border-color:var(--accent)"><h2 style="margin:0">The rescue week starts Tuesday, Nov 17</h2><p class="small muted">Until then: read the lessons below and do their flashcards.</p></div>`;
+  const week = `<div class="panel stack"><h2 style="margin:0">The week</h2><div class="plan">${RX_DAYS.map(([k, lab, what]) => { const P = planState().days[k] || {}; const n = Object.keys(P).length; return `<div class="step ${k < d ? 'done' : ''}" style="${k === d ? 'outline:2px solid var(--accent);border-radius:8px' : ''}"><span class="n">${k < d ? '✓' : lab.slice(4)}</span><div><b>${lab}${k === d ? ' · today' : ''}</b><div class="small muted">${esc(what)}${n ? ` · ${n} step${n === 1 ? '' : 's'} done` : ''}</div></div></div>`; }).join('')}</div></div>`;
+  const lessons = RX_LESSONS.map(L => {
+    const st = L.sets.map(s => ({ s, ...rxCardStats(s) }));
+    return `<details class="panel" data-lesson="${L.id}"><summary style="cursor:pointer"><b>${esc(RL[L.id].title)}</b>${st.map(x => ` <span class="chip">${x.n} cards · ${x.seen} seen${x.missed ? ` · ${x.missed} to fix` : ''}</span>`).join('')}</summary>
+      <div class="stack" style="gap:10px;line-height:1.55;margin-top:10px">${RL[L.id].html()}</div>
+      <div class="row" style="flex-wrap:wrap;gap:8px;margin-top:10px">
+        ${L.sets.length ? `<button class="btn primary" data-rxc="${L.id}">Flashcards for this lesson</button>` : ''}
+        ${L.check ? `<button class="btn" data-rxq="${L.id}">Quick check</button>` : ''}
+        ${L.drills.map((x, i) => `<button class="btn" data-rxd="${L.id}|${i}">${esc(x[0])}</button>`).join('')}
+      </div></details>`;
+  }).join('');
+  v.innerHTML = `<div class="stack" style="gap:14px">
+    <div><div class="eyebrow">Final rescue week · Nov 17–23</div><h1 style="margin:4px 0">Built only on your weak points</h1>
+    <p class="small muted">From your Nov 16 report: person/gender/number 18%, root 47%, weak-root parses 52%, form 62%, word meaning not known 67 times, story questions 20%. Method: short lesson with examples → recall from memory (flashcards) → focused drill → mixed practice → exam-style section → fix the misses. Cards you miss come back the same day and the next days.</p></div>
+    ${today}
+    <div class="panel stack"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><h2 style="margin:0">Patterns to memorise</h2><div class="row" style="gap:8px"><button class="btn primary" id="rx-allc">All pattern flashcards (30)</button><button class="btn" id="rx-miss">Only the cards I missed</button></div></div>
+      <p class="small muted">Open a lesson to study it. Each has its own flashcards, a quick check and drills.</p>${lessons}</div>
+    ${week}</div>`;
+  const back = () => { if (SES) SES.back = 'rescue'; };
+  if ($('#rx-go')) $('#rx-go').onclick = () => rxFrom(nx.act);
+  $$('[data-rxb]').forEach(b => b.onclick = () => { const x = B.find(y => y.id === b.dataset.rxb); if (x && x.act) rxFrom(x.act); });
+  $$('[data-rxm]').forEach(b => b.onclick = () => { planMark(b.dataset.rxm); renderRescue(); });
+  $$('[data-rxc]').forEach(b => b.onclick = () => { const L = RX_LESSONS.find(x => x.id === b.dataset.rxc); rxSession('Flashcards: ' + RL[L.id].title.replace(/^Lesson \d · /, ''), rescueFlashItems(L.sets, 30), null); back(); });
+  $$('[data-rxq]').forEach(b => b.onclick = () => { const L = RX_LESSONS.find(x => x.id === b.dataset.rxq); rxSession('Quick check: ' + RL[L.id].title.replace(/^Lesson \d · /, ''), rxCheck(RX_CHECK[L.check]), null); back(); });
+  $$('[data-rxd]').forEach(b => b.onclick = () => { const [id, i] = b.dataset.rxd.split('|'); const L = RX_LESSONS.find(x => x.id === id); rxFrom(L.drills[+i][1]); });
+  $('#rx-allc').onclick = () => { rxSession('All pattern flashcards', rescueFlashItems(Object.keys(RC_SETS), 30), null); back(); };
+  $('#rx-miss').onclick = () => { const mis = new Set(S.prog.mistakes.filter(m => !m.ok).map(m => m.key)); const it = rescueCards().filter(c => mis.has(c.key)).map(flashItem); if (!it.length) return flash('No missed pattern cards yet.'); rxSession('Pattern cards I missed', it, null); back(); };
+}
+(function () {
+  try {
+    const nav = $('#tabs'); if (nav && !nav.querySelector('[data-tab="rescue"]')) {
+      const t = nav.querySelector('[data-tab="today"]'); t.insertAdjacentHTML('afterend', '<button class="tab" role="tab" data-tab="rescue" style="font-weight:700">Final rescue</button>');
+      $('#main').insertAdjacentHTML('beforeend', '<section class="view" id="v-rescue" hidden></section>');
+      nav.querySelector('[data-tab="rescue"]').onclick = () => go('rescue');
+    }
+  } catch (e) { console.error(e); }
+  const _go = go;
+  go = function (tab, arg) { const r = _go.apply(this, arguments); if (tab === 'rescue') { try { renderRescue(); } catch (e) { console.error(e); } } return r; };
+  // The Today tab points to it.
+  const _pc = planCardHTML;
+  planCardHTML = function () { const h = _pc.apply(this, arguments); return h && RX_DAY[dayKey()] ? h.replace('</h2>', '</h2><button class="btn" onclick="go(\'rescue\')" style="margin-left:auto">Open the Final rescue tab</button>') : h; };
+})();
+
+</script>
+<script>
 // Colour mode: dark (default), light, or the same as the computer. Remembered on this device.
 (function () {
   const order = ['dark', 'light', 'auto'], lab = { dark: '☾ Dark', light: '☀ Light', auto: '◐ Auto' };
@@ -8568,5 +8641,5 @@ function rescueBlocks() {
   const b = document.getElementById('btn-theme'); if (b) b.onclick = () => { t = order[(order.indexOf(t) + 1) % order.length]; try { localStorage.setItem('het-theme', t); } catch {} apply(); };
 })();
 </script>
-<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='bfd861ca66';</script>
+<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='c6ba88e58a';</script>
 </body></html>
