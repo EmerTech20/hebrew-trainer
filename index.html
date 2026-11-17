@@ -5018,7 +5018,7 @@ function renderExam() {
   exClockStart();
   const it = EX.items[EX.cur], a = EX.ans[EX.cur] = EX.ans[EX.cur] || {};
   v.innerHTML = `<div class="sess-head"><b>${esc(bp.name)}</b><div class="progress"><i style="width:${EX.items.filter((x, i) => exAnswered(x, EX.ans[i])).length / EX.items.length * 100}%"></i></div><b id="ex-clock" style="font-variant-numeric:tabular-nums">--:--</b></div>
-    ${EX.passage && (EX.type === 'mock' ? ['comp', 'parse', 'translation'] : ['comp']).includes(it.sec) ? passageHTML() : ''}
+    ${EX.passage && (/^sim/.test(EX.type) ? ['comp', 'parse', 'translation', 'syntax'] : EX.type === 'mock' ? ['comp', 'parse', 'translation'] : ['comp']).includes(it.sec) ? passageHTML() : ''}
     <div class="panel qbox" style="max-width:760px;width:100%;margin:0 auto">${exItemHTML(it, a, EX.cur + 1)}
       <div class="row" style="justify-content:space-between"><div class="row"><button class="btn" id="ex-prev" ${EX.cur ? '' : 'disabled'}>← Previous</button><button class="btn primary" id="ex-next">${EX.cur + 1 < EX.items.length ? 'Next →' : 'Review & submit'}</button></div><button class="btn ghost sm" id="ex-sub">Submit now</button></div>
       <div class="row" style="gap:4px">${EX.items.map((x, i) => `<button class="btn sm ${i === EX.cur ? 'primary' : ''}" data-xi="${i}" style="min-width:34px;${exAnswered(x, EX.ans[i]) ? '' : 'opacity:.55'}">${i + 1}</button>`).join('')}</div></div>`;
@@ -8973,6 +8973,110 @@ ${tbl(['Vowel under the prefix', 'Stem', 'Imperfect on קטל', 'Then confirm wi
 
 </script>
 <script>
+// ---------- Three final-exam simulations, built like the professor's midterm (Oct 2026) and the syllabus:
+// “cumulative … translation, parsing, as well as other questions about the text”.
+// Midterm model: a studied story with Hebrew questions (שְׁאֵלָה א, ב …) answered from the text, parsing on the grid
+// (גּוּף · מִגְדָּר · מִסְפָּר · נְטִיָּה + write the root; the final adds בִּנְיָן), one translation, rare vocabulary given.
+// Every parse below is checked against the Hebrew Bible database (RUTH.verbs / the class-story verb list).
+const SIM_DEF = {
+  sim1: { name: 'Final simulation 1 · Ruth 1', parts: [{ kind: 'ruth', c: 1, from: 1, to: 22 }],
+    vocab: 'קָצִיר harvest · שְׂעֹרָה barley · מַר bitter · רֵיקָם empty · עגן be kept back · אמץ (Hithpael) be determined',
+    comp: [67, 68, 69, 72, 74, 75, 79, 81, 83, 85],
+    parse: [['וַתִּשָּׁאֵר', 'שׁאר', 'niphal', 'wayyiqtol', '3fs', 'Ruth 1:3'], ['לָגוּר', 'גור', 'qal', 'inf', '', 'Ruth 1:1'], ['שֹּׁבְנָה', 'שׁוב', 'qal', 'impv', '2fp', 'Ruth 1:8'], ['הַמֵּתִים', 'מות', 'qal', 'ptc', 'mp', 'Ruth 1:8'], ['תְּשַׂבֵּרְנָה', 'שׂבר', 'piel', 'yiqtol', '2fp|3fp', 'Ruth 1:13'], ['אֶקָּבֵר', 'קבר', 'niphal', 'yiqtol', '1cs', 'Ruth 1:17'], ['יַפְרִיד', 'פרד', 'hiphil', 'yiqtol', '3ms', 'Ruth 1:17'], ['מִתְאַמֶּצֶת', 'אמץ', 'hithpael', 'ptc', 'fs', 'Ruth 1:18'], ['לְדַבֵּר', 'דבר', 'piel', 'inf', '', 'Ruth 1:18'], ['הֱשִׁיבַנִי', 'שׁוב', 'hiphil', 'qatal', '3ms', 'Ruth 1:21']],
+    tr: [{ ruth: [1, 6] }, { ruth: [1, 16] }],
+    syn: [
+      ['Ruth 1:1 וַיְהִי בִּימֵי שְׁפֹט הַשֹּׁפְטִים — what does וַיְהִי do here?', ['It opens the story and sets the time: “And it happened in the days…”', 'It is the main action: “he was”', 'It is a command: “let it be”', 'It asks a question'], 'וַיְהִי + a time phrase opens a narrative scene. It is translated “And it happened / came to pass”, or left out in smooth English (“In the days when…”).'],
+      ['Ruth 1:16 כִּי אֶל־אֲשֶׁר תֵּלְכִי אֵלֵךְ — what does אֲשֶׁר introduce?', ['A relative clause: “(to the place) where you go, I will go”', 'A question', 'A reason: “because”', 'A condition: “if”'], 'אֲשֶׁר introduces a relative clause; with אֶל it means “to where”.'],
+      ['Ruth 1:6 כִּי שָׁמְעָה בִּשְׂדֵה מוֹאָב כִּי־פָקַד יְהוָה אֶת־עַמּוֹ — what does the second כִּי introduce?', ['The content of what she heard: “that the LORD had visited his people”', 'A reason: “because”', 'A contrast: “but”', 'A time: “when”'], 'After a verb of hearing / knowing / seeing, כִּי = “that” (content). The first כִּי is the reason (“for she had heard”).'],
+      ['Ruth 1:8 לֵכְנָה שֹּׁבְנָה אִשָּׁה לְבֵית אִמָּהּ — what does אִשָּׁה mean here?', ['“each one” (each woman)', '“a wife”', '“woman!” (calling her)', '“the woman”'], 'אִישׁ / אִשָּׁה + a verb in the plural = “each one”.'],
+      ['Ruth 1:19 הֲזֹאת נָעֳמִי — the הֲ at the start…', ['makes a yes/no question: “Is this Naomi?”', 'is the article “the”', 'means “behold”', 'is a Hiphil prefix'], 'הֲ (with hateph-patach) = question marker. The article is הַ + a doubled letter.']] },
+  sim2: { name: 'Final simulation 2 · David and Jonathan (Ch. 22) + Ruth 3', parts: [{ kind: 'story', ch: 22, from: 1, to: 33 }, { kind: 'ruth', c: 3, from: 1, to: 9 }],
+    vocab: 'חָפֵץ delight in · סֵתֶר hiding place · פֶּן lest · נָקִי innocent · חִנָּם for no reason · חֲנִית spear · קִיר wall · נגן (Piel) play music · גֹּרֶן threshing floor · מַרְגְּלֹת place of the feet',
+    storyQ: [0, 1, 2, 3, 4, 5, 6], comp: [104, 107, 109],
+    parse: [['לְהָמִית', 'מות', 'hiphil', 'inf', '', 'story line 3'], ['מְבַקֵּשׁ', 'בקשׁ', 'piel', 'ptc', 'ms', 'story line 5'], ['הִשָּׁמֶר', 'שׁמר', 'niphal', 'impv', '2ms', 'story line 6'], ['תִּמָּצֵא', 'מצא', 'niphal', 'yiqtol', '2ms|3fs', 'story line 7'], ['וַיִּשָּׁבַע', 'שׁבע', 'niphal', 'wayyiqtol', '3ms', 'story line 20'], ['וַיִּמָּלֵט', 'מלט', 'niphal', 'wayyiqtol', '3ms', 'story line 32'], ['אֲבַקֶּשׁ', 'בקשׁ', 'piel', 'yiqtol', '1cs', 'Ruth 3:1'], ['וְגִלִּית', 'גלה', 'piel', 'weqatal', '2fs', 'Ruth 3:4'], ['יַגִּיד', 'נגד', 'hiphil', 'yiqtol', '3ms', 'Ruth 3:4'], ['וַיִּלָּפֵת', 'לפת', 'niphal', 'wayyiqtol', '3ms', 'Ruth 3:8']],
+    tr: [{ story: 22, from: 4, to: 7, he: 'וַיַּגֵּד יְהוֹנָתָן לְדָוִד לֵאמֹר מְבַקֵּשׁ שָׁאוּל אָבִי לַהֲמִיתֶךָ וְעַתָּה הִשָּׁמֶר־נָא בַבֹּקֶר וְיָשַׁבְתָּ בַסֵּתֶר וְנִסְתַּרְתָּ פֶּן־תִּמָּצֵא׃', en: 'And Jonathan told David: “Saul my father is seeking to put you to death. So now, please be on your guard in the morning; stay in a hiding place and hide yourself, lest you be found.”' }, { ruth: [3, 5] }],
+    syn: [
+      ['Story line 3: לְהָמִית אֶת־דָּוִד — what does לְ + infinitive express here?', ['Purpose / content of the speech: “to put David to death”', 'Past tense: “he killed David”', 'A command: “kill David!”', 'A question'], 'לְ + infinitive construct after a verb = purpose or content (“to …”). לְהָמִית = Hiphil infinitive of מות.'],
+      ['Story line 3–4: וִיהוֹנָתָן בֶּן־שָׁאוּל חָפֵץ בְּדָוִד — וְ + a noun first (not וַיִּ…) signals…', ['A background or contrast clause: “Now Jonathan … delighted in David”', 'The next event of the story', 'A purpose', 'A command'], 'The story line moves with wayyiqtol. וְ + subject + qatal / participle stops the line to give background or contrast.'],
+      ['Story line 7: פֶּן־תִּמָּצֵא — פֶּן means…', ['“lest” (so that … not)', '“because”', '“if”', '“until”'], 'פֶּן + yiqtol = “lest / so that … not”: “lest you be found”.'],
+      ['Ruth 3:3 עַד כַּלֹּתוֹ לֶאֱכֹל — עַד + infinitive means…', ['“until he finishes (eating)”', '“because he finished”', '“he finished”', '“after he finishes”'], 'עַד = until; כַּלֹּתוֹ = Piel infinitive of כלה + ־וֹ (he is the one finishing).'],
+      ['Ruth 3:9 כִּי גֹאֵל אָתָּה — כִּי here is…', ['a reason: “for (because) you are a redeemer”', 'content: “that you are a redeemer”', 'time: “when”', 'contrast: “but”'], 'After a request, כִּי gives the reason for it.']] },
+  sim3: { name: 'Final simulation 3 · Ruth 4 + David and Goliath (Ch. 19)', parts: [{ kind: 'ruth', c: 4, from: 1, to: 13 }, { kind: 'story', ch: 19, from: 61, to: 97 }],
+    vocab: 'פְּלֹנִי אַלְמֹנִי “so-and-so” · חֶלְקָה portion · שׁלף draw off · נַעַל sandal · עֵד witness · מַחֲנֶה camp · ירע (Hiphil) shout · עֹשֶׁר riches · חֶרְפָּה reproach · עָרֵל uncircumcised',
+    comp: [116, 117, 118, 120, 121, 123],
+    own: [['כַּמָּה בָנִים לְיִשַׁי?', 'שְׁמֹנָה בָנִים', 'How many sons did Jesse have? — eight sons', 'story line 62'], ['מָה שָׁלַח יִשַׁי בְּיַד דָּוִד לְאֶחָיו?', 'עֲשָׂרָה לֶחֶם', 'What did Jesse send by David to his brothers? — ten (loaves of) bread', 'story lines 68–69'], ['מָה יַעֲשֶׂה הַמֶּלֶךְ לָאִישׁ אֲשֶׁר יַכֶּה אֶת־הַפְּלִשְׁתִּי?', 'יַעֲשִׁיר אֹתוֹ עֹשֶׁר גָּדוֹל וְאֶת־בִּתּוֹ יִתֶּן־לוֹ', 'What will the king do for the man who strikes the Philistine? — he will make him very rich and give him his daughter', 'story lines 83–85'], ['בְּמִי חָרָה אַף אֱלִיאָב?', 'בְּדָוִד', 'Against whom did Eliab’s anger burn? — against David', 'story line 93']],
+    parse: [['דִּבֶּר', 'דבר', 'piel', 'qatal', '3ms', 'Ruth 4:1'], ['הַגִּידָה', 'נגד', 'hiphil', 'impv', '2ms', 'Ruth 4:4'], ['לְהָקִים', 'קום', 'hiphil', 'inf', '', 'Ruth 4:5'], ['אַשְׁחִית', 'שׁחת', 'hiphil', 'yiqtol', '1cs', 'Ruth 4:6'], ['לְקַיֵּם', 'קום', 'piel', 'inf', '', 'Ruth 4:7'], ['יִכָּרֵת', 'כרת', 'niphal', 'yiqtol', '3ms', 'Ruth 4:10'], ['וַיַּשְׁכֵּם', 'שׁכם', 'hiphil', 'wayyiqtol', '3ms', 'story line 71'], ['וַהֲשִׁיבֵנִי', 'שׁוב', 'hiphil', 'impv', '2ms', 'story line 71'], ['הָעֹמְדִים', 'עמד', 'qal', 'ptc', 'mp', 'story line 86'], ['וְהֵסִיר', 'סור', 'hiphil', 'weqatal', '3ms', 'story line 88']],
+    tr: [{ ruth: [4, 13] }, { story: 19, from: 86, to: 90, he: 'וַיֹּאמֶר דָּוִד אֶל־הָאֲנָשִׁים הָעֹמְדִים עִמּוֹ לֵאמֹר מַה־יַּעֲשׂוּ לָאִישׁ אֲשֶׁר יַכֶּה אֶת־הַפְּלִשְׁתִּי הַזֶּה וְהֵסִיר חֶרְפָּה מֵעַל יִשְׂרָאֵל', en: 'And David said to the men who were standing with him: “What will be done for the man who strikes down this Philistine and takes away the reproach from Israel?”' }],
+    syn: [
+      ['Ruth 4:4 אִם־תִּגְאַל גְּאָל — אִם means…', ['“if”', '“mother”', '“with”', '“not”'], 'אִם + yiqtol = “if you will redeem, redeem!” (אֵם with tsere = mother).'],
+      ['Ruth 4:1 וְהִנֵּה הַגֹּאֵל עֹבֵר — וְהִנֵּה + participle shows…', ['A scene seen at that moment, ongoing: “and look, the redeemer was passing by”', 'A command', 'A finished past action', 'A question'], 'הִנֵּה draws attention; the participle עֹבֵר = ongoing action (“passing by”).'],
+      ['Ruth 4:10 קָנִיתִי לִי לְאִשָּׁה — לְאִשָּׁה means…', ['“as (my) wife”: to become my wife', '“to a woman”', '“for women”', '“from a wife”'], 'לְ + noun after “take / acquire” = what someone becomes: “as a wife”.'],
+      ['Story line 77: גָּלְיָת הַפְּלִשְׁתִּי שְׁמוֹ — שְׁמוֹ is…', ['“his name”: “Goliath the Philistine by name”', '“there”', '“he heard”', '“heavens”'], 'שֵׁם + ־וֹ = his name.'],
+      ['Story line 80: בִּרְאוֹתָם אֶת־הָאִישׁ means…', ['“when they saw the man” (בְּ + infinitive + ־ָם “they”)', '“in their seeing eyes”', '“they will see the man”', '“see them!”'], 'בְּ + infinitive construct = “when”; the ending ־ָם tells who: they.']] },
+};
+Object.keys(SIM_DEF).forEach(k => { BLUEPRINTS[k] = { id: k, name: SIM_DEF[k].name, minutes: () => 75, sections: { comp: { n: 10, w: .25, label: 'Questions on the text (answer in Hebrew)' }, parse: { n: 10, w: .35, label: 'Parsing (מָה הַפֹּעַל הַזֶּה?)' }, translation: { n: 2, w: .30, label: 'Translation (strict, then smooth English)' }, syntax: { n: 5, w: .10, label: 'Questions about the syntax of the text' } } }; });
+async function buildSim(k) {
+  const D = SIM_DEF[k], lines = [], items = [];
+  for (const p of D.parts) {
+    if (p.kind === 'ruth') { lines.push({ head: `Ruth ${p.c}:${p.from}–${p.to}`, he: '' }); for (let v = p.from; v <= p.to; v++) { const x = ruthVerse(p.c, v); if (x) lines.push({ no: `${p.c}:${v}`, he: x.he, cid: x.cid }); } }
+    else { const d = await storyDoc(p.ch); if (!d) throw new Error(`The Ch. ${p.ch} story text is not in the app yet: import hebrew-update-2026-11-17.json (Library → Add material).`); lines.push({ head: `Ch. ${p.ch} story: ${d.title} (lines ${p.from}–${p.to})`, he: '' }); for (let i = p.from; i <= p.to; i++) lines.push({ no: 'l.' + i, he: d.lines[i - 1], cid: `st:${p.ch}:${i}` }); }
+  }
+  lines.unshift({ head: 'Rare vocabulary: ' + D.vocab, he: '' });
+  const comp = (i, q, model, ref) => ({ kind: 'write', sub: 'comp', heAns: 1, key: `${k}|c|${i}`, cid: 'simq:' + AN.hash(q), q, model, lines: ref, t: 'comprehension', sec: 'comp', cat: 'protected', skill: 'reading' });
+  (D.storyQ || []).forEach(i => { const x = STORYQ[i]; items.push(comp('s' + i, x.q, `${x.o[0]} — ${x.qe} ${x.oe ? '→ ' + x.oe[0] : ''}`, (x.v || []).join(', '))); });
+  (D.comp || []).forEach(i => { const x = COMPQ[i]; items.push(comp(i, x.q, `${x.o[0]} — ${x.qe} → ${x.oe ? x.oe[0] : ''}`, x.v.join(', '))); });
+  (D.own || []).forEach((x, i) => items.push(comp('o' + i, x[0], `${x[1]} — ${x[2]}`, x[3])));
+  D.parse.forEach(([form, root, stem, conj, pgn, ref]) => { const nf = AN.normHe(form); const L = lines.find(l => l.he && AN.normHe(l.he).includes(nf)) || lines.find(l => l.he && AN.normHe(l.he).replace(/[\u05B0-\u05C7]/g, '').includes(nf.replace(/[\u05B0-\u05C7]/g, ''))); items.push({ kind: 'parse', key: `${k}|p|${form}`, cid: 'f:' + AN.hash(AN.normHe(form)), form, root, stem, conj, pgn, ctx: L ? L.he : '', ref, t: stem === 'qal' ? 'qal_weak' : PB_STEM_TOPIC[stem] || stem, sec: 'parse', cat: 'protected' }); });
+  D.tr.forEach((t, i) => { if (t.ruth) { const x = ruthVerse(t.ruth[0], t.ruth[1]); items.push(...exTranslate([x]).map(y => ({ ...y, key: `${k}|t|${i}`, sec: 'translation' }))); } else items.push({ kind: 'write', sub: 'translate2', key: `${k}|t|${i}`, cid: 'simt:' + AN.hash(t.he), he: t.he, model: t.en, ref: `Ch. ${t.story} story, lines ${t.from}–${t.to}`, t: 'translation', sec: 'translation', cat: 'protected' }); });
+  D.syn.forEach((s, i) => items.push({ kind: 'mc', key: `${k}|s|${i}`, cid: 'sims:' + AN.hash(s[0]), q: heWrap(esc(s[0])), o: s[1].map(o => heWrap(esc(o))), a: 0, x: heWrap(esc(s[2])), t: 'syntax', sec: 'syntax', cat: 'protected' }));
+  // Order like the professor's paper: questions in the order of the text, parsing and syntax in between, translation near the end.
+  const comps = items.filter(x => x.sec === 'comp'), pars = items.filter(x => x.sec === 'parse'), syns = items.filter(x => x.sec === 'syntax'), trs = items.filter(x => x.sec === 'translation');
+  const out = []; let pi = 0, si = 0; comps.forEach((c, i) => { out.push(c); if (pi < pars.length) out.push(pars[pi++]); if (i % 2 === 1 && si < syns.length) out.push(syns[si++]); });
+  out.push(...pars.slice(pi), ...syns.slice(si), ...trs);
+  out.forEach((x, i) => { x.n = i + 1; x.iid = AN.itemId(x); x.cid = x.cid || AN.contentId(x); x.diff = AN.difficulty(x); if (x.o) x._order = shuffle(x.o.map((o, j) => j)); });
+  return { id: 'a' + Date.now().toString(36), type: k, blueprint: k, items: out, passage: { ref: D.name.replace(/^Final simulation \d · /, ''), verses: lines }, limits: [], limitMs: 75 * 60000, created: Date.now() };
+}
+async function startSim(k) {
+  if (EX && EX.phase && EX.phase !== 'done' && !confirm('Another test is in progress. Start this simulation instead?')) return;
+  showLoading('Preparing ' + SIM_DEF[k].name + '…', 'The same text and questions every time, so you can compare your scores.');
+  let ex; try { ex = await buildSim(k); } catch (e) { console.error(e); hideLoading(e.message || String(e)); return; }
+  hideLoading();
+  EX = { ...ex, paper: false, phase: 'intro', ans: {}, ms: {}, cur: 0, elapsed: 0, interrupts: 0, writeMs: 0, entryMs: 0 };
+  exSave(); renderExam();
+}
+const simPct = a => { const t = Number(a.total) || 0; return Math.round(t <= 1 ? t * 100 : t); };
+function simResults(k) { return (S.assess || []).filter(a => a.type === k && a.end).sort((a, b) => a.end - b.end); }
+// Passage: show line labels (verse / story line) and part headings; show the text with EVERY item (as on paper).
+(function () {
+  const _ph = passageHTML;
+  passageHTML = function () {
+    if (!EX || !/^sim/.test(EX.type)) return _ph.apply(this, arguments);
+    return `<details class="panel" open><summary>Text: ${esc(EX.passage.ref)}</summary><div class="passage lines" style="--rsize:1.3rem;margin-top:8px">${EX.passage.verses.map(x => x.head ? `<div class="small" style="margin:8px 0 2px;font-weight:700">${heWrap(esc(x.head))}</div>` : `<div class="ln" style="cursor:default"><span class="no">${esc(x.no || '')}</span><span>${esc(x.he)}</span></div>`).join('')}</div></details>`;
+  };
+})();
+function simCardHTML() {
+  return `<div class="panel stack" id="sim-card" style="border-color:var(--accent)"><div class="row" style="justify-content:space-between"><h2 style="margin:0">Final simulations (3)</h2><span class="small muted">75 min each · closed book</span></div>
+    <p class="small muted">Built like the professor’s midterm and the syllabus: a studied text, questions about it in Hebrew, parsing on the quiz grid (with stem), translation, and syntax questions. Rare words are given. Same paper every time, so the scores can be compared. Suggested: #1 Wed 18, #2 Sat 21, #3 Sun 22.</p>
+    <div class="plan">${Object.keys(SIM_DEF).map((k, i) => { const r = simResults(k), last = r[r.length - 1]; return `<div class="step ${r.length ? 'done' : ''}"><span class="n">${r.length ? '✓' : i + 1}</span><div><b>${esc(SIM_DEF[k].name)}</b><div class="small muted">${r.length ? `Taken ${r.length}× · first score ${simPct(r[0])}%${r.length > 1 ? ` · last ${simPct(last)}%` : ''}` : 'not taken yet'}</div></div><button class="btn ${r.length ? '' : 'primary'}" data-sim="${k}">${r.length ? 'Take again' : 'Start'}</button></div>`; }).join('')}</div></div>`;
+}
+(function () {
+  // In the Final rescue tab, at the top.
+  const _rr = renderRescue;
+  renderRescue = function () { _rr.apply(this, arguments); const v = $('#v-rescue'); if (!v || $('#sim-card')) return; const top = v.querySelector('.stack > div'); (top || v).insertAdjacentHTML('afterend', simCardHTML()); $$('[data-sim]').forEach(b => b.onclick = () => startSim(b.dataset.sim)); };
+  // In the plan: Wednesday = simulation 1, Saturday = simulation 2, Sunday = simulation 3 (instead of the random timed final).
+  const _rb = rescueBlocks;
+  rescueBlocks = function () {
+    const B = _rb.apply(this, arguments), d = dayKey(); if (!B) return B;
+    const map = { '2026-11-18': 'sim1', '2026-11-21': 'sim2', '2026-11-22': 'sim3' }, k = map[d]; if (!k) return B;
+    const blk = { id: 'mock', min: 75, title: SIM_DEF[k].name + ' (75 min, closed book)', sub: 'Questions in Hebrew on the text, parsing with stem, translation, syntax. Phone away, no notes.', act: () => startSim(k), check: () => simResults(k).some(a => dayKey(new Date(a.end)) === d) };
+    const i = B.findIndex(b => b.id === 'mock'); if (i >= 0) B[i] = blk; else B.splice(1, 0, blk);
+    if (k === 'sim3') { const j = B.findIndex(b => b.id === 'mix'); if (j >= 0) B.splice(j, 1); }
+    return B;
+  };
+})();
+
+</script>
+<script>
 // Colour mode: dark (default), light, or the same as the computer. Remembered on this device.
 (function () {
   const order = ['dark', 'light', 'auto'], lab = { dark: '☾ Dark', light: '☀ Light', auto: '◐ Auto' };
@@ -8982,5 +9086,5 @@ ${tbl(['Vowel under the prefix', 'Stem', 'Imperfect on קטל', 'Then confirm wi
   const b = document.getElementById('btn-theme'); if (b) b.onclick = () => { t = order[(order.indexOf(t) + 1) % order.length]; try { localStorage.setItem('het-theme', t); } catch {} apply(); };
 })();
 </script>
-<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='cd8a8729f6';</script>
+<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='b540f6e931';</script>
 </body></html>
