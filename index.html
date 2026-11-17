@@ -4011,7 +4011,7 @@ function courseIndex() {
     if (/[A-Za-z]/.test(h)) return;
     for (const v of String(h).split(/\s*\/\s*/)) { const n = lexNorm(v).replace(/[־\s]/g, ''); if (!n) continue; const e = { h: v.replace(/־$/, ''), g, src, verb, stem: stem || '', root: rootHint }; if (!exact.has(n)) exact.set(n, e); else (exact.get(n).others = exact.get(n).others || []).push(e); const c = lexCons(n); if (!byCons.has(c)) byCons.set(c, []); byCons.get(c).push(e); } };
   VOCAB.forEach(v => add(v.h, v.g, 'main list', !!v.v));
-  try { for (const [id, d] of Object.entries(DECKS)) { if (id === 'core') continue; for (const c of d.cards()) if (/[א-ת]/.test(c.front) && !/[א-ת]/.test(c.back)) add(String(c.front).replace(/<[^>]+>/g, ''), String(c.back).replace(/<[^>]+>/g, ''), d.name.split(/[:&(]/)[0].trim(), c.topic === 'forms'); } } catch (e) { console.error(e); }
+  try { for (const [id, d] of Object.entries(DECKS)) { if (id === 'core' || id === 'patterns') continue; for (const c of d.cards()) if (/[א-ת]/.test(c.front) && !/[א-ת]/.test(c.back)) add(String(c.front).replace(/<[^>]+>/g, ''), String(c.back).replace(/<[^>]+>/g, ''), d.name.split(/[:&(]/)[0].trim(), c.topic === 'forms'); } } catch (e) { console.error(e); }
   if (S.vbc) for (const [ch, c] of Object.entries(S.vbc)) for (const e of c.items || []) add(e.h, e.g, 'Ch. ' + ch, /verb|participle/i.test(e.sec || '') || !!e.stem || /^to /.test(e.g), e.stem);
   // Verbs of the course lists indexed by root and stem (stem from the list, or read from the dictionary): Hiphil הִגִּיד → נגד + Hiphil.
   const byRoot = new Map(), idx = lexIndex();
@@ -6660,7 +6660,7 @@ async function doUpload() {
       if (ins) { ins.id = id; ins.docId = id; ins.addedAt = Date.now(); await saveInsight(ins); }
       const m = { title: meta.title || j.title, kind: KIND_LABEL[meta.kind] ? meta.kind : 'notes', chapter: Number(meta.chapter) || null, topics: meta.topics, summary: meta.summary, graded: (!!meta.graded || meta.kind === 'quiz' || meta.kind === 'exam') && purpose === 'test', source: 'upload', addedAt: Date.now(), studied: purpose === 'studied', chars: text.length, parts: nParts };
       if (S.db) await S.db.doc('libmeta/' + id).set(m);
-      S.lib.push({ id, ...m }); lsSet('libmeta', S.lib); added.push({ id, m });
+      if (!S.lib.some(l => l.id === id)) S.lib.push({ id, ...m }); lsSet('libmeta', S.lib); added.push({ id, m });
       if (purpose === 'studied') { m.topics.forEach(t => S.prog.covered[t] = true); saveProg(); }
       if (ins) { upRow(i, 'good', `Weak points: ${ins.weak.length ? ins.weak.map(w => esc(WP[w.wp].short)).join(', ') : 'none listed'} · new drills: ${ins.parse.length + ins.suffix.length + ins.mc.length}${ins.checkpoint ? ' · stopped at: ' + heWrap(esc(ins.checkpoint)) : ''}`); added[added.length - 1].ins = ins; continue; }
       upRow(i, note ? 'warn' : 'good', `${note ? esc(note) + ' ' : ''}${m.topics.length ? 'Topics: ' + m.topics.map(topicName).map(esc).join(', ') : esc(KIND_LABEL[m.kind] || m.kind)}`);
@@ -8847,6 +8847,132 @@ async function pxContext(front, en) {
 
 </script>
 <script>
+// ---------- Stem by the vowels: the vowel under the prefix (or the first vowel) tells the stem ----------
+// Drill on real forms (Ruth, class stories, course passages) whose roots have no weak letter that changes the prefix vowel,
+// plus the model verb קטל in every stem. After each answer: the key signs coloured in the word, the rule, and the
+// correct stem next to the stem you chose, on the same model verb, so the vowel difference is visible.
+const VK_TPL = {
+  qal: { qatal: 'קָטַל', yiqtol: 'יִקְטֹל', wayyiqtol: 'וַיִּקְטֹל', weqatal: 'וְקָטַל', weyiqtol: 'וְיִקְטֹל', impv: 'קְטֹל', inf: 'קְטֹל', ptc: 'קֹטֵל' },
+  niphal: { qatal: 'נִקְטַל', yiqtol: 'יִקָּטֵל', wayyiqtol: 'וַיִּקָּטֵל', weqatal: 'וְנִקְטַל', weyiqtol: 'וְיִקָּטֵל', impv: 'הִקָּטֵל', inf: 'הִקָּטֵל', ptc: 'נִקְטָל' },
+  piel: { qatal: 'קִטֵּל', yiqtol: 'יְקַטֵּל', wayyiqtol: 'וַיְקַטֵּל', weqatal: 'וְקִטֵּל', weyiqtol: 'וִיקַטֵּל', impv: 'קַטֵּל', inf: 'קַטֵּל', ptc: 'מְקַטֵּל' },
+  pual: { qatal: 'קֻטַּל', yiqtol: 'יְקֻטַּל', wayyiqtol: 'וַיְקֻטַּל', weqatal: 'וְקֻטַּל', weyiqtol: 'וִיקֻטַּל', ptc: 'מְקֻטָּל' },
+  hithpael: { qatal: 'הִתְקַטֵּל', yiqtol: 'יִתְקַטֵּל', wayyiqtol: 'וַיִּתְקַטֵּל', weqatal: 'וְהִתְקַטֵּל', weyiqtol: 'וְיִתְקַטֵּל', impv: 'הִתְקַטֵּל', inf: 'הִתְקַטֵּל', ptc: 'מִתְקַטֵּל' },
+  hiphil: { qatal: 'הִקְטִיל', yiqtol: 'יַקְטִיל', wayyiqtol: 'וַיַּקְטֵל', weqatal: 'וְהִקְטִיל', weyiqtol: 'וְיַקְטִיל', impv: 'הַקְטֵל', inf: 'הַקְטִיל', ptc: 'מַקְטִיל' },
+  hophal: { qatal: 'הָקְטַל', yiqtol: 'יָקְטַל', wayyiqtol: 'וַיָּקְטַל', weqatal: 'וְהָקְטַל', weyiqtol: 'וְיָקְטַל', inf: 'הָקְטַל', ptc: 'מָקְטָל' },
+};
+// Hophal: the ָ under the prefix is read “o” (qamets-hatuf); the general pronunciation engine cannot tell, so the model forms are given here.
+const VK_SAY = { 'הָקְטַל': 'hoq-TAL', 'יָקְטַל': 'yoq-TAL', 'וַיָּקְטַל': 'vay-yoq-TAL', 'וְהָקְטַל': 've-hoq-TAL', 'וְיָקְטַל': 've-yoq-TAL', 'מָקְטָל': 'moq-TAL' };
+const VK_EN = { qal: 'killed', niphal: 'was killed', piel: 'massacred', pual: 'was massacred', hithpael: 'killed himself', hiphil: 'caused to kill', hophal: 'was made to kill' };
+const VK_GROUP = c => ['yiqtol', 'wayyiqtol', 'weyiqtol'].includes(c) ? 'prefix' : ['qatal', 'weqatal'].includes(c) ? 'perfect' : c;
+// The rule to look at, per stem and form group.
+const VK_RULE = {
+  prefix: { qal: 'prefix with ִ (i) — and ֹ (o) before the last letter (for “I” the prefix is אֶ)', niphal: 'prefix with ִ (i) + the FIRST root letter doubled (the hidden נ) + ֵ (e) (for “I”: אֶ)', piel: 'prefix with ְ (shewa) + ַ (a) under the 1st root letter + the MIDDLE letter doubled (if it is a guttural or ר: no dot, the vowel before it gets longer; for “I” the prefix is אֲ)', pual: 'prefix with ְ (shewa) + ֻ (u) under the 1st root letter + doubled middle (before ר / a guttural: ֹ instead of ֻ)', hithpael: 'prefix + תְ (יִתְ / תִּתְ / וַיִּתְ) + doubled middle', hiphil: 'prefix with ַ (a) + ִי before the last letter (wayyiqtol: ֵ)', hophal: 'prefix with ָ or ֻ (o / u): this ָ is read “o” (yoq-TAL)' },
+  perfect: { qal: 'NO prefix; ָ (a) under the 1st root letter', niphal: 'נִ in front', piel: 'NO prefix; ִ (i) under the 1st root letter + doubled middle (guttural / ר: ֵ instead, e.g. בֵּרַךְ)', pual: 'NO prefix; ֻ (u) under the 1st root letter + doubled middle', hithpael: 'הִתְ in front + doubled middle', hiphil: 'הִ in front + ִי before the last letter', hophal: 'הָ or הֻ in front: this ָ is read “o” (hoq-TAL)' },
+  ptc: { qal: 'NO prefix; ֹ (o) after the 1st root letter + ֵ (e): קֹטֵל', niphal: 'נִ in front + ָ before the last letter', piel: 'מְ in front + doubled middle', pual: 'מְ in front + ֻ (u) (before ר / a guttural: ֹ, e.g. מְצֹרָע)', hithpael: 'מִתְ in front', hiphil: 'מַ in front + ִי', hophal: 'מָ or מֻ in front' },
+  impv: { qal: 'no prefix: like the imperfect without its prefix (קְטֹל)', niphal: 'הִ + doubled first root letter', piel: 'no prefix, ַ (a) + doubled middle', hithpael: 'הִתְ in front', hiphil: 'הַ in front (a-vowel) + ֵ', hophal: '—', pual: '—' },
+  inf: { qal: 'no stem prefix (often לִ in front): ְ…ֹ', niphal: 'הִ + doubled first root letter', piel: 'ַ (a) + doubled middle', hithpael: 'הִתְ in front', hiphil: 'הַ in front + ִי', hophal: 'הָ in front', pual: '—' },
+};
+const VK_STEMS = ['qal', 'niphal', 'piel', 'pual', 'hithpael', 'hiphil', 'hophal'];
+const VK_NEAR = { qal: ['niphal', 'piel', 'hiphil'], niphal: ['qal', 'piel', 'hithpael'], piel: ['qal', 'pual', 'hiphil'], pual: ['piel', 'hophal', 'qal'], hithpael: ['niphal', 'piel', 'hiphil'], hiphil: ['qal', 'hophal', 'piel'], hophal: ['hiphil', 'pual', 'qal'] };
+const vkClean = r => String(r || '').replace(/[ְ-ׇ]/g, '').replace(/[ךםןףץ]/g, c => ({ 'ך': 'כ', 'ם': 'מ', 'ן': 'נ', 'ף': 'פ', 'ץ': 'צ' }[c]));
+// Roots whose weak letters change the prefix vowel are left out (so the rule always holds): I-guttural, I-נ, I-י/ו, hollow, III-ה, double.
+const vkStrong = r => { r = vkClean(r); return r.length === 3 && !/[אהחענוי]/.test(r[0]) && !/[וי]/.test(r[1]) && r[2] !== 'ה' && r[1] !== r[2]; };
+async function vkPool() {
+  const out = [], seen = new Set();
+  const push = (x, src) => { if (!x || !VK_STEMS.includes(x.stem) || !VK_TPL[x.stem][x.conj] || !vkStrong(x.root)) return; const k = AN.normHe(x.form); if (seen.has(k)) return; seen.add(k); out.push({ ...x, src }); };
+  sfPool().forEach(x => push(x, x.ref || ''));
+  for (const ch of STORY_CHS) { const d = await storyDoc(ch); (d && d.verbs || []).forEach(v => push({ form: v[0], root: v[1], stem: v[2], conj: v[3], pgn: v[4], ref: `Ch. ${ch} story` }, 'story')); }
+  VK_STEMS.forEach(s => Object.entries(VK_TPL[s]).forEach(([c, f]) => push({ form: f, root: 'קטל', stem: s, conj: c, pgn: ['inf'].includes(c) ? '' : c === 'ptc' ? 'ms' : c === 'impv' ? '2ms' : '3ms', ref: 'model verb קטל' }, 'model')));
+  return out;
+}
+// Colour the signs that decide the stem: the prefix (after וַ / וְ / הַ / לְ) and every letter with a dot after it.
+function vkMark(form, stem, conj) {
+  const g = String(form).match(/[א-תיִ-ﭏ][֑-ׇ]*|[^א-ת]/g) || [];
+  let i = 0; const out = [];
+  const isConj = s => /^ו[ְִַָ]?/.test(s) && i === 0;
+  if (g[0] && /^ו/.test(g[0]) && /[ְַָ]|ּ/.test(g[0]) && g.length > 3) { out.push(['c', g[0]]); i = 1; }
+  if (conj === 'inf' && g[i] && /^[לבכ]/.test(g[i]) && stem === 'qal') { out.push(['c', g[i]]); i++; }
+  const hasPrefix = !(stem === 'qal' && ['qatal', 'weqatal', 'impv', 'inf', 'ptc'].includes(conj)) && !(['piel', 'pual'].includes(stem) && ['qatal', 'weqatal', 'impv', 'inf'].includes(conj));
+  let k = 0;
+  for (; i < g.length; i++, k++) {
+    const s = g[i];
+    if (hasPrefix && k === 0) out.push(['p', s]);
+    else if (stem === 'hithpael' && k === 1 && /^[תשׂשסצז]/.test(s)) out.push(['p', s]);
+    else if (k === 0 && !hasPrefix) out.push(['v', s]);
+    else if (/ּ/.test(s) && !/^[וּ]/.test(s) && !(i === g.length - 1) && !(/^[בגדכפת]/.test(s) && /ְ/.test(g[i - 1] || ''))) out.push(['d', s]);
+    else if (/^י$/.test(s) && stem === 'hiphil') out.push(['v', s]);
+    else out.push(['n', s]);
+  }
+  const col = { c: '#b9a6ff', p: '#ffb454', v: '#5fd38d', d: '#ff7ab6', n: 'inherit' };
+  return out.map(([t, s]) => `<span style="color:${col[t]};${t !== 'n' ? 'text-decoration:underline;text-underline-offset:6px' : ''}">${esc(s)}</span>`).join('');
+}
+function vkItem(x) {
+  const opts = [x.stem, ...VK_NEAR[x.stem]].map(s => STEMS[s][1]);
+  return { kind: 'mc', key: 'vk|' + x.form, t: PB_STEM_TOPIC[x.stem] || x.stem, w: x.form, vk: x, q: `<div class="form-big" lang="he">${esc(x.form)}</div><div style="text-align:center">${VK_SAY[x.form] ? `<span class="pr">${VK_SAY[x.form]}</span>` : PR(x.form)}</div><div style="text-align:center"><b>Which stem (בִּנְיָן)?</b> <span class="small muted">Look at the vowel under the prefix, or the first vowel. Form: ${esc(CONJ[x.conj] ? CONJ[x.conj][1] : x.conj)}</span></div>`, o: opts, a: 0, x: '', cat: 'stem' };
+}
+function vkFeedback(it, chosenIdx) {
+  const x = it.vk, grp = VK_GROUP(x.conj), rule = (VK_RULE[grp] || VK_RULE.prefix)[x.stem];
+  const chosen = it.o[chosenIdx] ? VK_STEMS.find(s => STEMS[s][1] === it.o[chosenIdx]) : null;
+  const t = VK_TPL[x.stem][x.conj], tc = chosen && chosen !== x.stem ? (VK_TPL[chosen] || {})[x.conj] : null;
+  const row = (s, f, me) => `<tr${me ? ' style="background:rgba(95,211,141,.12)"' : ''}><td><b>${STEMS[s][1]}</b>${me ? ' ✓' : ' (your choice)'}</td><td class="he" lang="he" style="font-size:1.6rem">${f ? vkMark(f, s, x.conj) : '—'}</td><td class="small">${f ? esc(VK_SAY[f] || PR_TEXT(f)) : ''}</td><td class="small">${heWrap(esc(pxMarks((VK_RULE[grp] || VK_RULE.prefix)[s] || '')))}</td></tr>`;
+  return `<div class="stack small" style="gap:8px;margin-top:6px">
+    <div class="he" lang="he" style="font-size:2.2rem;text-align:center">${vkMark(x.form, x.stem, x.conj)}</div>
+    <div class="row" style="justify-content:center;gap:12px;font-size:.75rem"><span style="color:#b9a6ff">■ “and” / “to”</span><span style="color:#ffb454">■ prefix (its vowel = the key)</span><span style="color:#5fd38d">■ first vowel / Hiphil ◌ִי</span><span style="color:#ff7ab6">■ doubled letter</span></div>
+    <div><b>${STEMS[x.stem][1]} ${esc(CONJ[x.conj] ? CONJ[x.conj][1] : x.conj)}</b>${x.pgn ? ' ' + esc(x.pgn) : ''} · root ${H(esc([...vkClean(x.root)].join('־')))} · <span class="muted">${esc(x.src === 'model' ? 'model verb' : x.ref || '')}</span></div>
+    <div><b>Look at:</b> ${heWrap(esc(pxMarks(rule)))}</div>
+    <div class="tw"><table class="mini" style="width:100%"><tr><th>Stem</th><th>Same form on the model verb קטל</th><th>Say it</th><th>Rule</th></tr>${row(x.stem, t, true)}${tc !== null && chosen && chosen !== x.stem ? row(chosen, tc, false) : ''}</table></div>
+    <div class="muted">On קטל: ${STEMS[x.stem][1]} = “${VK_EN[x.stem]}”. Compare the two rows: the difference is only in the vowels and the dots.</div></div>`;
+}
+const PR_TEXT = f => { try { const d = document.createElement('div'); d.innerHTML = PR(f); return d.textContent.trim(); } catch { return ''; } };
+async function startVowelKey(o = {}) {
+  const pool = await vkPool(); const n = o.n || 20;
+  const by = {}; pool.forEach(x => (by[x.stem] = by[x.stem] || []).push(x));
+  const pick = []; const stems = VK_STEMS.filter(s => by[s] && by[s].length);
+  // Interleave the stems: every stem appears, real forms first, the model verb fills the gaps.
+  for (let r = 0; pick.length < n && r < 40; r++) for (const s of shuffle(stems.slice())) { const L = by[s]; if (!L.length || pick.length >= n) continue; const realIdx = L.findIndex(x => x.src !== 'model'); pick.push(L.splice(realIdx >= 0 && Math.random() < .7 ? realIdx : Math.floor(Math.random() * L.length), 1)[0]); }
+  startSession({ title: 'Stem by the vowels (בִּנְיָן)', items: shuffle(pick).map(vkItem), back: S.tab === 'rescue' ? 'rescue' : S.tab === 'today' ? 'today' : 'practice', noVary: false, mode: 'practice', planBlock: o.planBlock });
+}
+(function () {
+  const _am = answerMC;
+  answerMC = function (idx) {
+    const it = SES && SES.items[SES.i]; const r = _am.apply(this, arguments);
+    try { if (it && it.vk) { const fb = document.querySelector('#fb .fb'); if (fb && !fb.querySelector('.vk-fb')) { const d = document.createElement('div'); d.className = 'vk-fb'; d.innerHTML = vkFeedback(it, idx); fb.appendChild(d); } } } catch (e) { console.error(e); }
+    return r;
+  };
+  const _gu = giveUp;
+  giveUp = function () { const it = SES && SES.items[SES.i]; const r = _gu.apply(this, arguments); try { if (it && it.vk) { const fb = document.querySelector('#fb .fb'); if (fb && !fb.querySelector('.vk-fb')) { const d = document.createElement('div'); d.className = 'vk-fb'; d.innerHTML = vkFeedback(it, -1); fb.appendChild(d); } } } catch (e) { console.error(e); } return r; };
+})();
+// The lesson that goes with it.
+RL.vowels = { title: 'Lesson 3b · The stem is in the vowels: look under the prefix', html: () => `
+<p><b>One question decides most stems: which vowel is under the prefix (or, with no prefix, under the first letter)?</b> Then confirm with the dot (dagesh) and the vowel before the last letter.</p>
+${tbl(['Vowel under the prefix', 'Stem', 'Imperfect on קטל', 'Then confirm with'], [
+  [heS('ִ') + ' (i)', 'Qal', heS('יִקְטֹל'), heS('ֹ') + ' (o) before the last letter'],
+  [heS('ִ') + ' (i)', 'Niphal', heS('יִקָּטֵל'), 'the FIRST root letter doubled + ' + heS('ֵ')],
+  [heS('ִתְ'), 'Hithpael', heS('יִתְקַטֵּל'), 'ת after the prefix + doubled middle'],
+  [heS('ְ') + ' (shewa)', '<b>Piel</b>', heS('יְקַטֵּל'), heS('ַ') + ' under the 1st letter + doubled MIDDLE letter'],
+  [heS('ְ') + ' (shewa)', 'Pual', heS('יְקֻטַּל'), heS('ֻ') + ' (u) under the 1st letter'],
+  [heS('ַ') + ' (a)', 'Hiphil', heS('יַקְטִיל'), heS('ִי') + ' before the last letter'],
+  [heS('ָ / ֻ') + ' (o / u)', 'Hophal', heS('יָקְטַל'), heS('ַ') + ' before the last letter']])}
+<p><b>Perfect (no prefix):</b> ${heS('קָטַל')} Qal (ָ under the 1st letter) · ${heS('נִקְטַל')} Niphal (נִ) · ${heS('קִטֵּל')} Piel (ִ + doubled middle) · ${heS('קֻטַּל')} Pual (ֻ) · ${heS('הִתְקַטֵּל')} Hithpael · ${heS('הִקְטִיל')} Hiphil (הִ + ִי) · ${heS('הָקְטַל')} Hophal (הָ).</p>
+<p><b>Participle:</b> ${heS('קֹטֵל')} Qal (ֹ…ֵ, no prefix) · ${heS('נִקְטָל')} Niphal · ${heS('מְקַטֵּל')} Piel (מְ) · ${heS('מְקֻטָּל')} Pual · ${heS('מִתְקַטֵּל')} Hithpael · ${heS('מַקְטִיל')} Hiphil (מַ) · ${heS('מָקְטָל')} Hophal.</p>
+<p><b>Worked example (Ruth 2:4):</b> ${heS('יְבָרֶכְךָ יְהוָה')} “may YHWH bless you”. Prefix ${heS('יְ')} has <b>shewa</b> → Piel (Qal would be ${heS('יִ')}). The middle root letter is ר, which cannot be doubled, so instead of a dot the ב gets a longer vowel ${heS('ָ')} (${heS('בָ')}). Root ב־ר־ך. The same for ${heS('תְּבָרֵךְ')} “you / she will bless”: ${heS('תְּ')} with shewa = Piel.</p>
+<p><b>Careful: weak roots change the prefix vowel.</b> ${heS('וַיֵּשֶׁב')} (I-י, Qal) has ${heS('ֵ')}; ${heS('וַיָּקָם')} (hollow, Qal) has ${heS('ָ')}; ${heS('יַעֲמֹד')} (first letter ע, Qal) has ${heS('ַ')}. When the root has א ה ח ע נ י ו, check Lesson 4 before you trust the prefix vowel.</p>` };
+(function () {
+  try {
+    RX_LESSONS.splice(3, 0, { id: 'vowels', sets: [], check: 'stems', drills: [['Stem by the vowels (20 forms)', () => startVowelKey({ n: 20 })], ['Stem by the vowels (40 forms)', () => startVowelKey({ n: 40 })]] });
+    const _rb = rescueBlocks;
+    rescueBlocks = function () {
+      const B = _rb.apply(this, arguments); const day = RX_DAY[dayKey()]; if (!B || !day || [2, 5, 7].includes(day)) return B;
+      const i = B.findIndex(b => b.id === 'cards');
+      B.splice(i >= 0 ? i + 1 : 1, 0, { id: 'vk', min: 12, title: 'Stem by the vowels (20 forms)', sub: 'Look under the prefix: ִ Qal/Niphal · ְ Piel/Pual · ַ Hiphil · ָ/ֻ Hophal. After each answer, your choice and the right stem side by side.', act: () => startVowelKey({ n: 20, planBlock: 'vk' }) });
+      if (day === 3) { const L = B.find(b => b.id === 'lesson'); if (L) L.act = () => rxLesson(['vowels', 'stems', 'weak'], [...RX_CHECK.stems, ...RX_CHECK.weak], 'lesson'); }
+      return B;
+    };
+  } catch (e) { console.error(e); }
+})();
+
+</script>
+<script>
 // Colour mode: dark (default), light, or the same as the computer. Remembered on this device.
 (function () {
   const order = ['dark', 'light', 'auto'], lab = { dark: '☾ Dark', light: '☀ Light', auto: '◐ Auto' };
@@ -8856,5 +8982,5 @@ async function pxContext(front, en) {
   const b = document.getElementById('btn-theme'); if (b) b.onclick = () => { t = order[(order.indexOf(t) + 1) % order.length]; try { localStorage.setItem('het-theme', t); } catch {} apply(); };
 })();
 </script>
-<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='1ffa4baad5';</script>
+<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='cd8a8729f6';</script>
 </body></html>
