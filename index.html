@@ -7413,7 +7413,7 @@ async function vxIndex() {
     const add = (w, ex) => { const a = vxAnalyze(w); if (!a || !a.lemma) return; const k = vxKey(a.lemma); const l = idx.get(k) || []; if (l.length < 8 && !l.some(e => e.ref === ex.ref)) l.push({ ...ex, form: w }); idx.set(k, l); };
     const ruthEn = new Map(); (PBANK.verses || []).forEach(v => { if (v[0] === 'Ruth') ruthEn.set(v[1] + ':' + v[2], v[4]); });
     let n = 0; const tick = async () => { if (++n % 300 === 0) await new Promise(r => setTimeout(r, 0)); };
-    for (const c of ['1', '2', '3', '4']) for (const [v, he] of (RUTH.verses[c] || [])) { const line = String(he); for (const w of lexWords(line)) { add(w, { he: line, ref: `Ruth ${c}:${v}`, en: ruthEn.get(c + ':' + v) || '' }); await tick(); } }
+    for (const c of ['1', '2', '3', '4']) for (const [v, he] of (RUTH.verses[c] || [])) { const line = String(he); for (const w of lexWords(line)) { add(w, { he: line, ref: `Ruth ${c}:${v}`, en: ruthEn.get(c + ':' + v) || RUTH_EN[c + ':' + v] || '' }); await tick(); } }
     // Class-story PDFs come out with lines mixed up, so their sentences are not used: Ruth first, then the other Bible passages of the course (with English).
     for (const v of (PBANK.verses || [])) if (v[0] !== 'Ruth') for (const w of lexWords(v[3])) { add(w, { he: v[3], ref: `${v[0]} ${v[1]}:${v[2]}`, en: v[4] || '', other: 1 }); await tick(); }
     VX.idx = idx; return idx;
@@ -8632,6 +8632,221 @@ function renderRescue() {
 
 </script>
 <script>
+// ---------- Pattern cards: after “Show the answer”, take the word apart (visual pattern + why), root, parsing, English + Spanish, and a sentence ----------
+// Each piece of the word gets a colour and a label; the explanations come from one table so the same sign is always explained the same way.
+const PX_ROLE = {
+  R: ['root', 'root letter'], Rq: ['root', 'root letter + ֹ (holem) after the 1st root letter = the Qal participle vowel (ongoing action: “keeping”)'],
+  wa: ['conj', 'וַ + a doubled next letter = wayyiqtol: “and” + story past (“and he did”)'], we: ['conj', 'וְ / וּ = “and”; on a perfect it makes weqatal (future / instruction), on a prefix form weyiqtol (“so that”)'],
+  art: ['conj', 'הַ = the article “the”; it doubles the next letter (that dot is the article, NOT Piel)'], le: ['conj', 'לְ / לִ = “to”: here before an infinitive (“to …”)'], be: ['conj', 'בְּ = “in / when”: before an infinitive it means “when …”'], al: ['conj', 'אַל = “do not” (with a prefix form: a negative command)'],
+  prep: ['conj', 'לְ = “to, for” (a preposition with its own vowel before the ending)'], prepW: ['conj', 'עִם = “with” (the מ doubles before an ending)'], prepT: ['conj', 'אֶל = “to, toward” (with יְ before the ending, like a plural)'], prepO: ['conj', 'עַל = “on, upon” (with יִ before the ending, like a plural)'], noun: ['root', 'the noun itself'], nounM: ['stem', 'מ = a noun-forming prefix (part of the noun), NOT “from”'],
+  yi: ['pgn', 'prefix י = he (3ms); with וּ at the end = they (3mp)'], ti: ['pgn', 'prefix ת = she (3fs) OR you (2ms); with ִי at the end = you (f.); with וּ = you (pl.); with נָה = they / you (f. pl.)'], e1: ['pgn', 'prefix א = I (1cs)'], n1p: ['pgn', 'prefix נ = we (1cp): a prefix form, not Niphal (Niphal perfect would be נִשְׁמַר with a)'],
+  s3fs: ['pgn', 'ending ָה = she (3fs) on a perfect'], s2ms: ['pgn', 'ending תָּ = you (m.) on a perfect'], s2fs: ['pgn', 'ending תְּ = you (f.) on a perfect (NOT “she”: she is ָה)'], s1cs: ['pgn', 'ending תִּי = I on a perfect'], s3cp: ['pgn', 'ending וּ = they on a perfect'], s2mp: ['pgn', 'ending תֶם = you (m. pl.) on a perfect'], s1cp: ['pgn', 'ending נוּ = we on a perfect'],
+  sYi: ['pgn', 'ending ִי with a ת prefix (or on an imperative) = you (f. sg.)'], sU: ['pgn', 'ending וּ = plural: they (with י) / you pl. (with ת or on an imperative)'], sNa: ['pgn', 'ending נָה = feminine plural: they (f.) / you (f. pl.)'], coh: ['pgn', 'ending ָה on a 1st-person prefix form = cohortative “let me / let us” (NOT “she”)'],
+  ptcFs: ['pgn', 'ending ֶת = feminine singular (participle)'], ptcMp: ['pgn', 'ending ִים = masculine plural'], fpl: ['pgn', 'ת (from וֹת) = feminine plural noun ending'], fsg: ['pgn', 'ת = feminine noun ending (ה becomes ת before an ending)'],
+  infA: ['stem', 'וֹ (holem-vav) between the 2nd and 3rd root letters = infinitive absolute (“surely”)'], inf: ['stem', 'וֹת / ת = the infinitive ending of verbs whose last root letter is ה'], infT: ['stem', 'ת = infinitive ending (כַּלּוֹת “to finish”, last root letter ה)'],
+  hiph: ['stem', 'ה at the start of a perfect = Hiphil sign (“cause someone to …”)'], hiphY: ['stem', 'prefix with an a-vowel (יַ / תַּ / מַ) = Hiphil'], hiphI: ['stem', 'ִי (hireq-yod) before the last root letter = the Hiphil vowel'], hiphE: ['stem', 'root letter with ֵ (tsere) = the SHORT Hiphil vowel (wayyiqtol / jussive / imperative)'],
+  hiphV: ['stem', 'Hiphil prefix + וֹ: the first root letter י became וֹ (I-י verb: ילד, יצא)'], hiphHol: ['stem', 'הֵ = Hiphil ה with ֵ, typical of hollow roots (the middle ו is gone)'],
+  niph: ['stem', 'נִ at the start of a perfect / participle = Niphal (passive / “-self”)'], niphD: ['stem', 'first root letter doubled right after the prefix = the Niphal נ assimilated (Niphal)'], niphH: ['stem', 'הִ = Niphal infinitive / imperative prefix (the נ is hidden in the doubled letter)'],
+  pielD: ['stem', 'dot (dagesh) in the MIDDLE root letter = doubled stem (Piel / Pual / Hithpael)'], pielE: ['stem', 'shewa under the prefix (יְ / תְ / מְ) = Piel or Pual'], pualU: ['stem', 'u-vowel (ֻ) under the first root letter = Pual (passive of Piel)'], gutL: ['stem', 'root letter with a longer vowel: the next letter (guttural ר / ה / א / ע) cannot be doubled, so the Piel doubling is replaced by a longer vowel'],
+  hith: ['stem', 'הִתְ / יִתְ / מִתְ / תִּתְ = Hithpael (“-self”, each other, to and fro)'], hisht: ['stem', 'שְׁתַּ = the Hishtaphel sign (only חוה “bow down, worship”)'], hishH: ['stem', 'ה = prefix of the perfect / infinitive (here Hishtaphel)'], hophO: ['stem', 'o / u under the prefix (הָ / יָ / מָ / הֻ) = Hophal (passive of Hiphil)'], mptc: ['stem', 'מְ / מִ prefix = participle of a derived stem (Piel / Pual / Hithpael)'],
+  inun: ['stem', 'dot (dagesh) here = the lost נ of the root (I-נ verb), NOT Piel'], iyod: ['stem', 'prefix with ֵ (tsere) = I-י verb: the first root letter י is gone (Qal)'], iiiH: ['stem', 'ִי = the last root letter ה became י before the ending (III-ה verb)'],
+  oMe: ['suf', 'ending נִי on a verb = me (object)'], oMy: ['suf', 'ending ִי = me / my'], oHis: ['suf', 'ending וֹ = his / him (here: who does the action)'], oHisP: ['suf', 'ending ָיו = his (on a plural noun)'], oHer: ['suf', 'ending הּ (with a dot) = her'], oHerP: ['suf', 'ending ֶיהָ = her (on a plural / preposition)'], oYouF: ['suf', 'ending ךְ = your / you (f. sg.)'], oYouFP: ['suf', 'ending ַיִךְ = you (f. sg.) on a preposition / plural'], oThem: ['suf', 'ending הֶם = them / their (m.)'], oThemF: ['suf', 'ending הֶן = them / their (f.)'], oYouP: ['suf', 'ending כֶם = you / your (pl.)'],
+  nm: ['root', 'the name of the stem'], sp: ['conj', ' '],
+};
+const PX_COL = { root: '#5aa9ff', stem: '#ffb454', pgn: '#5fd38d', conj: '#b9a6ff', suf: '#ff7ab6' };
+const PX_NAME = { root: 'root', stem: 'stem / form sign', pgn: 'who (person · gender · number)', conj: 'little word', suf: 'pronoun ending' };
+// front → [root, parsing, English, Spanish, pieces, note]
+const PX = {
+  'שָׁמַר': ['שׁמר', 'Qal · perfect (qatal) · 3ms', 'he kept', 'él guardó', 'שָׁ:R|מַ:R|ר:R', 'No ending on a perfect = he (3ms). This is also the dictionary form.'],
+  'שָׁמְרָה': ['שׁמר', 'Qal · perfect · 3fs', 'she kept', 'ella guardó', 'שָׁ:R|מְ:R|רָ:R|ה:s3fs', 'The ending ָה is spread over two signs: the ָ under ר and the ה.'],
+  'שָׁמַרְתָּ': ['שׁמר', 'Qal · perfect · 2ms', 'you (m.) kept', 'tú (m.) guardaste', 'שָׁ:R|מַ:R|רְ:R|תָּ:s2ms', ''],
+  'שָׁמַרְתְּ': ['שׁמר', 'Qal · perfect · 2fs', 'you (f.) kept', 'tú (f.) guardaste', 'שָׁ:R|מַ:R|רְ:R|תְּ:s2fs', 'Same as וְרָחַצְתְּ (Ruth 3:3), where you answered “3fs”.'],
+  'שָׁמַרְתִּי': ['שׁמר', 'Qal · perfect · 1cs', 'I kept', 'yo guardé', 'שָׁ:R|מַ:R|רְ:R|תִּי:s1cs', ''],
+  'שָׁמְרוּ': ['שׁמר', 'Qal · perfect · 3cp', 'they kept', 'ellos guardaron', 'שָׁ:R|מְ:R|ר:R|וּ:s3cp', ''],
+  'שְׁמַרְתֶּם': ['שׁמר', 'Qal · perfect · 2mp', 'you (m. pl.) kept', 'ustedes guardaron', 'שְׁ:R|מַ:R|רְ:R|תֶּם:s2mp', ''],
+  'שָׁמַרְנוּ': ['שׁמר', 'Qal · perfect · 1cp', 'we kept', 'nosotros guardamos', 'שָׁ:R|מַ:R|רְ:R|נוּ:s1cp', ''],
+  'יִשְׁמֹר': ['שׁמר', 'Qal · imperfect (yiqtol) · 3ms', 'he will keep', 'él guardará', 'יִ:yi|שְׁ:R|מֹ:R|ר:R', 'ֹ (o) before the last root letter = Qal imperfect.'],
+  'תִּשְׁמֹר': ['שׁמר', 'Qal · imperfect · 3fs or 2ms', 'she will keep / you (m.) will keep', 'ella guardará / tú guardarás', 'תִּ:ti|שְׁ:R|מֹ:R|ר:R', 'ת with NO ending: two answers are possible; the story decides (on the grid both are accepted).'],
+  'תִּשְׁמְרִי': ['שׁמר', 'Qal · imperfect · 2fs', 'you (f.) will keep', 'tú (f.) guardarás', 'תִּ:ti|שְׁ:R|מְ:R|רִ:R|י:sYi', 'ת prefix + ִי ending together = you (f.).'],
+  'אֶשְׁמֹר': ['שׁמר', 'Qal · imperfect · 1cs', 'I will keep', 'yo guardaré', 'אֶ:e1|שְׁ:R|מֹ:R|ר:R', ''],
+  'יִשְׁמְרוּ': ['שׁמר', 'Qal · imperfect · 3mp', 'they will keep', 'ellos guardarán', 'יִ:yi|שְׁ:R|מְ:R|ר:R|וּ:sU', ''],
+  'תִּשְׁמְרוּ': ['שׁמר', 'Qal · imperfect · 2mp', 'you (pl.) will keep', 'ustedes guardarán', 'תִּ:ti|שְׁ:R|מְ:R|ר:R|וּ:sU', ''],
+  'תִּשְׁמֹרְנָה': ['שׁמר', 'Qal · imperfect · 3fp or 2fp', 'they (f.) will keep / you (f. pl.) will keep', 'ellas guardarán / ustedes (f.) guardarán', 'תִּ:ti|שְׁ:R|מֹ:R|רְ:R|נָה:sNa', ''],
+  'נִשְׁמֹר': ['שׁמר', 'Qal · imperfect · 1cp', 'we will keep', 'nosotros guardaremos', 'נִ:n1p|שְׁ:R|מֹ:R|ר:R', 'Look at the vowel before the last letter: ֹ (o) = Qal imperfect, so נִ is “we”.'],
+  'שִׁמְרִי': ['שׁמר', 'Qal · imperative · 2fs', 'keep! (to a woman)', '¡guarda! (a una mujer)', 'שִׁ:R|מְ:R|רִ:R|י:sYi', 'An imperative is the “you” form without the prefix: תִּשְׁמְרִי → שִׁמְרִי.'],
+  'שִׁמְרוּ': ['שׁמר', 'Qal · imperative · 2mp', 'keep! (to several)', '¡guarden!', 'שִׁ:R|מְ:R|ר:R|וּ:sU', 'תִּשְׁמְרוּ without the prefix.'],
+  'שֹׁמֶרֶת': ['שׁמר', 'Qal · participle · f. sg. (person “—”)', 'keeping (f.) / a woman who keeps', 'guardando (f.) / la que guarda', 'שֹׁ:Rq|מֶ:R|רֶ:R|ת:ptcFs', 'A participle has gender and number but NO person: on the grid, person = “—”.'],
+  'שֹׁמְרִים': ['שׁמר', 'Qal · participle · m. pl. (person “—”)', 'keeping (m. pl.) / those who keep', 'guardando (m. pl.) / los que guardan', 'שֹׁ:Rq|מְ:R|רִ:R|ים:ptcMp', ''],
+  'וְרָחַצְתְּ': ['רחץ', 'Qal · weqatal · 2fs', 'and you (f.) shall wash', 'y te lavarás', 'וְ:we|רָ:R|חַ:R|צְ:R|תְּ:s2fs', 'Ruth 3:3, Naomi to Ruth. English adds “yourself”; the Hebrew has only “you (f.) shall wash”.'],
+  'וַתֹּאמֶר': ['אמר', 'Qal · wayyiqtol · 3fs', 'and she said', 'y ella dijo', 'וַ:wa|תֹּ:ti|א:R|מֶ:R|ר:R', 'The א is silent; the dot in ת is the wayyiqtol doubling.'],
+  'תֹּאמְרִי': ['אמר', 'Qal · imperfect · 2fs', 'you (f.) say / will say', 'tú (f.) dices / dirás', 'תֹּ:ti|א:R|מְ:R|רִ:R|י:sYi', 'Ruth 3:5: “all that you say”. No וַ, and the ִי ending = you (f.).'],
+  'הֱשִׁיבַנִי': ['שׁוב', 'Hiphil · perfect · 3ms + object suffix 1cs', 'he brought me back', 'me hizo volver', 'הֱ:hiph|שִׁ:R|י:hiphI|בַ:R|נִי:oMe', 'Root שׁוב: the middle ו is gone (hollow root). Without the ending: הֵשִׁיב “he brought back”; the ending נִי (me) shortens הֵ to הֱ. Ruth 1:21: “YHWH brought me back empty”.'],
+  'אֵלְכָה': ['הלך', 'Qal · cohortative · 1cs', 'let me go', 'déjame ir / voy a ir', 'אֵ:e1|לְ:R|כָ:R|ה:coh', 'Root הלך: the ה is lost in the prefix forms (it behaves like a I-י verb: אֵלֵךְ). Ruth 2:2.'],
+  'וַתֵּלַכְנָה': ['הלך', 'Qal · wayyiqtol · 3fp', 'and they (f.) went', 'y ellas fueron', 'וַ:wa|תֵּ:ti|לַ:R|כְ:R|נָה:sNa', 'Ruth 1:7: Naomi and her daughters-in-law. Root הלך: the ה is lost.'],
+  'וַיִּשְׁמֹר': ['שׁמר', 'Qal · wayyiqtol · 3ms', 'and he kept', 'y él guardó', 'וַ:wa|יִּ:yi|שְׁ:R|מֹ:R|ר:R', ''],
+  'וְשָׁמַרְתָּ': ['שׁמר', 'Qal · weqatal · 2ms', 'and you shall keep', 'y guardarás', 'וְ:we|שָׁ:R|מַ:R|רְ:R|תָּ:s2ms', 'וְ + perfect = future or instruction.'],
+  'וְיִשְׁמֹר': ['שׁמר', 'Qal · weyiqtol · 3ms', 'so that he may keep', 'para que él guarde', 'וְ:we|יִ:yi|שְׁ:R|מֹ:R|ר:R', 'וְ (not וַ) + prefix form = weyiqtol: purpose or wish.'],
+  'יְהִי': ['היה', 'Qal · jussive · 3ms', 'let there be / may it be', 'sea / que haya', 'יְ:yi|הִ:R|י:R', 'Root היה: the last ה is cut off (short jussive). Gen 1:3 יְהִי אוֹר “let there be light”.'],
+  'אַל־תִּירְאִי': ['ירא', 'Qal · imperfect (jussive) · 2fs with אַל', 'do not be afraid (to a woman)', 'no temas (a una mujer)', 'אַל־:al|תִּ:ti|י:R|רְ:R|אִ:R|י:sYi', 'Ruth 3:11, Boaz to Ruth.'],
+  'שָׁמוֹר תִּשְׁמְרוּ': ['שׁמר', 'Qal · infinitive absolute + imperfect 2mp', 'you shall surely keep', 'ciertamente guardarán', 'שָׁ:R|מוֹ:infA|ר:R| :sp|תִּ:ti|שְׁ:R|מְ:R|ר:R|וּ:sU', 'Infinitive absolute before a verb of the same root = “surely, indeed”.'],
+  'בְּשָׁמְרוֹ': ['שׁמר', 'Qal · infinitive construct + suffix 3ms (person “—”)', 'when he kept', 'cuando él guardó', 'בְּ:be|שָׁ:R|מְ:R|ר:R|וֹ:oHis', 'The infinitive has no person; the ending וֹ tells WHO does it (“he”).'],
+  'לִשְׁמֹר': ['שׁמר', 'Qal · infinitive construct (P/G/N “—”)', 'to keep', 'guardar / para guardar', 'לִ:le|שְׁ:R|מֹ:R|ר:R', ''],
+  'הַשֹּׁמֵר': ['שׁמר', 'Qal · participle · m. sg. with the article (person “—”)', 'the one who keeps', 'el que guarda', 'הַ:art|שֹּׁ:Rq|מֵ:R|ר:R', 'Why is שׁ doubled? Because of the article הַ, not because of Piel. Why a participle? ֹ after the first root letter + ֵ before the last = Qal participle (ongoing action, “keeping”). With הַ: “the one who keeps”.'],
+  'שְׁמֹר': ['שׁמר', 'Qal · imperative · 2ms', 'keep!', '¡guarda!', 'שְׁ:R|מֹ:R|ר:R', 'Imperative = תִּשְׁמֹר without the prefix.'],
+  'קָטַל': ['קטל', 'Qal · perfect · 3ms', 'he killed', 'él mató', 'קָ:R|טַ:R|ל:R', 'Model verb: the stems are learned on קטל.'],
+  'יִקְטֹל': ['קטל', 'Qal · imperfect · 3ms', 'he will kill', 'él matará', 'יִ:yi|קְ:R|טֹ:R|ל:R', ''],
+  'קֹטֵל': ['קטל', 'Qal · participle · m. sg.', 'killing / one who kills', 'matando / el que mata', 'קֹ:Rq|טֵ:R|ל:R', ''],
+  'נִקְטַל': ['קטל', 'Niphal · perfect · 3ms', 'he was killed', 'él fue muerto', 'נִ:niph|קְ:R|טַ:R|ל:R', ''],
+  'יִקָּטֵל': ['קטל', 'Niphal · imperfect · 3ms', 'he will be killed', 'él será muerto', 'יִ:yi|קָּ:niphD|טֵ:R|ל:R', 'The dot in ק (the FIRST root letter) = the hidden נ of the Niphal.'],
+  'הִקָּטֵל': ['קטל', 'Niphal · infinitive / imperative', 'to be killed / be killed!', 'ser muerto', 'הִ:niphH|קָּ:niphD|טֵ:R|ל:R', ''],
+  'נִקְטָל': ['קטל', 'Niphal · participle · m. sg.', 'being killed', 'siendo muerto', 'נִ:niph|קְ:R|טָ:R|ל:R', 'Participle = like the perfect but ָ under the 2nd letter (נִקְטָל vs נִקְטַל).'],
+  'קִטֵּל': ['קטל', 'Piel · perfect · 3ms', 'he massacred', 'él masacró', 'קִ:R|טֵּ:pielD|ל:R', 'i under the 1st letter + doubled middle letter = Piel perfect.'],
+  'יְקַטֵּל': ['קטל', 'Piel · imperfect · 3ms', 'he will massacre', 'él masacrará', 'יְ:pielE|קַ:R|טֵּ:pielD|ל:R', 'The prefix י still means “he”; its shewa ְ is the Piel sign.'],
+  'מְקַטֵּל': ['קטל', 'Piel · participle · m. sg.', 'massacring', 'masacrando', 'מְ:mptc|קַ:R|טֵּ:pielD|ל:R', ''],
+  'קַטֵּל': ['קטל', 'Piel · imperative 2ms / infinitive', 'massacre! / to massacre', '¡masacra! / masacrar', 'קַ:R|טֵּ:pielD|ל:R', ''],
+  'קֻטַּל': ['קטל', 'Pual · perfect · 3ms', 'he was massacred', 'él fue masacrado', 'קֻ:pualU|טַּ:pielD|ל:R', ''],
+  'מְקֻטָּל': ['קטל', 'Pual · participle · m. sg.', 'massacred', 'masacrado', 'מְ:mptc|קֻ:pualU|טָּ:pielD|ל:R', ''],
+  'הִתְקַטֵּל': ['קטל', 'Hithpael · perfect 3ms / infinitive / imperative', 'he killed himself', 'él se mató', 'הִתְ:hith|קַ:R|טֵּ:pielD|ל:R', 'Hithpael has ONE shape in every form.'],
+  'יִתְקַטֵּל': ['קטל', 'Hithpael · imperfect · 3ms', 'he will kill himself', 'él se matará', 'יִתְ:hith|קַ:R|טֵּ:pielD|ל:R', ''],
+  'מִתְקַטֵּל': ['קטל', 'Hithpael · participle · m. sg.', 'killing himself', 'matándose', 'מִתְ:hith|קַ:R|טֵּ:pielD|ל:R', ''],
+  'מִתְהַלֵּךְ': ['הלך', 'Hithpael · participle · m. sg.', 'walking to and fro', 'andando de un lado a otro', 'מִתְ:hith|הַ:R|לֵּ:pielD|ךְ:R', 'From the professor’s slides.'],
+  'וַיִּתְפַּלֵּל': ['פלל', 'Hithpael · wayyiqtol · 3ms', 'and he prayed', 'y oró', 'וַ:wa|יִּתְ:hith|פַּ:R|לֵּ:pielD|ל:R', ''],
+  'הִקְטִיל': ['קטל', 'Hiphil · perfect · 3ms', 'he caused to kill', 'él hizo matar', 'הִ:hiph|קְ:R|טִ:R|י:hiphI|ל:R', ''],
+  'יַקְטִיל': ['קטל', 'Hiphil · imperfect · 3ms', 'he will cause to kill', 'él hará matar', 'יַ:hiphY|קְ:R|טִ:R|י:hiphI|ל:R', ''],
+  'וַיַּקְטֵל': ['קטל', 'Hiphil · wayyiqtol · 3ms', 'and he caused to kill', 'e hizo matar', 'וַ:wa|יַּ:hiphY|קְ:R|טֵ:hiphE|ל:R', 'Wayyiqtol uses the SHORT Hiphil: ֵ instead of ִי.'],
+  'מַקְטִיל': ['קטל', 'Hiphil · participle · m. sg.', 'causing to kill', 'haciendo matar', 'מַ:hiphY|קְ:R|טִ:R|י:hiphI|ל:R', ''],
+  'יַגִּיד': ['נגד', 'Hiphil · imperfect · 3ms', 'he will tell', 'él dirá / contará', 'יַ:hiphY|גִּ:inun|י:hiphI|ד:R', 'Root נגד: the first נ disappears and leaves its dot in ג. Your only error on the Ch. 22 quiz (you marked Piel).'],
+  'הוֹלִיד': ['ילד', 'Hiphil · perfect · 3ms', 'he fathered', 'él engendró', 'הוֹ:hiphV|לִ:R|י:hiphI|ד:R', 'Ruth 4:18–22: “Perez fathered Hezron…”.'],
+  'הֵשִׁיב': ['שׁוב', 'Hiphil · perfect · 3ms', 'he brought back', 'él hizo volver', 'הֵ:hiphHol|שִׁ:R|י:hiphI|ב:R', 'Root שׁוב: only שׁ and ב are visible (hollow root).'],
+  'הָקְטַל': ['קטל', 'Hophal · perfect · 3ms', 'he was made to kill', 'él fue hecho matar', 'הָ:hophO|קְ:R|טַ:R|ל:R', 'Hophal is the passive of Hiphil.'],
+  'יָקְטַל': ['קטל', 'Hophal · imperfect · 3ms', 'he will be made to kill', 'él será hecho matar', 'יָ:hophO|קְ:R|טַ:R|ל:R', ''],
+  'וַיִּשְׁתַּחוּ': ['חוה', 'Hishtaphel · wayyiqtol · 3ms', 'and he bowed down (worshipped)', 'y se postró (adoró)', 'וַ:wa|יִּ:yi|שְׁתַּ:hisht|ח:R|וּ:R', 'Root חוה: ח and ו are visible (ו as וּ); the last ה is cut off in the wayyiqtol.'],
+  'לְהִשְׁתַּחֲוֹת': ['חוה', 'Hishtaphel · infinitive construct', 'to bow down, to worship', 'postrarse, adorar', 'לְ:le|הִ:hishH|שְׁתַּ:hisht|חֲ:R|וֹ:R|ת:inf', ''],
+  'קַל': ['—', 'name of the stem', '“light” = the simple stem', '“ligero” = la forma simple', 'קַל:nm', 'Qal has no extra signs: model קָטַל / פָּעַל.'],
+  'נִפְעַל': ['פעל', 'name: Niphal (perfect 3ms of פעל)', '“it was done”', '“fue hecho”', 'נִ:niph|פְ:R|עַ:R|ל:R', 'Each stem’s name IS its pattern on פעל.'],
+  'פִּעֵל': ['פעל', 'name: Piel (perfect 3ms of פעל)', '“he did (intensively)”', '“hizo (intensivamente)”', 'פִּ:R|עֵ:R|ל:R', 'ע is a guttural and cannot show the doubling: on קטל it is קִטֵּל.'],
+  'פֻּעַל': ['פעל', 'name: Pual (perfect 3ms of פעל)', '“it was done (Piel passive)”', '“fue hecho (pasivo del Piel)”', 'פֻּ:pualU|עַ:R|ל:R', 'On קטל: קֻטַּל.'],
+  'הִתְפַּעֵל': ['פעל', 'name: Hithpael (perfect 3ms of פעל)', '“he did to himself”', '“se hizo a sí mismo”', 'הִתְ:hith|פַּ:R|עֵ:R|ל:R', 'On קטל: הִתְקַטֵּל.'],
+  'הִפְעִיל': ['פעל', 'name: Hiphil (perfect 3ms of פעל)', '“he caused to do”', '“hizo hacer”', 'הִ:hiph|פְ:R|עִ:R|י:hiphI|ל:R', 'On קטל: הִקְטִיל.'],
+  'הָפְעַל': ['פעל', 'name: Hophal (perfect 3ms of פעל)', '“he was caused to do”', '“fue hecho hacer”', 'הָ:hophO|פְ:R|עַ:R|ל:R', 'On קטל: הָקְטַל.'],
+  'הִשְׁתַּפְעֵל': ['פעל', 'name: Hishtaphel', '“he bowed down” (only חוה)', '“se postró” (solo חוה)', 'הִ:hishH|שְׁתַּ:hisht|פְ:R|עֵ:R|ל:R', 'The only verb: הִשְׁתַּחֲוָה “he bowed down”.'],
+  'יִפֹּל': ['נפל', 'Qal · imperfect · 3ms', 'he will fall', 'él caerá', 'יִ:yi|פֹּ:inun|ל:R', ''],
+  'יִתֵּן': ['נתן', 'Qal · imperfect · 3ms', 'he will give', 'él dará', 'יִ:yi|תֵּ:inun|ן:R', 'נתן loses BOTH נ: the first leaves its dot in ת.'],
+  'וַיִּקַּח': ['לקח', 'Qal · wayyiqtol · 3ms', 'and he took', 'y tomó', 'וַ:wa|יִּ:yi|קַּ:inun|ח:R', 'לקח behaves like a I-נ verb: the ל disappears and leaves its dot in ק.'],
+  'וַיֵּשֶׁב': ['ישׁב', 'Qal · wayyiqtol · 3ms', 'and he sat / stayed', 'y se sentó / se quedó', 'וַ:wa|יֵּ:iyod|שֶׁ:R|ב:R', 'Do not confuse with וַיָּשָׁב (root שׁוב) “and he returned”.'],
+  'יוֹצִיא': ['יצא', 'Hiphil · imperfect · 3ms', 'he will bring out', 'él sacará', 'יוֹ:hiphV|צִ:R|י:hiphI|א:R', ''],
+  'וַיָּקָם': ['קום', 'Qal · wayyiqtol · 3ms', 'and he arose', 'y se levantó', 'וַ:wa|יָּ:yi|קָ:R|ם:R', 'Hollow root: only 2 letters; put ו in the middle → קום.'],
+  'יָמוּת': ['מות', 'Qal · imperfect · 3ms', 'he will die', 'él morirá', 'יָ:yi|מ:R|וּ:R|ת:R', 'Here the middle ו is visible as וּ. Spell the root with ת (tav), not ט.'],
+  'וַתָּשָׁב': ['שׁוב', 'Qal · wayyiqtol · 3fs', 'and she returned', 'y ella volvió', 'וַ:wa|תָּ:ti|שָׁ:R|ב:R', 'Ruth 1:22. Hollow root: add ו in the middle.'],
+  'וַיַּעַשׂ': ['עשׂה', 'Qal · wayyiqtol · 3ms', 'and he did / made', 'e hizo', 'וַ:wa|יַּ:yi|עַ:R|שׂ:R', 'III-ה verb: the wayyiqtol is cut short (no ה).'],
+  'עָשִׂיתִי': ['עשׂה', 'Qal · perfect · 1cs', 'I did / I made', 'yo hice', 'עָ:R|שִׂ:R|י:iiiH|תִי:s1cs', ''],
+  'וַיְהִי': ['היה', 'Qal · wayyiqtol · 3ms', 'and it happened / and there was', 'y sucedió / y hubo', 'וַ:wa|יְ:yi|הִ:R|י:R', 'Ruth 1:1: “And it happened in the days…”.'],
+  'לִבְנוֹת': ['בנה', 'Qal · infinitive construct', 'to build', 'construir', 'לִ:le|בְ:R|נ:R|וֹת:inf', ''],
+  'וַיְבָרֶךְ': ['ברך', 'Piel · wayyiqtol · 3ms', 'and he blessed', 'y bendijo', 'וַ:wa|יְ:pielE|בָ:gutL|רֶ:R|ךְ:R', 'ר cannot be doubled, so instead of בַּרֵּ we get בָרֶ.'],
+  'וַיְכַהֲנוּ': ['כהן', 'Piel · wayyiqtol · 3mp', 'and they served as priests', 'y sirvieron como sacerdotes', 'וַ:wa|יְ:pielE|כַ:R|הֲ:R|נ:R|וּ:sU', 'You chose Hiphil on the Ch. 20 quiz: the shewa under יְ says Piel.'],
+  'וַיָּסָב': ['סבב', 'Qal · wayyiqtol · 3ms', 'and he turned around', 'y se volvió', 'וַ:wa|יָּ:yi|סָ:R|ב:R', 'Double-letter root: only one ב is written.'],
+  'לָהֶם': ['—', 'preposition לְ + suffix 3mp', 'to them / for them', 'a ellos / para ellos', 'לָ:prep|הֶם:oThem', 'Ruth 1: you read it as לֶחֶם (bread). לָהֶם has ה; לֶחֶם has ח.'],
+  'לָהֶן': ['—', 'preposition לְ + suffix 3fp', 'to them (f.)', 'a ellas', 'לָ:prep|הֶן:oThemF', ''],
+  'עִמָּהּ': ['—', 'preposition עִם + suffix 3fs', 'with her', 'con ella', 'עִמָּ:prepW|הּ:oHer', ''],
+  'אֵלֶיהָ': ['—', 'preposition אֶל + suffix 3fs', 'to her', 'a ella', 'אֵלֶ:prepT|יהָ:oHerP', ''],
+  'בְּנוֹ': ['בן', 'noun בֵּן + suffix 3ms', 'his son', 'su hijo', 'בְּנ:noun|וֹ:oHis', ''],
+  'מַרְגְּלֹתָיו': ['רגל', 'noun (f. pl.) + suffix 3ms', 'his feet (the place at his feet)', 'sus pies (el lugar a sus pies)', 'מַ:nounM|רְ:R|גְּ:R|לֹ:R|תָ:fpl|יו:oHisP', 'Ruth 3:4, 7–8. The noun is f. pl.; its owner (“his”) is 3ms: two different things.'],
+  'שִׂמְלֹתֵךְ': ['שׂמל', 'noun שִׂמְלָה (f. pl.) + suffix 2fs', 'your (f.) clothes', 'tus vestidos (f.)', 'שִׂ:R|מְ:R|לֹ:R|תֵ:fpl|ךְ:oYouF', 'Ruth 3:3.'],
+  'עָלַיִךְ': ['—', 'preposition עַל + suffix 2fs', 'on you (f.)', 'sobre ti (f.)', 'עָלַ:prepO|יִךְ:oYouFP', 'Ruth 3:3 (qere).'],
+  'לִי': ['—', 'preposition לְ + suffix 1cs', 'to me / for me', 'a mí / para mí', 'לִ:prep|י:oMy', ''],
+  'כַּלֹּתוֹ': ['כלה', 'Piel · infinitive construct + suffix 3ms', 'his finishing → until he finishes', 'su acabar → hasta que él termine', 'כַּ:R|לֹּ:pielD|ת:infT|וֹ:oHis', 'Ruth 3:3 עַד כַּלֹּתוֹ לֶאֱכֹל. Compare כַּלָּתוֹ “his daughter-in-law” (different vowels).'],
+  'כַּלָּתָהּ': ['—', 'noun כַּלָּה + suffix 3fs', 'her daughter-in-law', 'su nuera', 'כַּלָּ:noun|תָ:fsg|הּ:oHer', 'Ruth 1:22.'],
+  'עִמָּכֶם': ['—', 'preposition עִם + suffix 2mp', 'with you (pl.)', 'con ustedes', 'עִמָּ:prepW|כֶם:oYouP', 'Ruth 2:4: יְהוָה עִמָּכֶם “YHWH be with you”.'],
+};
+const PX_TPL = { 'qal|perfect': 'קָטַל', 'qal|imperfect': 'יִקְטֹל', 'qal|wayyiqtol': 'וַיִּקְטֹל', 'qal|imperative': 'קְטֹל', 'qal|participle': 'קֹטֵל', 'qal|infinitive construct': 'קְטֹל', 'qal|weqatal': 'וְקָטַל', 'qal|weyiqtol': 'וְיִקְטֹל', 'qal|cohortative': 'אֶקְטְלָה', 'qal|jussive': 'יִקְטֹל', 'hiphil|perfect': 'הִקְטִיל', 'hiphil|imperfect': 'יַקְטִיל', 'hiphil|wayyiqtol': 'וַיַּקְטֵל', 'hiphil|participle': 'מַקְטִיל', 'niphal|perfect': 'נִקְטַל', 'niphal|imperfect': 'יִקָּטֵל', 'niphal|participle': 'נִקְטָל', 'piel|perfect': 'קִטֵּל', 'piel|imperfect': 'יְקַטֵּל', 'piel|wayyiqtol': 'וַיְקַטֵּל', 'piel|participle': 'מְקַטֵּל', 'piel|infinitive construct': 'קַטֵּל', 'hithpael|participle': 'מִתְקַטֵּל', 'hithpael|wayyiqtol': 'וַיִּתְקַטֵּל', 'hishtaphel|wayyiqtol': 'וַיִּשְׁתַּחוּ', 'hishtaphel|infinitive construct': 'לְהִשְׁתַּחֲוֹת' };
+function pxTemplate(parse) {
+  const p = parse.toLowerCase(), stem = (p.match(/^(qal|niphal|piel|pual|hithpael|hiphil|hophal|hishtaphel)/) || [])[1]; if (!stem) return '';
+  const conj = ['wayyiqtol', 'weqatal', 'weyiqtol', 'cohortative', 'jussive', 'imperative', 'participle', 'infinitive construct', 'perfect', 'imperfect'].find(c => p.includes(c));
+  return conj ? PX_TPL[stem + '|' + conj] || '' : '';
+}
+// A vowel sign written alone gets a dotted circle so it is visible: ◌ֹ
+const pxMarks = t => String(t).replace(/(^|[^\u05D0-\u05EA\u05B0-\u05C7\u25CC])([\u05B0-\u05BD\u05BF-\u05C2\u05C7]+)/g, '$1\u25CC$2');
+function pxHTML(front) {
+  const x = PX[front]; if (!x) return '';
+  const [root, parse, en, es, segs, note] = x;
+  const pcs = segs.split('|').map(s => { const i = s.lastIndexOf(':'); return [s.slice(0, i), s.slice(i + 1)]; });
+  const box = (t, r) => { if (r === 'sp') return '<div style="width:14px"></div>'; const [k] = PX_ROLE[r] || ['root']; const lab = r === 'R' || r === 'Rq' ? 'root' : r === 'nm' ? 'name' : (PX_NAME[k] || ''); return `<div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:38px"><div class="he" lang="he" style="font-size:2.1rem;line-height:1.25;color:${PX_COL[k]};border-bottom:3px solid ${PX_COL[k]};padding:0 4px">${esc(t)}</div><div class="small" style="color:${PX_COL[k]};font-size:.72rem;text-align:center;max-width:90px">${lab}</div></div>`; };
+  const seen = new Set(), why = pcs.filter(([, r]) => r !== 'sp' && !seen.has(r) && seen.add(r)).map(([t, r]) => { const [k, txt] = PX_ROLE[r] || ['root', '']; return `<li><span class="he" lang="he" style="color:${PX_COL[k]};font-weight:700">${esc(t)}</span> → ${heWrap(esc(pxMarks(txt)))}</li>`; }).join('');
+  const tpl = pxTemplate(parse), rl = root && root !== '—' ? [...root].filter(c => /[א-ת]/.test(c)) : [];
+  const shown = new Set(pcs.filter(([, r]) => r === 'R' || r === 'Rq' || r === 'noun').map(([t]) => t.replace(/[^א-ת]/g, '')).join('').replace(/[ךםןףץ]/g, c => ({ 'ך': 'כ', 'ם': 'מ', 'ן': 'נ', 'ף': 'פ', 'ץ': 'צ' }[c])));
+  const hidden = rl.filter(c => !shown.has(c.replace(/[ךםןףץ]/g, m => ({ 'ך': 'כ', 'ם': 'מ', 'ן': 'נ', 'ף': 'פ', 'ץ': 'צ' }[m]))));
+  return `<div class="px stack" style="gap:10px;text-align:left">
+    <div style="display:flex;flex-direction:row-reverse;justify-content:center;flex-wrap:wrap;gap:6px;direction:ltr;padding:6px 0">${pcs.map(([t, r]) => box(t, r)).join('')}</div>
+    <div class="row" style="justify-content:center;gap:10px;flex-wrap:wrap;font-size:.75rem">${Object.entries(PX_NAME).map(([k, n]) => `<span style="color:${PX_COL[k]}">■ ${n}</span>`).join('')}</div>
+    <div class="tw"><table class="mini" style="width:100%">
+      <tr><th style="width:130px">English</th><td><b>${esc(en)}</b></td></tr>
+      <tr><th>Español</th><td>${esc(es)}</td></tr>
+      <tr><th>Root letters</th><td>${rl.length ? `<span class="he" lang="he" style="font-size:1.3rem;color:${PX_COL.root}">${rl.join(' · ')}</span>${hidden.length ? ` <span class="small muted">(hidden in this word: ${hidden.map(c => H(c)).join(', ')})</span>` : ''}` : '<span class="muted">no verb root (a little word + ending)</span>'}</td></tr>
+      <tr><th>Parsing</th><td>${esc(parse)}</td></tr>
+      ${tpl && tpl !== front ? `<tr><th>Model pattern</th><td><span class="he" lang="he" style="font-size:1.3rem">${esc(tpl)}</span> <span class="small muted">← the model on the root ק־ט־ל; this word follows the same pattern</span></td></tr>` : ''}
+    </table></div>
+    <div><b>Why each piece:</b><ul style="margin:4px 0 0 18px">${why}</ul></div>
+    ${note ? `<div>${heWrap(esc(pxMarks(note)))}</div>` : ''}
+    <div id="px-ctx" class="small muted">Looking for a sentence…</div></div>`;
+}
+// Exact form in the course texts: Ruth first, then the class stories, then the other course passages.
+async function pxFind(word) {
+  const k = fvKey(word), has = line => String(line).split(/[\s־׃,.;:!?]+/).some(w => w && fvKey(w) === k);
+  const ruthEn = new Map(); (PBANK.verses || []).forEach(v => { if (v[0] === 'Ruth') ruthEn.set(v[1] + ':' + v[2], v[4]); });
+  for (const c of ['1', '2', '3', '4']) for (const [v, he] of (RUTH.verses[c] || [])) if (has(he)) return { he: String(he), ref: `Ruth ${c}:${v}`, en: ruthEn.get(c + ':' + v) || RUTH_EN[c + ':' + v] || '', form: String(he).split(/[\s־׃]+/).find(w => fvKey(w) === k) };
+  for (const ch of STORY_CHS) { const d = await storyDoc(ch); if (!d) continue; const text = d.lines.join('\n').replace(/־\n/g, '־').replace(/\n/g, ' '); for (const s of text.split('׃')) if (has(s)) return { he: s.trim() + '׃', ref: `Ch. ${ch} story: ${d.title}`, en: '', form: s.split(/[\s־]+/).find(w => fvKey(w) === k) }; }
+  for (const v of (PBANK.verses || [])) if (v[0] !== 'Ruth' && has(v[3])) return { he: v[3], ref: `${v[0]} ${v[1]}:${v[2]}`, en: v[4] || '', form: String(v[3]).split(/[\s־׃]+/).find(w => fvKey(w) === k) };
+  return null;
+}
+async function pxContext(front, en) {
+  const host = document.getElementById('px-ctx'); if (!host) return;
+  try {
+    const word = front.split(' ')[0].replace(/־$/, ''); const ex = await pxFind(word);
+    if (!document.getElementById('px-ctx')) return;
+    host.className = ''; host.innerHTML = ex ? `<b>In a text of the course</b> <span class="muted">(${esc(ex.ref)})</span><div class="he" dir="rtl" lang="he" style="font-size:1.25rem;line-height:1.8">${vxHL(ex.he, ex.form)}</div>${ex.en ? `<div class="small muted">${esc(ex.en)}</div>` : ''}` : '<span class="small muted">This exact form does not occur in Ruth, the class stories or the course passages: it is a model form for the pattern.</span>';
+  } catch (e) { host.innerHTML = ''; }
+}
+// Hook into the pattern card: replace the short answer with the full breakdown.
+(function () {
+  const _df = drawFlash;
+  drawFlash = function (it) {
+    _df.apply(this, arguments);
+    const show = $('#fl-show'); if (!show || !PX[it.front || it.form]) return;
+    const orig = show.onclick;
+    show.onclick = () => { orig(); const b = $('#fl-back'); if (b) { b.innerHTML = `<div style="margin-bottom:8px"><b>${heWrap(esc(pxMarks(it.back)))}</b></div>${pxHTML(it.front || it.form)}`; pxContext(it.front || it.form); } };
+  };
+})();
+
+// ---------- Vocabulary cards: a sentence from the class stories too (clean texts), and say plainly when there is none ----------
+(function () {
+  let added = false;
+  const _vi = vxIndex;
+  vxIndex = async function () {
+    const idx = await _vi.apply(this, arguments); if (added) return idx; added = true;
+    try {
+      for (const ch of STORY_CHS) {
+        const d = await storyDoc(ch); if (!d) continue;
+        const text = d.lines.join('\n').replace(/־\n/g, '־').replace(/\n/g, ' ');
+        const sents = text.split('׃').map(s => s.trim()).filter(s => s.length > 3);
+        for (const s of sents) { const he = s + '׃'; for (const w of lexWords(s)) { const a = vxAnalyze(w); if (!a || !a.lemma) continue; const k = vxKey(a.lemma); const l = idx.get(k) || []; if (l.length < 12 && !l.some(e => e.ref.startsWith(`Ch. ${ch} story`))) { l.push({ he, ref: `Ch. ${ch} story: ${d.title}`, en: '', form: w }); idx.set(k, l); } } await new Promise(r => setTimeout(r, 0)); }
+      }
+    } catch (e) { console.error(e); }
+    return idx;
+  };
+  const _vp = vxPostHTML;
+  vxPostHTML = function (word, meaning, ex) {
+    let h = _vp.apply(this, arguments);
+    try {
+      const I = vxInfo(word, meaning), a = I.a;
+      const extra = `${a && a.root ? `<div><b>Root letters:</b> ${H(esc([...a.root].join(' · ')))}${a.lemma && fvKey(a.lemma) !== fvKey(word) ? ` · dictionary form ${H(esc(a.lemma))}` : ''}</div>` : ''}${!a && I.g ? `<div><b>Parsing:</b> ${esc(I.g)}</div>` : ''}${ex ? '' : '<div class="muted">No sentence with this word in Ruth, the class stories (Ch. 14–22) or the course passages: it is a vocabulary-list word.</div>'}`;
+      h = h.replace(/<\/div>\s*$/, extra + '</div>');
+    } catch (e) { console.error(e); }
+    return h;
+  };
+})();
+
+</script>
+<script>
 // Colour mode: dark (default), light, or the same as the computer. Remembered on this device.
 (function () {
   const order = ['dark', 'light', 'auto'], lab = { dark: '☾ Dark', light: '☀ Light', auto: '◐ Auto' };
@@ -8641,5 +8856,5 @@ function renderRescue() {
   const b = document.getElementById('btn-theme'); if (b) b.onclick = () => { t = order[(order.indexOf(t) + 1) % order.length]; try { localStorage.setItem('het-theme', t); } catch {} apply(); };
 })();
 </script>
-<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='c6ba88e58a';</script>
+<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='1ffa4baad5';</script>
 </body></html>
