@@ -9081,6 +9081,16 @@ function simCardHTML() {
 
 </script>
 <script>
+// ---------- Ruth text fix (found Nov 17): the verse bank dropped every word whose written and read forms differ (Ketiv/Qere),
+// e.g. Ruth 4:5 lost קָנִיתָ, 3:3 lost שִׂמְלֹתַיִךְ and וְיָרַדְתְּ. Use the full Ruth text everywhere; remove stray dots in א.
+(function () {
+  const clean = s => String(s).replace(/(א[\u05B0-\u05BB\u05C1\u05C2\u05C7]*)\u05BC/g, '$1');
+  try { for (const c of Object.keys(RUTH.verses)) RUTH.verses[c].forEach(r => { r[1] = clean(r[1]); }); } catch { }
+  try { PBANK.verses.forEach(row => { if (row[0] !== 'Ruth') return; const r = (RUTH.verses[row[1]] || []).find(y => y[0] === row[2]); if (r && r[1] !== row[3]) row[3] = r[1]; row[3] = clean(row[3]); }); } catch { }
+})();
+// The professor's printed Ruth (BHS style) writes some words in their written (Ketiv) form: shown that way in the simulations.
+const RUTH_PROF = { '2:1': [['מוֹדַע', 'מֹידַע']], '2:9': [['וְהָלַכְתִּ אַחֲרֵיהֶן', 'וְהָלַכְתְּ אַחֲרֵיהֶן']], '3:3': [['שִׂמְלֹתַיִךְ', 'שִׂמְלֹתֵךְ'], ['וְיָרַדְתְּ', 'וְיָרַדְתִּי']], '3:4': [['וְשָׁכָבְתְּ', 'וְשָׁכָבְתִּי']], '4:4': [['וְאֵדְעָה', 'וְאֵדַע']], '4:5': [['קָנִיתָה', 'קָנִיתִי']], '4:6': [['לִגְאָל־לִי', 'לִגְאוֹל־לִי']] };
+const ruthProf = (c, v, he) => { const L = RUTH_PROF[c + ':' + v]; return L ? L.reduce((s, [a, b]) => s.replace(a.normalize('NFC'), b), he.normalize('NFC')) : he; };
 // ---------- Final simulations in the professor's ANNOUNCED format (class of Nov 17, S18) ----------
 // One whole class story (any of Ch. 14–22): ~15 verbs to parse = 32 pts · ~20 questions in Hebrew = 26 pts.
 // Ruth: 5–6 verses in a row to translate = 30 pts (rare words given) · questions in English on that passage = 12 pts.
@@ -9090,7 +9100,8 @@ const FS_MIN = 140;
 const FS_SECTIONS = { parse: { n: 15, w: .32, label: 'Story · parsing (32 points)' }, translation: { n: 6, w: .30, label: 'Ruth · translation (30 points)' }, comp: { n: 20, w: .26, label: 'Story · questions in Hebrew (26 points)' }, syntax: { n: 4, w: .12, label: 'Ruth · syntax questions in English (12 points)' } };
 FS_KEYS.forEach((k, i) => { BLUEPRINTS[k] = { id: k, name: `Final simulation ${i + 1} (professor’s format)`, minutes: () => FS_MIN, sections: FS_SECTIONS }; });
 BLUEPRINTS.sp = { id: 'sp', name: 'Story practice (exam format)', minutes: () => 60, sections: { parse: { n: 15, w: .55, label: 'Story · parsing' }, comp: { n: 12, w: .45, label: 'Story · questions in Hebrew' } } };
-const SP_CHS = [14, 16, 17, 18, 20, 21];   // the stories that are not inside the three simulations
+const SP_CHS = [14, 15, 16, 17, 18, 22];   // the stories that are not inside the three simulations (19, 20, 21)
+const GPT_MOCK_CHS = [14, 15, 17, 18, 22];  // the GPT paper mock finals (Drive, Nov 17) use these stories
 const FS_NEED = 'The simulation texts are not in the app yet: import hebrew-update-2026-11-18.json (Library → Add material).';
 async function fsDef(path) { try { if (S.db) { const s = await S.db.doc(path).get(); return s.exists ? s.data() : null; } } catch { } return null; }
 const fsLn = ln => ln ? (ln[1] > ln[0] ? `${ln[0]}–${ln[1]}` : `${ln[0]}`) : '';
@@ -9110,7 +9121,7 @@ async function buildFS(k) {
   const d = await storyDoc(D.ch); if (!d) throw new Error(FS_NEED);
   const L = d.lines;
   const story = fsByLine([...D.comp.map((x, i) => fsCompItem(k, i, x)), ...D.parse.map(x => fsParseItem(k, L, x))]);
-  const [c, v1, v2] = D.ruth, verses = []; for (let v = v1; v <= v2; v++) { const x = ruthVerse(c, v); if (x) verses.push(x); }
+  const [c, v1, v2] = D.ruth, verses = []; for (let v = v1; v <= v2; v++) { const x = ruthVerse(c, v); if (x) verses.push({ ...x, he: ruthProf(c, v, x.he) }); }
   const tr = exTranslate(verses).map((y, i) => ({ ...y, key: `${k}|t|${c}:${v1 + i}`, cat: catByExposure(y.cid) }));
   const syn = D.syn.map((s, i) => ({ kind: 'write', sub: 'comp', synEn: 1, key: `${k}|s|${i}`, cid: 'fss:' + AN.hash(s[0]), q: s[0], model: s[1], t: 'syntax', sec: 'syntax', cat: 'protected', skill: 'syntax' }));
   const items = fsFinish([...story, ...tr, ...syn]);
@@ -9176,7 +9187,7 @@ const isFS = t => /^(fs\d|sp)$/.test(t || '');
       const h1 = $('#v-session h1');
       if (h1) h1.insertAdjacentHTML('afterend', EX.type === 'sp'
         ? `<div class="note">One whole class story, as on the final: the verbs to parse and the questions in Hebrew sit next to their lines (in text order). Parse every verb (partial credit per box). Answer the questions with words from the text. 60 minutes.</div>`
-        : `<div class="note"><b>The professor’s format (class of Nov 17).</b> A whole class story (which one is a surprise, as on Monday): 15 verbs to parse = 32 points, 20 questions in Hebrew = 26 points. Then Ruth, 6 verses in a row: translation = 30 points, questions about its syntax in English = 12 points. ${FS_MIN} minutes.<br><b>His advice:</b> never leave a parse or a verse blank (each box earns points); do not spend 10 minutes on one question; the lexicon is allowed but slow. <b>Suggested order:</b> parsing (40–45 min) → Ruth translation (40–45) → Hebrew questions (25–35) → syntax (10–15) → check (10–15). Use the item numbers to jump.</div>`);
+        : `<div class="note"><b>The professor’s format (class of Nov 17).</b> A whole class story (which one is a surprise, as on Monday): 15 verbs to parse = 32 points, 20 questions in Hebrew = 26 points. Then Ruth, 5–6 verses in a row: translation = 30 points, questions about its syntax in English = 12 points. ${FS_MIN} minutes.<br><b>His advice:</b> never leave a parse or a verse blank (each box earns points); do not spend 10 minutes on one question; the lexicon is allowed but slow. <b>Suggested order:</b> parsing (40–45 min) → Ruth translation (40–45) → Hebrew questions (25–35) → syntax (10–15) → check (10–15). Use the item numbers to jump.</div>`);
     }
     if (EX.phase === 'taking') { const el = $('.fs-hl'), box = el && el.closest('.fs-box'); if (box) box.scrollTop = Math.max(0, el.offsetTop - box.clientHeight / 3); }
     return r;
@@ -9188,11 +9199,11 @@ const isFS = t => /^(fs\d|sp)$/.test(t || '');
 // ---------- The card in the Final rescue tab (replaces the midterm-style simulations, which stay available below) ----------
 function fsCardHTML() {
   const row = (k, i) => { const r = fsResults(k), last = r[r.length - 1]; return `<div class="step ${r.length ? 'done' : ''}"><span class="n">${r.length ? '✓' : i + 1}</span><div><b>Final simulation ${i + 1}</b> <span class="small muted">(story revealed when you start)</span><div class="small muted">${r.length ? `Taken ${r.length}× · first ${simPct(r[0])}%${r.length > 1 ? ` · last ${simPct(last)}%` : ''}` : ['suggested Fri 20', 'suggested Sat 21', 'extra: Sun 22, morning only, if rested'][i]}</div></div><button class="btn ${r.length ? '' : 'primary'}" data-fs="${k}">${r.length ? 'Take again' : 'Start'}</button></div>`; };
-  const sp = ch => { const r = spResults(ch), last = r[r.length - 1]; return `<button class="btn sm ${r.length ? '' : 'primary'}" data-sp="${ch}">Ch. ${ch}${r.length ? ` · ${simPct(last)}%` : ''}</button>`; };
+  const sp = ch => { const r = spResults(ch), last = r[r.length - 1]; return `<button class="btn sm ${r.length ? '' : 'primary'}" data-sp="${ch}">Ch. ${ch}${GPT_MOCK_CHS.includes(ch) ? '*' : ''}${r.length ? ` · ${simPct(last)}%` : ''}</button>`; };
   return `<div class="panel stack" id="fs-card" style="border-color:var(--accent)"><div class="row" style="justify-content:space-between"><h2 style="margin:0">Final simulations · the professor’s format</h2><span class="small muted">${FS_MIN} min each</span></div>
-    <p class="small">What he announced on Nov 17: <b>one whole class story</b> (15 verbs to parse = 32 pts · 20 questions in Hebrew = 26 pts) + <b>6 verses of Ruth</b> (translation = 30 pts · syntax questions in English = 12 pts). No hints, open answers, rare Ruth words given. Same paper every time, so scores can be compared.</p>
+    <p class="small">What he announced on Nov 17: <b>one whole class story</b> (15 verbs to parse = 32 pts · 20 questions in Hebrew = 26 pts) + <b>5–6 verses of Ruth</b> (translation = 30 pts · syntax questions in English = 12 pts). No hints, open answers, rare Ruth words given. Same paper every time, so scores can be compared.</p>
     <div class="plan">${FS_KEYS.map(row).join('')}</div>
-    <div class="stack" style="gap:6px"><b>Story practice (60 min)</b><span class="small muted">A whole story the simulations do not use: 15 of its verbs + about 12 questions in Hebrew. The final can use any story, so do as many as you can.</span><div class="row" style="gap:6px">${SP_CHS.map(sp).join('')}</div></div>
+    <div class="stack" style="gap:6px"><b>Story practice (60 min)</b><span class="small muted">A whole story the simulations do not use: 15 of its verbs + its questions in Hebrew (12–20). The final can use any story, so do as many as you can. The GPT paper mock finals in your Drive use Ch. 14, 15, 17, 18 and 22 (marked *): if you do that paper mock, do it first, cold.</span><div class="row" style="gap:6px">${SP_CHS.map(sp).join('')}</div></div>
     <details><summary class="small">Older practice finals (midterm format, before the Nov 17 announcement)</summary><div class="row" style="gap:6px;margin-top:6px">${Object.keys(SIM_DEF).map((k, i) => `<button class="btn sm" data-sim="${k}">Practice final ${i + 1}${simResults(k).length ? ` · ${simPct(simResults(k).slice(-1)[0])}%` : ''}</button>`).join('')}</div></details></div>`;
 }
 (function () {
@@ -9205,12 +9216,12 @@ function fsCardHTML() {
     $$('[data-sim]').forEach(b => b.onclick = () => startSim(b.dataset.sim));
   };
   // The plan, re-timed to the professor's format: Wed = story practice + Ruth; Fri = simulation 1; Sat = simulation 2; Sun = story practice (short).
-  const nextSP = () => SP_CHS.map(ch => [ch, spResults(ch).length]).sort((a, b) => a[1] - b[1] || [18, 20, 14, 21, 17, 16].indexOf(a[0]) - [18, 20, 14, 21, 17, 16].indexOf(b[0]))[0][0];
+  const nextSP = () => SP_CHS.map(ch => [ch, spResults(ch).length]).sort((a, b) => a[1] - b[1] || [16, 18, 14, 17, 15, 22].indexOf(a[0]) - [16, 18, 14, 17, 15, 22].indexOf(b[0]))[0][0];
   const _rb = rescueBlocks;
   rescueBlocks = function () {
     const B = _rb.apply(this, arguments), d = dayKey(); if (!B) return B;
     const done = t => () => (S.assess || []).some(a => a.type === t && a.end && dayKey(new Date(a.end)) === d);
-    const spBlk = () => { const ch = nextSP(); return { id: 'sp', min: 60, title: `Story practice: Ch. ${ch}, the whole story (60 min)`, sub: '15 of its verbs to parse + its questions in Hebrew, like the first half of the final. Answer with words from the text.', act: () => startSP(nextSP()), check: done('sp') }; };
+    const spBlk = () => { const ch = nextSP(); return { id: 'sp', min: 60, title: `Story practice: Ch. ${ch}, the whole story (60 min)`, sub: '15 of its verbs to parse + its questions in Hebrew, like the first half of the final. Answer with words from the text.' + (GPT_MOCK_CHS.includes(ch) ? ' (If you plan to do the GPT paper mock on this story, do that first.)' : ''), act: () => startSP(nextSP()), check: done('sp') }; };
     const fsBlk = (k, i) => ({ id: 'mock', min: FS_MIN, title: `Final simulation ${i} (${FS_MIN} min, the professor’s format)`, sub: 'Whole story: 15 parses + 20 questions in Hebrew. Ruth: 6 verses to translate + 4 syntax questions. Paper lexicon allowed, phone away.', act: () => startFS(k), check: done(k) });
     const ruthBlk = { id: 'ruth', min: 20, title: 'Ruth: 6 verses, translate blind', sub: 'Strict first, then smooth English. Then ask: what does each אֲשֶׁר point back to? Why is each Piel a Piel?', act: () => startRuthWork({ planBlock: 'ruth' }) };
     const drop = ids => ids.forEach(id => { const j = B.findIndex(b => b.id === id); if (j >= 0) B.splice(j, 1); });
@@ -9266,5 +9277,5 @@ ${tbl(['', 'Where is the u / o?', 'Examples'], [['Pual', 'under the <b>first roo
   const b = document.getElementById('btn-theme'); if (b) b.onclick = () => { t = order[(order.indexOf(t) + 1) % order.length]; try { localStorage.setItem('het-theme', t); } catch {} apply(); };
 })();
 </script>
-<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='67439f04f8';</script>
+<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='b28c3c8cca';</script>
 </body></html>
