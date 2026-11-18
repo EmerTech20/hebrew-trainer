@@ -9077,6 +9077,25 @@ function simCardHTML() {
 
 </script>
 <script>
+// ---------- Hebrew keys under EVERY Hebrew answer box (root boxes, Hebrew answers), so no Hebrew keyboard is needed ----------
+(function () {
+  const isHe = el => el.matches('input[lang="he"], textarea[lang="he"], input[dir="rtl"], textarea[dir="rtl"]') && !/^(hidden|radio|checkbox)$/.test(el.type || '');
+  const already = el => { const box = el.closest('.prow, .rootbox, label, .f') || el.parentElement; return !!(box && box.querySelector('.hekeys, #p-kbd')) || !!(el.parentElement && el.parentElement.parentElement && el.parentElement.parentElement.querySelector(':scope > .hekeys')); };
+  function attach(el) {
+    el.dataset.hk = '1'; if (already(el)) return;
+    const w = document.createElement('div'); w.innerHTML = heKeysHTML(); const d = w.firstElementChild; if (!d) return;
+    if (/root/i.test((el.id || '') + ' ' + (el.className || '') + ' ' + (el.getAttribute('aria-label') || '') + ' ' + ((el.closest('label') || {}).textContent || ''))) d.open = true;
+    d.style.maxWidth = '520px'; d.style.margin = '6px auto';
+    (el.closest('label') || el).insertAdjacentElement('afterend', d);
+    wireHeKeys(d, () => el);
+  }
+  let t = null; const scan = () => document.querySelectorAll('input, textarea').forEach(el => { if (!el.dataset.hk && isHe(el)) attach(el); });
+  new MutationObserver(() => { clearTimeout(t); t = setTimeout(scan, 60); }).observe(document.body, { childList: true, subtree: true });
+  setTimeout(scan, 500);
+})();
+
+</script>
+<script>
 // Colour mode: dark (default), light, or the same as the computer. Remembered on this device.
 (function () {
   const order = ['dark', 'light', 'auto'], lab = { dark: '☾ Dark', light: '☀ Light', auto: '◐ Auto' };
@@ -9086,5 +9105,5 @@ function simCardHTML() {
   const b = document.getElementById('btn-theme'); if (b) b.onclick = () => { t = order[(order.indexOf(t) + 1) % order.length]; try { localStorage.setItem('het-theme', t); } catch {} apply(); };
 })();
 </script>
-<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='b540f6e931';</script>
+<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='91b3486d57';</script>
 </body></html>
