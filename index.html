@@ -5018,7 +5018,7 @@ function renderExam() {
   exClockStart();
   const it = EX.items[EX.cur], a = EX.ans[EX.cur] = EX.ans[EX.cur] || {};
   v.innerHTML = `<div class="sess-head"><b>${esc(bp.name)}</b><div class="progress"><i style="width:${EX.items.filter((x, i) => exAnswered(x, EX.ans[i])).length / EX.items.length * 100}%"></i></div><b id="ex-clock" style="font-variant-numeric:tabular-nums">--:--</b></div>
-    ${EX.passage && (/^sim/.test(EX.type) ? ['comp', 'parse', 'translation', 'syntax'] : EX.type === 'mock' ? ['comp', 'parse', 'translation'] : ['comp']).includes(it.sec) ? passageHTML() : ''}
+    ${EX.passage && (/^(sim|fs\d|sp$)/.test(EX.type) ? ['comp', 'parse', 'translation', 'syntax'] : EX.type === 'mock' ? ['comp', 'parse', 'translation'] : ['comp']).includes(it.sec) ? passageHTML() : ''}
     <div class="panel qbox" style="max-width:760px;width:100%;margin:0 auto">${exItemHTML(it, a, EX.cur + 1)}
       <div class="row" style="justify-content:space-between"><div class="row"><button class="btn" id="ex-prev" ${EX.cur ? '' : 'disabled'}>← Previous</button><button class="btn primary" id="ex-next">${EX.cur + 1 < EX.items.length ? 'Next →' : 'Review & submit'}</button></div><button class="btn ghost sm" id="ex-sub">Submit now</button></div>
       <div class="row" style="gap:4px">${EX.items.map((x, i) => `<button class="btn sm ${i === EX.cur ? 'primary' : ''}" data-xi="${i}" style="min-width:34px;${exAnswered(x, EX.ans[i]) ? '' : 'opacity:.55'}">${i + 1}</button>`).join('')}</div></div>`;
@@ -7938,7 +7938,7 @@ function readinessHTML() {
 // consensus, to be confirmed), one or two stories already studied, all seven main stems possible. His first advice: retake the
 // earlier quizzes cold. The S15 report suggests 40% retakes, 35% stem + form recognition, 20% Ruth 3 forms, 5% text signs.
 // Quiz layout (Ruth 1–3 quizzes): translate a passage into smooth English + parse 1–2 words in the six-box grid.
-const FINAL_WHEN = 'Mon Nov 23, 8:00 a.m. (confirm the professor’s announcement)';
+const FINAL_WHEN = 'Mon Nov 23, 8:00 a.m. (confirmed Nov 17; he may start at 7:50)';
 
 // ---------- Quiz retakes (Ruth 1–3) ----------
 // Passages and target words only (the Bible text is in the app already). The “rare vocabulary” lists of the quiz sheets
@@ -9059,21 +9059,6 @@ function simCardHTML() {
     <p class="small muted">Built like the professor’s midterm and the syllabus: a studied text, questions about it in Hebrew, parsing on the quiz grid (with stem), translation, and syntax questions. Rare words are given. Same paper every time, so the scores can be compared. Suggested: #1 Wed 18, #2 Sat 21, #3 Sun 22.</p>
     <div class="plan">${Object.keys(SIM_DEF).map((k, i) => { const r = simResults(k), last = r[r.length - 1]; return `<div class="step ${r.length ? 'done' : ''}"><span class="n">${r.length ? '✓' : i + 1}</span><div><b>${esc(SIM_DEF[k].name)}</b><div class="small muted">${r.length ? `Taken ${r.length}× · first score ${simPct(r[0])}%${r.length > 1 ? ` · last ${simPct(last)}%` : ''}` : 'not taken yet'}</div></div><button class="btn ${r.length ? '' : 'primary'}" data-sim="${k}">${r.length ? 'Take again' : 'Start'}</button></div>`; }).join('')}</div></div>`;
 }
-(function () {
-  // In the Final rescue tab, at the top.
-  const _rr = renderRescue;
-  renderRescue = function () { _rr.apply(this, arguments); const v = $('#v-rescue'); if (!v || $('#sim-card')) return; const top = v.querySelector('.stack > div'); (top || v).insertAdjacentHTML('afterend', simCardHTML()); $$('[data-sim]').forEach(b => b.onclick = () => startSim(b.dataset.sim)); };
-  // In the plan: Wednesday = simulation 1, Saturday = simulation 2, Sunday = simulation 3 (instead of the random timed final).
-  const _rb = rescueBlocks;
-  rescueBlocks = function () {
-    const B = _rb.apply(this, arguments), d = dayKey(); if (!B) return B;
-    const map = { '2026-11-18': 'sim1', '2026-11-21': 'sim2', '2026-11-22': 'sim3' }, k = map[d]; if (!k) return B;
-    const blk = { id: 'mock', min: 75, title: SIM_DEF[k].name + ' (75 min, closed book)', sub: 'Questions in Hebrew on the text, parsing with stem, translation, syntax. Phone away, no notes.', act: () => startSim(k), check: () => simResults(k).some(a => dayKey(new Date(a.end)) === d) };
-    const i = B.findIndex(b => b.id === 'mock'); if (i >= 0) B[i] = blk; else B.splice(1, 0, blk);
-    if (k === 'sim3') { const j = B.findIndex(b => b.id === 'mix'); if (j >= 0) B.splice(j, 1); }
-    return B;
-  };
-})();
 
 </script>
 <script>
@@ -9096,6 +9081,182 @@ function simCardHTML() {
 
 </script>
 <script>
+// ---------- Final simulations in the professor's ANNOUNCED format (class of Nov 17, S18) ----------
+// One whole class story (any of Ch. 14–22): ~15 verbs to parse = 32 pts · ~20 questions in Hebrew = 26 pts.
+// Ruth: 5–6 verses in a row to translate = 30 pts (rare words given) · questions in English on that passage = 12 pts.
+// The content (story choice, verbs, questions, model answers) lives only in the private update file (docs simdefs/fs1–3, storyqs/<ch>).
+const FS_KEYS = ['fs1', 'fs2', 'fs3'];
+const FS_MIN = 140;
+const FS_SECTIONS = { parse: { n: 15, w: .32, label: 'Story · parsing (32 points)' }, translation: { n: 6, w: .30, label: 'Ruth · translation (30 points)' }, comp: { n: 20, w: .26, label: 'Story · questions in Hebrew (26 points)' }, syntax: { n: 4, w: .12, label: 'Ruth · syntax questions in English (12 points)' } };
+FS_KEYS.forEach((k, i) => { BLUEPRINTS[k] = { id: k, name: `Final simulation ${i + 1} (professor’s format)`, minutes: () => FS_MIN, sections: FS_SECTIONS }; });
+BLUEPRINTS.sp = { id: 'sp', name: 'Story practice (exam format)', minutes: () => 60, sections: { parse: { n: 15, w: .55, label: 'Story · parsing' }, comp: { n: 12, w: .45, label: 'Story · questions in Hebrew' } } };
+const SP_CHS = [14, 16, 17, 18, 20, 21];   // the stories that are not inside the three simulations
+const FS_NEED = 'The simulation texts are not in the app yet: import hebrew-update-2026-11-18.json (Library → Add material).';
+async function fsDef(path) { try { if (S.db) { const s = await S.db.doc(path).get(); return s.exists ? s.data() : null; } } catch { } return null; }
+const fsLn = ln => ln ? (ln[1] > ln[0] ? `${ln[0]}–${ln[1]}` : `${ln[0]}`) : '';
+function fsCompItem(k, i, x) {
+  const [q, a, qe, ae, ln] = x;
+  return { kind: 'write', sub: 'comp', heAns: 1, key: `${k}|c|${i}`, cid: 'fsq:' + AN.hash(AN.normHe(q)), q, model: `${a} — ${qe} → ${ae}`, lines: fsLn(ln), ln: ln || null, t: 'comprehension', sec: 'comp', cat: 'protected', skill: 'reading' };
+}
+function fsParseItem(k, L, x) {
+  const [form, root, stem, conj, pgn, alts, ln] = x, cid = 'f:' + AN.hash(AN.normHe(form));
+  return { kind: 'parse', key: `${k}|p|${form}`, cid, form, root, stem, conj, pgn: storyPgn(conj, pgn), ...(alts ? { alts } : {}), gloss: '', ctx: ln ? L[ln - 1] : '', ref: `story line ${ln}`, ln: ln ? [ln, ln] : null, t: stem === 'qal' ? 'qal_weak' : PB_STEM_TOPIC[stem] || stem, sec: 'parse', cat: catByExposure(cid) };
+}
+// Story items in the order of the text (like the professor's paper: questions and verbs next to their lines).
+const fsByLine = items => items.map((x, i) => [x, i]).sort((a, b) => ((a[0].ln || [1e4])[0] - (b[0].ln || [1e4])[0]) || (a[0].kind === 'write' ? -1 : 1) - (b[0].kind === 'write' ? -1 : 1) || a[1] - b[1]).map(x => x[0]);
+function fsFinish(items) { items.forEach((x, i) => { x.n = i + 1; x.iid = AN.itemId(x); x.cid = x.cid || AN.contentId(x); x.diff = AN.difficulty(x); }); return items; }
+async function buildFS(k) {
+  const D = await fsDef('simdefs/' + k); if (!D) throw new Error(FS_NEED);
+  const d = await storyDoc(D.ch); if (!d) throw new Error(FS_NEED);
+  const L = d.lines;
+  const story = fsByLine([...D.comp.map((x, i) => fsCompItem(k, i, x)), ...D.parse.map(x => fsParseItem(k, L, x))]);
+  const [c, v1, v2] = D.ruth, verses = []; for (let v = v1; v <= v2; v++) { const x = ruthVerse(c, v); if (x) verses.push(x); }
+  const tr = exTranslate(verses).map((y, i) => ({ ...y, key: `${k}|t|${c}:${v1 + i}`, cat: catByExposure(y.cid) }));
+  const syn = D.syn.map((s, i) => ({ kind: 'write', sub: 'comp', synEn: 1, key: `${k}|s|${i}`, cid: 'fss:' + AN.hash(s[0]), q: s[0], model: s[1], t: 'syntax', sec: 'syntax', cat: 'protected', skill: 'syntax' }));
+  const items = fsFinish([...story, ...tr, ...syn]);
+  BLUEPRINTS[k].name = D.name;
+  const ruthHead = `Ruth ${c}:${v1}–${v2}`;
+  return { id: 'a' + Date.now().toString(36), type: k, blueprint: k, items, limits: [], limitMs: FS_MIN * 60000, created: Date.now(), fsName: D.name,
+    passage: { ref: `Ch. ${D.ch} story (${d.title}) + ${ruthHead}`, verses: [...L.map((l, i) => ({ cid: `st:${D.ch}:${i + 1}` })), ...verses.map(x => ({ cid: x.cid }))],
+      story: { head: `Story · Ch. ${D.ch}: ${d.title} (whole text, ${L.length} lines)`, lines: L }, ruth: { head: ruthHead, verses, vocab: D.vocab.map(x => x[0] + ' “' + x[1] + '”').join(' · ') } } };
+}
+// Story practice: a whole story, 15 verbs from it (chosen where you lose points) + the questions in Hebrew for that story.
+function spVerbs(d, n = 15) {
+  const Q = { wayyiqtol: 4, qatal: 3, yiqtol: 3, weqatal: 2, impv: 2, ptc: 2, inf: 2, weyiqtol: 1 }, cnt = {}, seenF = new Set(), seenR = new Set(), out = [];
+  const cand = (d.verbs || []).filter(v => (v[3] !== 'inf' || /^ל/.test(AN.normHe(v[0]).replace(/[^א-ת]/g, ''))) && !/^ב/.test(v[3] === 'ptc' ? AN.normHe(v[0]).replace(/[^א-ת]/g, '') : ''));
+  for (const v of weightedPick(cand, storyVerbWeight, cand.length)) {
+    const f = AN.normHe(v[0]); if (seenF.has(f) || seenR.has(v[1]) || (cnt[v[3]] || 0) >= (Q[v[3]] || 1)) continue;
+    seenF.add(f); seenR.add(v[1]); cnt[v[3]] = (cnt[v[3]] || 0) + 1; out.push(v); if (out.length >= n) break;
+  }
+  return out;
+}
+async function buildSP(ch) {
+  const d = await storyDoc(ch), Q = await fsDef('storyqs/' + ch); if (!d || !Q) throw new Error(FS_NEED);
+  const L = d.lines, k = 'sp' + ch;
+  const parse = spVerbs(d).map(v => fsParseItem(k, L, [v[0], String(v[1]).replace(/[כמנפצ]$/, c => ({ 'כ': 'ך', 'מ': 'ם', 'נ': 'ן', 'פ': 'ף', 'צ': 'ץ' }[c])), v[2], v[3], v[4], null, v[5] + 1]));
+  const items = fsFinish(fsByLine([...Q.q.map((x, i) => fsCompItem(k, i, x)), ...parse]));
+  BLUEPRINTS.sp.name = `Story practice · Ch. ${ch}: ${d.title}`;
+  return { id: 'a' + Date.now().toString(36), type: 'sp', blueprint: 'sp', spCh: ch, items, limits: [], limitMs: 60 * 60000, created: Date.now(),
+    passage: { ref: `Ch. ${ch} story (${d.title})`, verses: L.map((l, i) => ({ cid: `st:${ch}:${i + 1}` })), story: { head: `Story · Ch. ${ch}: ${d.title} (whole text, ${L.length} lines)`, lines: L } } };
+}
+async function fsStart(build, label) {
+  if (EX && EX.phase && EX.phase !== 'done' && !confirm('Another test is in progress. Start this one instead?')) return;
+  showLoading('Preparing ' + label + '…', 'The whole story, the verbs and the questions.');
+  let ex; try { ex = await build(); } catch (e) { console.error(e); hideLoading(e.message || String(e)); return; }
+  hideLoading();
+  EX = { ...ex, paper: false, phase: 'intro', ans: {}, ms: {}, cur: 0, elapsed: 0, interrupts: 0, writeMs: 0, entryMs: 0 };
+  exSave(); renderExam();
+}
+const startFS = k => fsStart(() => buildFS(k), 'the simulation');
+const startSP = ch => fsStart(() => buildSP(ch), 'the story practice');
+const fsResults = k => (S.assess || []).filter(a => a.type === k && a.end).sort((a, b) => a.end - b.end);
+const spResults = ch => (S.assess || []).filter(a => a.type === 'sp' && a.end && (a.passage || {}).ref && a.passage.ref.startsWith(`Ch. ${ch} `)).sort((a, b) => a.end - b.end);
+const isFS = t => /^(fs\d|sp)$/.test(t || '');
+// The text panel: the whole story (scrolls to the lines of the current item, highlighted) or the Ruth passage + rare words.
+(function () {
+  const _ph = passageHTML;
+  passageHTML = function () {
+    if (!EX || !isFS(EX.type) || !EX.passage || !EX.passage.story) return _ph.apply(this, arguments);
+    const it = EX.phase === 'taking' ? EX.items[EX.cur] : null, P = EX.passage;
+    const onStory = !it || it.sec === 'comp' || it.sec === 'parse', onRuth = P.ruth && (!it || it.sec === 'translation' || it.sec === 'syntax');
+    const hl = 'background:var(--accent-soft);border-radius:6px';
+    let h = '';
+    if (onStory) { const [a, b] = it && it.ln ? it.ln : [0, -1];
+      h += `<details class="panel" open><summary>${esc(P.story.head)}</summary><div class="passage lines fs-box" style="--rsize:1.25rem;margin-top:8px;position:relative;${it ? 'max-height:44vh;overflow:auto' : ''}">${P.story.lines.map((l, i) => { const on = i + 1 >= a && i + 1 <= b; return `<div class="ln${on ? ' fs-hl' : ''}" style="cursor:default;${on ? hl : ''}"><span class="no">${i + 1}</span><span>${esc(l)}</span></div>`; }).join('')}</div></details>`; }
+    if (onRuth) h += `<details class="panel" open><summary>${esc(P.ruth.head)}</summary><div class="small" style="margin:6px 0"><b>Rare words (given):</b> ${heWrap(esc(P.ruth.vocab))}</div><div class="passage lines" style="--rsize:1.3rem">${P.ruth.verses.map(x => { const on = it && it.sub === 'translate2' && it.he === x.he; return `<div class="ln${on ? ' fs-hl' : ''}" style="cursor:default;${on ? hl : ''}"><span class="no">${x.c}:${x.v}</span><span>${esc(x.he)}</span></div>`; }).join('')}</div></details>`;
+    return h;
+  };
+  const _re = renderExam;
+  renderExam = function () {
+    if (EX && isFS(EX.type) && EX.fsName && BLUEPRINTS[EX.type]) BLUEPRINTS[EX.type].name = EX.fsName;
+    if (EX && EX.type === 'sp' && EX.passage) BLUEPRINTS.sp.name = 'Story practice · ' + EX.passage.ref;
+    const r = _re.apply(this, arguments);
+    if (!EX || !isFS(EX.type)) return r;
+    if (EX.phase === 'intro') {
+      const h1 = $('#v-session h1');
+      if (h1) h1.insertAdjacentHTML('afterend', EX.type === 'sp'
+        ? `<div class="note">One whole class story, as on the final: the verbs to parse and the questions in Hebrew sit next to their lines (in text order). Parse every verb (partial credit per box). Answer the questions with words from the text. 60 minutes.</div>`
+        : `<div class="note"><b>The professor’s format (class of Nov 17).</b> A whole class story (which one is a surprise, as on Monday): 15 verbs to parse = 32 points, 20 questions in Hebrew = 26 points. Then Ruth, 6 verses in a row: translation = 30 points, questions about its syntax in English = 12 points. ${FS_MIN} minutes.<br><b>His advice:</b> never leave a parse or a verse blank (each box earns points); do not spend 10 minutes on one question; the lexicon is allowed but slow. <b>Suggested order:</b> parsing (40–45 min) → Ruth translation (40–45) → Hebrew questions (25–35) → syntax (10–15) → check (10–15). Use the item numbers to jump.</div>`);
+    }
+    if (EX.phase === 'taking') { const el = $('.fs-hl'), box = el && el.closest('.fs-box'); if (box) box.scrollTop = Math.max(0, el.offsetTop - box.clientHeight / 3); }
+    return r;
+  };
+  // Syntax questions are answered in English (short).
+  const _xi = exItemHTML;
+  exItemHTML = function (it) { const h = _xi.apply(this, arguments); return it && it.synEn ? h.replace('Answer (Hebrew or English)', 'Answer in English (two or three sentences)') : h; };
+})();
+// ---------- The card in the Final rescue tab (replaces the midterm-style simulations, which stay available below) ----------
+function fsCardHTML() {
+  const row = (k, i) => { const r = fsResults(k), last = r[r.length - 1]; return `<div class="step ${r.length ? 'done' : ''}"><span class="n">${r.length ? '✓' : i + 1}</span><div><b>Final simulation ${i + 1}</b> <span class="small muted">(story revealed when you start)</span><div class="small muted">${r.length ? `Taken ${r.length}× · first ${simPct(r[0])}%${r.length > 1 ? ` · last ${simPct(last)}%` : ''}` : ['suggested Fri 20', 'suggested Sat 21', 'extra: Sun 22, morning only, if rested'][i]}</div></div><button class="btn ${r.length ? '' : 'primary'}" data-fs="${k}">${r.length ? 'Take again' : 'Start'}</button></div>`; };
+  const sp = ch => { const r = spResults(ch), last = r[r.length - 1]; return `<button class="btn sm ${r.length ? '' : 'primary'}" data-sp="${ch}">Ch. ${ch}${r.length ? ` · ${simPct(last)}%` : ''}</button>`; };
+  return `<div class="panel stack" id="fs-card" style="border-color:var(--accent)"><div class="row" style="justify-content:space-between"><h2 style="margin:0">Final simulations · the professor’s format</h2><span class="small muted">${FS_MIN} min each</span></div>
+    <p class="small">What he announced on Nov 17: <b>one whole class story</b> (15 verbs to parse = 32 pts · 20 questions in Hebrew = 26 pts) + <b>6 verses of Ruth</b> (translation = 30 pts · syntax questions in English = 12 pts). No hints, open answers, rare Ruth words given. Same paper every time, so scores can be compared.</p>
+    <div class="plan">${FS_KEYS.map(row).join('')}</div>
+    <div class="stack" style="gap:6px"><b>Story practice (60 min)</b><span class="small muted">A whole story the simulations do not use: 15 of its verbs + about 12 questions in Hebrew. The final can use any story, so do as many as you can.</span><div class="row" style="gap:6px">${SP_CHS.map(sp).join('')}</div></div>
+    <details><summary class="small">Older practice finals (midterm format, before the Nov 17 announcement)</summary><div class="row" style="gap:6px;margin-top:6px">${Object.keys(SIM_DEF).map((k, i) => `<button class="btn sm" data-sim="${k}">Practice final ${i + 1}${simResults(k).length ? ` · ${simPct(simResults(k).slice(-1)[0])}%` : ''}</button>`).join('')}</div></details></div>`;
+}
+(function () {
+  const _rr = renderRescue;
+  renderRescue = function () {
+    _rr.apply(this, arguments); const v = $('#v-rescue'); if (!v || $('#fs-card')) return;
+    const top = v.querySelector('.stack > div'); (top || v).insertAdjacentHTML('afterend', fsCardHTML());
+    $$('[data-fs]').forEach(b => b.onclick = () => startFS(b.dataset.fs));
+    $$('[data-sp]').forEach(b => b.onclick = () => startSP(+b.dataset.sp));
+    $$('[data-sim]').forEach(b => b.onclick = () => startSim(b.dataset.sim));
+  };
+  // The plan, re-timed to the professor's format: Wed = story practice + Ruth; Fri = simulation 1; Sat = simulation 2; Sun = story practice (short).
+  const nextSP = () => SP_CHS.map(ch => [ch, spResults(ch).length]).sort((a, b) => a[1] - b[1] || [18, 20, 14, 21, 17, 16].indexOf(a[0]) - [18, 20, 14, 21, 17, 16].indexOf(b[0]))[0][0];
+  const _rb = rescueBlocks;
+  rescueBlocks = function () {
+    const B = _rb.apply(this, arguments), d = dayKey(); if (!B) return B;
+    const done = t => () => (S.assess || []).some(a => a.type === t && a.end && dayKey(new Date(a.end)) === d);
+    const spBlk = () => { const ch = nextSP(); return { id: 'sp', min: 60, title: `Story practice: Ch. ${ch}, the whole story (60 min)`, sub: '15 of its verbs to parse + its questions in Hebrew, like the first half of the final. Answer with words from the text.', act: () => startSP(nextSP()), check: done('sp') }; };
+    const fsBlk = (k, i) => ({ id: 'mock', min: FS_MIN, title: `Final simulation ${i} (${FS_MIN} min, the professor’s format)`, sub: 'Whole story: 15 parses + 20 questions in Hebrew. Ruth: 6 verses to translate + 4 syntax questions. Paper lexicon allowed, phone away.', act: () => startFS(k), check: done(k) });
+    const ruthBlk = { id: 'ruth', min: 20, title: 'Ruth: 6 verses, translate blind', sub: 'Strict first, then smooth English. Then ask: what does each אֲשֶׁר point back to? Why is each Piel a Piel?', act: () => startRuthWork({ planBlock: 'ruth' }) };
+    const drop = ids => ids.forEach(id => { const j = B.findIndex(b => b.id === id); if (j >= 0) B.splice(j, 1); });
+    const at = id => B.findIndex(b => b.id === id);
+    if (d === '2026-11-18') { const i = at('mock'); if (i >= 0) B[i] = spBlk(); else B.splice(1, 0, spBlk()); if (at('ruth') < 0) B.splice(at('sp') + 1, 0, ruthBlk); }
+    if (d === '2026-11-20') { drop(['cards', 'nf', 'suffix', 'ruth', 'story', 'recall']); B.splice(Math.max(1, at('lesson') + 1), 0, fsBlk('fs1', 1)); }
+    if (d === '2026-11-21') { const i = at('mock'); if (i >= 0) B[i] = fsBlk('fs2', 2); else B.splice(1, 0, fsBlk('fs2', 2)); }
+    if (d === '2026-11-22') { const i = at('mix'); if (i >= 0) B[i] = spBlk(); else B.splice(2, 0, spBlk()); }
+    return B;
+  };
+})();
+// ---------- Lessons: the new strategy, and the Pual / Hophal difference (class of Nov 17) ----------
+RL.exam = { title: 'Lesson 6 · How to take the final (the professor’s format, Nov 17)', html: () => `
+<p><b>The paper (announced Nov 17):</b></p>
+${tbl(['Part', 'What', 'Points'], [['Story', '~15 verbs from ONE whole class story (any of Ch. 14–22) to parse', '32'], ['Ruth', '5–6 verses in a row to translate (rare words are given)', '30'], ['Story', '~20 questions in Hebrew on the same story', '26'], ['Ruth', 'questions in English on the syntax of that passage (+ extra credit)', '12']])}
+<ol><li><b>Order:</b> parsing (40–45 min) → Ruth translation (40–45) → Hebrew questions (25–35) → syntax (10–15) → check (10–15). The big points first.</li>
+<li><b>Never leave a parse or a verse blank.</b> Each box (person, gender, number, form, stem, root) earns points on its own. A reasoned guess beats an empty box.</li>
+<li><b>Parsing order:</b> form → who (prefix + ending) → stem (decision order) → root (routine). Participle: person “—”. Infinitive: “—” three times.</li>
+<li><b>Translation:</b> strict, word by word in Hebrew order; then smooth English. Every Hebrew word must appear; add nothing.</li>
+<li><b>Questions in Hebrew:</b> find the line, then <b>copy the words</b> from the text. Do not spend 10 minutes on one question: 20 questions share 26 points.</li>
+<li><b>Syntax (English):</b> “What does אֲשֶׁר refer back to?” → the noun just before that makes sense, and the ending (־וֹ, ־יו) that points back to it. “Why Piel, not Qal?” → name the signs (doubled middle letter, ${heS('ִ / ְ')} under the prefix) and what the Piel does here (makes something happen to an object, repeated action, the usual stem of the verb, like ${heS('דִּבֶּר')}).</li>
+<li><b>Lexicon:</b> allowed on paper, but slow. Use it only for a word that blocks a whole verse.</li>
+<li><b>The night before:</b> no full test on Sunday night. Sleep fixes in memory what you practised.</li></ol>
+<p><b>Question words</b> (you must understand the question to answer it):</p>
+${tbl(['Word', 'Means', 'Answer with'], [[heS('מִי'), 'who', 'a name'], [heS('אֶת־מִי'), 'whom', heS('אֶת־') + ' + name'], [heS('לְמִי'), 'to whom / whose', heS('לְ') + ' + name'], [heS('מָה / מַה־ / מֶה'), 'what', 'a thing / an action'], [heS('לָמָּה / מַדּוּעַ'), 'why', heS('כִּי …')], [heS('אֵיפֹה'), 'where', heS('בְּ…')], [heS('אָנָה'), 'where to', heS('אֶל… / …ָה')], [heS('מֵאַיִן'), 'from where', heS('מִ…')], [heS('מָתַי / עַד־מָתַי'), 'when / until when', heS('בְּ… / עַד…')], [heS('כַּמָּה / בְּכַמָּה'), 'how many / for how much', 'a number'], [heS('בֶּן־כַּמָּה שָׁנִים'), 'how old', heS('בֶּן־… שָׁנָה')], [heS('אֵיךְ'), 'how', 'the manner'], [heS('הֲ…'), 'yes/no question', heS('כֵּן / לֹא')]])}` };
+(function () {
+  const base = RL.stems.html;
+  RL.stems.html = () => base() + `<p><b>Pual or Hophal? Look where the “u” sits</b> (class of Nov 17):</p>
+${tbl(['', 'Where is the u / o?', 'Examples'], [['Pual', 'under the <b>first root letter</b> + the middle letter doubled', heS('קֻטַּל · יְקֻטַּל · מְקֻטָּל') + ' · Qal passive ' + heS('יֻלַּד') + ' (Ruth 4:17)'], ['Hophal', 'under the <b>prefix</b> (ה / י / מ), no doubling', heS('הָקְטַל') + ' read <i>hoq-TAL</i> (the ָ is short o) · ' + heS('הֻשְׁלַךְ') + ' was thrown']])}
+<p><b>Hophal of weak roots</b> (the prefix becomes ${heS('הוּ')}): ${heS('הוּבָא')} was brought (בוא) · ${heS('הוּמַת')} was put to death (מות) · ${heS('הוּשַׁב')} was brought back / made to dwell · ${heS('הוּרַד')} was brought down (ירד) · ${heS('הוּגַּד')} it was told (נגד) · ${heS('הֻכָּה')} was struck (נכה). Hiphil ${heS('הִפְקִיד')} appoint → Hophal ${heS('הָפְקַד')} be appointed (פקד).</p>
+<p><b>Passive participles end in ${heS('ָ')}:</b> ${heS('נִשְׁמַר')} he was kept (Niphal perfect) but ${heS('נִשְׁמָר')} being kept (participle) · ${heS('מְקֻטָּל')} · ${heS('מָקְטָל')}.</p>`;
+})();
+// The result page: the score on the professor's 100 points (his weights), with the points per part.
+(function () {
+  const _rv = renderExamReview;
+  renderExamReview = function (rec) {
+    const r = _rv.apply(this, arguments); if (!rec || !isFS(rec.type)) return r;
+    const h1 = $('#v-session h1'), W = BLUEPRINTS[rec.type].sections;
+    const pts = Object.entries(rec.sections || {}).map(([k, o]) => { const max = Math.round((W[k] || {}).w * (rec.type === 'sp' ? 58 : 100)); return `${esc(String((W[k] || {}).label || k).replace(/ \(\d+ points\)/, ''))}: <b>${Math.round(o.acc * max * 10) / 10}</b> / ${max}`; }).join(' · ');
+    if (h1) h1.innerHTML = rec.type === 'sp' ? `Story score: ${Math.round(rec.total * .58)} / 58 <span class="small muted" style="font-family:var(--f-ui)">(= the story half of the final, ${rec.total}%)</span>` : `Score: ${rec.total} / 100 <span class="small muted" style="font-family:var(--f-ui)">(the professor’s weights)</span>`;
+    if (h1) h1.insertAdjacentHTML('afterend', `<p class="small">${pts}</p>`);
+    return r;
+  };
+})();
+</script>
+<script>
 // Colour mode: dark (default), light, or the same as the computer. Remembered on this device.
 (function () {
   const order = ['dark', 'light', 'auto'], lab = { dark: '☾ Dark', light: '☀ Light', auto: '◐ Auto' };
@@ -9105,5 +9266,5 @@ function simCardHTML() {
   const b = document.getElementById('btn-theme'); if (b) b.onclick = () => { t = order[(order.indexOf(t) + 1) % order.length]; try { localStorage.setItem('het-theme', t); } catch {} apply(); };
 })();
 </script>
-<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='91b3486d57';</script>
+<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='67439f04f8';</script>
 </body></html>
