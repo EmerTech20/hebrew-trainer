@@ -9284,6 +9284,49 @@ function startRuth4End(o = {}) {
 })();
 </script>
 <script>
+// ---------- The professor's final-review slide practice (class of Nov 19: Hophal deck slides 59–84; Pual deck slides 39–48) ----------
+// [form, root, stem, conj, pgn, gloss, alts, note]
+const REVIEW_SLIDES = [
+  ['יוּמַת', 'מות', 'hophal', 'yiqtol', '3ms', 'he will be put to death', null, 'Hophal of a hollow root: prefix + וּ (יוּ). Qal would be יָמוּת “he will die”; Hophal = “be killed”.'],
+  ['וְהֻכָּה', 'נכה', 'hophal', 'weqatal', '3ms', 'and he will be struck', null, 'u-vowel ֻ under the PREFIX ה = Hophal; the dagesh in כּ is the lost נ of נכה. וְ + qatal = weqatal.'],
+  ['מָרְאֶה', 'ראה', 'hophal', 'ptc', 'ms', 'being shown', null, 'מָ (short o, “mor”) + no doubling = Hophal participle. Not the noun מַרְאֶה “appearance” (patach).'],
+  ['הָרְאֵיתָ', 'ראה', 'hophal', 'qatal', '2ms', 'you were shown', null, 'הָ = hoph- (short o under the prefix). The ending ־תָ = you (m.).'],
+  ['וְהוּבָא', 'בוא', 'hophal', 'weqatal', '3ms', 'and he will be brought', null, 'Hollow root in the Hophal: הוּ. Passive of Hiphil “bring”, not Qal “came”.'],
+  ['תַּשְׂכִּיל', 'שׂכל', 'hiphil', 'yiqtol', '2ms|3fs', 'you will / she will act wisely', null, 'a under the prefix (תַּ) + ִי before the last letter = Hiphil. Prefix ת with no ending: 2ms or 3fs (the slide gives both).'],
+  ['וְנִקְדַּשְׁתִּי', 'קדשׁ', 'niphal', 'weqatal', '1cs', 'and I will be shown holy', null, 'נִ + root = Niphal perfect; ־תִּי = I; וְ + qatal = weqatal.'],
+  ['תָּשִׁבִי', 'שׁוב', 'hiphil', 'yiqtol', '2fs', 'you (f.) will bring back', null, 'Hollow root in the Hiphil: תָּ + ִ (written without י here). The final ־ִי is the 2fs ending, not the root ו.'],
+  ['כַּבֵּד', 'כבד', 'piel', 'impv', '2ms', 'honour!', null, 'No prefix; ַ under the 1st letter + doubled middle בּ + ֵ = Piel imperative.'],
+  ['הַנִּשְׁבָּרָה', 'שׁבר', 'niphal', 'ptc', 'fs', 'the broken (one, f.)', null, 'הַ = the ARTICLE (dagesh in נּ), not a Hiphil ה. נִ + long ָ before the last letter = Niphal participle; ־ָה = feminine.'],
+  ['יוֹסִיף', 'יסף', 'hiphil', 'yiqtol', '3ms', 'he will add', null, 'I-י root in the Hiphil: the prefix vowel becomes וֹ (יוֹ) + ִי. The ו is not a root letter.'],
+  ['מוּבָא', 'בוא', 'hophal', 'ptc', 'ms', 'the one being brought in', null, 'Hollow root, Hophal participle: מוּ. Compare מָרְאֶה (also a Hophal participle).'],
+  ['וַיֻּכּוּ', 'נכה', 'hophal', 'wayyiqtol', '3mp', 'and they were struck', null, 'וַ + doubled prefix = wayyiqtol; ֻ under the prefix = Hophal; כּ = lost נ; ־וּ = they.'],
+  ['וַיְכֻלּוּ', 'כלה', 'pual', 'wayyiqtol', '3mp', 'and they were completed (Gen 2:1)', null, 'Pual: ֻ under the 1st ROOT letter (כֻ) + doubled middle לּ. וַיְ = wayyiqtol.'],
+  ['מְשֻׁלֶּשֶׁת', 'שׁלשׁ', 'pual', 'ptc', 'fs', 'divided into three / three years old (Gen 15:9)', null, 'מְ + ֻ under the 1st root letter + doubled middle = Pual participle; ־ֶת = feminine.'],
+  ['שֻׁלְּחוּ', 'שׁלח', 'pual', 'qatal', '3cp', 'they were sent (Gen 44:3)', null, 'No prefix; ֻ under the 1st root letter + doubled לּ = Pual perfect; ־וּ = they.'],
+  ['צֻוֵּיתָ', 'צוה', 'pual', 'qatal', '2ms', 'you were commanded (Gen 45:19)', null, 'ֻ under צ + doubled וּ = Pual; III-ה root: ־ֵיתָ = you (m.).'],
+  ['יְצֻוֶּה', 'צוה', 'pual', 'yiqtol', '3ms', 'he/it will be commanded (Exod 34:34)', null, 'יְ + ֻ under the 1st root letter + doubled middle = Pual imperfect.']
+];
+function startReviewSlides(o = {}) {
+  const items = shuffle(REVIEW_SLIDES.slice()).map(v => ({ kind: 'parse', key: 'rs|' + v[0], form: v[0], root: v[1], stem: v[2], conj: v[3], pgn: v[4], gloss: v[5], en: v[5], ...(v[6] ? { alts: v[6] } : {}), note: v[7], ref: 'Professor’s review slides (Nov 19)', t: v[2] === 'qal' ? 'qal_weak' : PB_STEM_TOPIC[v[2]] || v[2], sec: 'parse' }));
+  startSession({ title: 'The professor’s final-review slides: 13 Hophal-deck + 5 Pual-deck forms', items, back: S.tab === 'today' ? 'today' : 'practice', noVary: true, mode: 'practice', planBlock: o.planBlock });
+}
+(function () {
+  const _rb = rescueBlocks;
+  rescueBlocks = function () {
+    const B = _rb.apply(this, arguments), d = dayKey(); if (!B) return B;
+    if (['2026-11-20', '2026-11-21'].includes(d)) { const j = B.findIndex(b => b.id === 'vk'); if (j >= 0) B.splice(j, 1); }
+    if (['2026-11-20', '2026-11-21', '2026-11-22'].includes(d)) B.splice(Math.min(1, B.length), 0, { id: 'rslides', min: 12, title: 'The professor’s final-review slides (18 forms)', sub: 'The exact forms he projected in the last class (Nov 19): Hophal, Pual, Niphal, Hiphil, Piel. Do it until you get all 18 right.', act: () => startReviewSlides({ planBlock: 'rslides' }) });
+    return B;
+  };
+  const _rr = renderRescue;
+  renderRescue = function () {
+    _rr.apply(this, arguments); const c = $('#fs-card'); if (!c || $('#rs-btn')) return;
+    c.insertAdjacentHTML('afterend', `<div class="panel row" style="justify-content:space-between"><div><b>The professor’s final-review slides</b><div class="small muted">The 18 forms he projected on Nov 19 (Hophal deck 13, Pual deck 5), with his answers.</div></div><button class="btn primary" id="rs-btn">Practise</button></div>`);
+    $('#rs-btn').onclick = () => startReviewSlides();
+  };
+})();
+</script>
+<script>
 // Colour mode: dark (default), light, or the same as the computer. Remembered on this device.
 (function () {
   const order = ['dark', 'light', 'auto'], lab = { dark: '☾ Dark', light: '☀ Light', auto: '◐ Auto' };
@@ -9293,5 +9336,5 @@ function startRuth4End(o = {}) {
   const b = document.getElementById('btn-theme'); if (b) b.onclick = () => { t = order[(order.indexOf(t) + 1) % order.length]; try { localStorage.setItem('het-theme', t); } catch {} apply(); };
 })();
 </script>
-<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='b986c9938e';</script>
+<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='8dc0d2ecbd';</script>
 </body></html>
