@@ -9266,6 +9266,22 @@ ${tbl(['', 'Where is the u / o?', 'Examples'], [['Pual', 'under the <b>first roo
     return r;
   };
 })();
+// S19 checkpoint (Nov 19): finish Ruth 4:15b–22 — translate 4:15–17 blind + parse every verb of 4:15–22 (object suffixes, 3fp wayyiqtol, יֻלַּד, הוֹלִיד).
+function startRuth4End(o = {}) {
+  const tv = [15, 16, 17].map(v => ruthVerse(4, v)).filter(Boolean);
+  const seen = new Set(), parse = [];
+  RUTH.verbs.forEach((v, i) => { if (!/^Ruth 4:(1[5-9]|2\d)\b/.test(v[7] || '') || seen.has(AN.normHe(v[0]))) return; seen.add(AN.normHe(v[0])); const it = ruthItem(i); if (v[0] === 'יֻלַּד') it.alts = [{ stem: 'qal' }]; parse.push(it); });
+  const items = [...exTranslate(tv).map(x => ({ ...x, cat: 'instructional' })), ...parse];
+  startSession({ title: 'Ruth 4:15–22: translate blind + parse every verb (S19 checkpoint)', items, passage: { ref: 'Ruth 4:15–22', lines: [15, 16, 17, 18, 19, 20, 21, 22].map(v => { const x = ruthVerse(4, v); return x ? `${v} ${x.he}` : ''; }).filter(Boolean) }, back: S.tab === 'today' ? 'today' : 'practice', noVary: true, mode: 'practice', planBlock: o.planBlock });
+}
+(function () {
+  const _rb = rescueBlocks;
+  rescueBlocks = function () {
+    const B = _rb.apply(this, arguments), d = dayKey(); if (!B) return B;
+    if (d === '2026-11-19' || d === '2026-11-20') B.splice(Math.min(1, B.length), 0, { id: 'r4end', min: 25, title: 'Ruth 4:15–22: finish the chapter (S19 checkpoint)', sub: 'Translate 4:15–17 strictly, then parse every verb: אֲהֵבַתֶךְ she loved YOU · יְלָדַתּוּ she bore HIM · וַתִּקְרֶאנָה they (f.) called · יֻלַּד was born · הוֹלִיד fathered.', act: () => startRuth4End({ planBlock: 'r4end' }) });
+    return B;
+  };
+})();
 </script>
 <script>
 // Colour mode: dark (default), light, or the same as the computer. Remembered on this device.
@@ -9277,5 +9293,5 @@ ${tbl(['', 'Where is the u / o?', 'Examples'], [['Pual', 'under the <b>first roo
   const b = document.getElementById('btn-theme'); if (b) b.onclick = () => { t = order[(order.indexOf(t) + 1) % order.length]; try { localStorage.setItem('het-theme', t); } catch {} apply(); };
 })();
 </script>
-<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='b28c3c8cca';</script>
+<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='b986c9938e';</script>
 </body></html>
