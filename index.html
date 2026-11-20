@@ -9327,6 +9327,141 @@ function startReviewSlides(o = {}) {
 })();
 </script>
 <script>
+// ---------- Nov 20 request: every question = Hebrew + pronunciation + English (of the QUESTION, never of the answer);
+// comprehension questions always show the lines they ask about; pattern cards show the vowel pattern. ----------
+const QHE = {
+  'Who does it? (person · gender · number)': ['מָה הַגּוּף, הַמִּגְדָּר וְהַמִּסְפָּר?', 'What are the person, the gender and the number?'],
+  'Which form? What does it mean in English?': ['מָה הַנְּטִיָּה, וּמָה פֵּרוּשׁ הַמִּלָּה?', 'Which form is it, and what does the word mean?'],
+  'Which stem and form?': ['מָה הַבִּנְיָן, וּמָה הַנְּטִיָּה?', 'Which stem is it, and which form?'],
+  'What does this stem mean?': ['מָה פֵּרוּשׁ הַבִּנְיָן הַזֶּה?', 'What does this stem mean?'],
+  'Root? Which weak type?': ['מָה הַשֹּׁרֶשׁ?', 'What is the root? Which kind of weak root is it?'],
+  'What does it mean? (whose / to whom)': ['מָה פֵּרוּשׁ הַמִּלָּה?', 'What does the word mean? (whose? to whom?)'],
+  'Which stem (בִּנְיָן)?': ['מָה הַבִּנְיָן?', 'Which stem is it?'],
+};
+const QPARSE = ['מָה הַפֹּעַל הַזֶּה?', 'What is this verb? Parse it.'];
+try { document.head.insertAdjacentHTML('beforeend', '<style>.exam .pr.pr-q{display:block!important}</style>'); } catch { }
+const qHas = s => /[א-ת]/.test(String(s || ''));
+function qTri(he, en, o = {}) {
+  return `<div class="qtri" style="margin:6px 0;text-align:${o.center ? 'center' : 'inherit'}"><div class="he" dir="rtl" lang="he" style="font-size:${o.size || '1.35rem'};line-height:1.6">${esc(he)}</div><div style="font-size:.95rem">${PR(he).replace('class="pr"', 'class="pr pr-q"')}</div>${en ? (o.hideEn ? `<button class="btn sm ghost qen-btn" type="button">Show the English of the question</button><div class="small muted qen" hidden>${esc(en)}</div>` : `<div class="small muted">${esc(en)}</div>`) : ''}</div>`;
+}
+function qIndex(it) { const m = String((it && it.key) || '').match(/^cqw?\|(\d+)$/); return m && typeof COMPQ !== 'undefined' && COMPQ[+m[1]] ? COMPQ[+m[1]] : null; }
+function qHebrew(it) { const c = qIndex(it); if (c) return c.q; const q = String(it.q || '').replace(/<[^>]*>/g, ''); return qHas(q) ? q : ''; }
+function qEnglish(it) {
+  if (it.qe) return it.qe;
+  const c = qIndex(it); if (c) return c.qe || '';
+  const he = qHebrew(it); if (!he) return '';
+  const n = AN.normHe(he);
+  if (typeof STORYQ !== 'undefined') { const s = STORYQ.find(x => AN.normHe(x.q) === n); if (s && s.qe) return s.qe; }
+  if (typeof COMPQ !== 'undefined') { const s = COMPQ.find(x => AN.normHe(x.q) === n); if (s && s.qe) return s.qe; }
+  if (it.model && / — .+ → /.test(it.model)) return it.model.split(' — ').slice(1).join(' — ').split(' → ')[0];
+  return '';
+}
+const isCompQ = it => it && ((it.kind === 'write' && it.sub === 'comp' && !it.synEn) || (it.kind === 'mc' && it.mk === 'comp'));
+// The lines a comprehension question asks about: Ruth verses (COMPQ refs) or class-story lines (simulation / story-practice keys).
+async function qLines(it) {
+  const c = qIndex(it), refs = it.refs || (c && c.v);
+  if (refs && refs.length) return { head: refs.length > 1 ? `${refs[0]}–${refs[refs.length - 1].split(':')[1]}` : refs[0], rows: refs.map(r => { const o = cqRef(r); const v = o && PBANK.verses.find(y => y[0] === o.b && y[1] === o.c && y[2] === o.v); return v ? { no: `${o.c}:${o.v}`, he: v[3], on: true } : null; }).filter(Boolean) };
+  const m = String(it.key || '').match(/^(fs\d|sp(\d+))\|c\|/);
+  if (m && it.ln) {
+    let ch = m[2] ? +m[2] : null; if (!ch) { const D = await fsDef('simdefs/' + m[1]); ch = D && D.ch; }
+    const d = ch && await storyDoc(ch); if (!d) return null;
+    const [a, b] = it.ln, rows = []; for (let i = Math.max(1, a - 1); i <= Math.min(d.lines.length, b + 1); i++) rows.push({ no: i, he: d.lines[i - 1], on: i >= a && i <= b });
+    return { head: `Ch. ${ch}: ${d.title}, lines ${a}${b > a ? '–' + b : ''}`, rows };
+  }
+  if (it.ctx && qHas(it.ctx)) return { head: 'the text', rows: [{ no: '', he: it.ctx, on: true }] };
+  return null;
+}
+function qLinesHTML(L) {
+  return `<div class="panel" style="margin:0 0 10px;padding:10px 12px"><div class="small muted" style="margin-bottom:4px">The text this question is about · ${esc(L.head)}</div><div class="passage lines" style="--rsize:1.3rem">${L.rows.map(r => `<div class="ln" style="cursor:default;${r.on ? 'background:var(--accent-soft);border-radius:6px' : 'opacity:.75'}"><span class="no">${esc(String(r.no))}</span><span>${esc(r.he)}</span></div>`).join('')}</div></div>`;
+}
+// Turn the comprehension question in a rendered card into Hebrew + pronunciation + English, and add its lines above it.
+async function qDecorate(root, it, o = {}) {
+  if (!root || !isCompQ(it)) return;
+  const he = qHebrew(it); if (!he) return;
+  const qt = root.querySelector('.qtext'); if (!qt || qt.dataset.tri) return; qt.dataset.tri = '1';
+  const lines = it.lines && o.hideEn ? `<div class="small muted">line${/[–,-]/.test(String(it.lines)) ? 's' : ''} ${esc(it.lines)}</div>` : '';
+  const extra = it.kind === 'write' && it.he ? `<div class="he" dir="rtl" style="font-size:1.6rem;margin-top:6px">${esc(it.he)}</div>` : '';
+  qt.innerHTML = lines + qTri(he, qEnglish(it), { hideEn: o.hideEn }) + extra;
+  qt.querySelectorAll('.qen-btn').forEach(b => b.onclick = () => { b.hidden = true; const e = b.nextElementSibling; if (e) e.hidden = false; if (o.onEn) o.onEn(); });
+  if (o.lines !== false) { const L = await qLines(it); if (L && L.rows.length && qt.isConnected && !root.querySelector('.qlines')) { qt.insertAdjacentHTML('beforebegin', `<div class="qlines">${qLinesHTML(L)}</div>`); } }
+}
+(function () {
+  // Practice sessions
+  const _di = drawItem;
+  drawItem = function () {
+    const r = _di.apply(this, arguments);
+    try {
+      const it = SES && SES.items[SES.i], v = $('#v-session'); if (!it || !v) return r;
+      if (it.kind === 'parse') { const e = v.querySelector('.qbox .eyebrow'); if (e && /Parse this verb/.test(e.textContent)) e.outerHTML = qTri(QPARSE[0], QPARSE[1], { center: true, size: '1.15rem' }); }
+      v.querySelectorAll('b').forEach(b => { const k = b.textContent.trim(); if (QHE[k]) b.outerHTML = qTri(QHE[k][0], QHE[k][1], { center: true, size: '1.2rem' }); });
+      if (isCompQ(it)) { const b = $('#b-tr'); if (b) b.remove(); }
+      qDecorate(v, it);
+    } catch (e) { console.error(e); }
+    return r;
+  };
+  // Flashcards (pattern cards)
+  const _df = drawFlash;
+  drawFlash = function (it) {
+    const r = _df.apply(this, arguments);
+    try { const v = $('#v-session'); const k = String(it.q || '').trim(); const b = [...v.querySelectorAll('p > b')].find(x => x.textContent.trim() === k); if (b) { const q = QHE[k]; b.parentElement.outerHTML = q ? qTri(q[0], q[1], { center: true, size: '1.25rem' }) : `<p><b>${esc(k)}</b></p>`; } } catch (e) { console.error(e); }
+    return r;
+  };
+  // Timed tests: Hebrew + pronunciation always; the English of the question one tap away (the real paper has none; the tap is recorded).
+  const _re = renderExam;
+  renderExam = function () {
+    const r = _re.apply(this, arguments);
+    try {
+      if (EX && EX.phase === 'taking') {
+        const it = EX.items[EX.cur], i = EX.cur, v = $('#v-session');
+        qDecorate(v, it, { hideEn: true, lines: !(EX.passage && EX.passage.story), onEn: () => { EX.qen = EX.qen || {}; EX.qen[i] = 1; try { exSave(); } catch { } } });
+        if (it && it.kind === 'parse') { const e = [...v.querySelectorAll('.eyebrow')].find(x => /Parse this verb|מָה הַפֹּעַל/.test(x.textContent)); if (e) e.insertAdjacentHTML('afterend', `<div style="text-align:center">${PR(QPARSE[0]).replace('class="pr"', 'class="pr pr-q"')}<div class="small muted">${esc(QPARSE[1])}</div></div>`); }
+      }
+    } catch (e) { console.error(e); }
+    return r;
+  };
+})();
+// ---------- Pattern cards: the vowel pattern of the word, letter by letter ----------
+const PXV = { 'ְ': ['shewa', 'ə / silent'], 'ֱ': ['hateph segol', 'e'], 'ֲ': ['hateph patach', 'a'], 'ֳ': ['hateph qamets', 'o'], 'ִ': ['hireq', 'i'], 'ֵ': ['tsere', 'e'], 'ֶ': ['segol', 'e'], 'ַ': ['patach', 'a'], 'ָ': ['qamets', 'a'], 'ֹ': ['holem', 'o'], 'ֺ': ['holem', 'o'], 'ֻ': ['qibbuts', 'u'], 'ׇ': ['qamets hatuf', 'o'] };
+function pxVowels(word) {
+  const units = String(word || '').match(/[א-ת][֑-ׇ]*/g) || [], out = [];
+  units.forEach((u, i) => {
+    const L = u[0], marks = u.slice(1).replace(/[֑-ֽֿ֯׀ׁׂ׃]/g, ''), dag = marks.includes('ּ');
+    const vs = [...marks].filter(c => PXV[c]);
+    const prev = out[out.length - 1];
+    if (L === 'ו' && dag && !vs.length && i > 0) { out.push({ t: u, name: 'shureq', snd: 'u', mater: 1 }); return; }
+    if (L === 'ו' && vs[0] === 'ֹ' && i > 0 && prev) { out.push({ t: u, name: 'holem-vav', snd: 'o', mater: 1 }); return; }
+    if ((L === 'י' || L === 'ו') && !vs.length && !dag && prev && prev.snd && i > 0) { prev.t += L; prev.name += L === 'י' ? '-yod' : '-vav'; prev.long = 1; return; }
+    const isLast = i === units.length - 1;
+    if (!vs.length) { out.push({ t: u, name: '', snd: '', dag, last: isLast }); return; }
+    const [n, s] = PXV[vs[0]]; out.push({ t: u, name: n, snd: s, dag, shewa: vs[0] === 'ְ' });
+  });
+  return out;
+}
+function pxVowelRow(word, tpl) {
+  const V = pxVowels(word); if (!V.length) return '';
+  const pat = V.filter(x => x.snd && !(x.shewa && x.last)).map(x => (x.snd === 'ə / silent' ? 'ə' : x.snd) + (x.long ? '̄' : '')).join(' – ');
+  const per = V.map(x => `<span style="white-space:nowrap"><span class="he" lang="he" style="font-size:1.25rem">${esc(pxMarks(x.t))}</span> ${x.name ? `${x.name} <b>${esc(x.snd)}</b>` : '<span class="muted">no vowel</span>'}${x.dag && !x.mater ? ' <span class="small muted">+ dot</span>' : ''}</span>`).join(' · ');
+  const TV = tpl ? pxVowels(tpl).filter(x => x.snd && !(x.shewa && x.last)).map(x => (x.snd === 'ə / silent' ? 'ə' : x.snd) + (x.long ? '̄' : '')).join(' – ') : '';
+  return `<tr><th>Vowel pattern</th><td><div><b style="font-size:1.1rem">${esc(pat)}</b>${TV && tpl !== word ? ` <span class="small muted">(model ${H(esc(tpl))}: ${esc(TV)})</span>` : ''}</div><div class="small" style="margin-top:4px;line-height:1.9">${per}</div><div class="small muted">Read right to left. A dot (dagesh) in a middle root letter = doubled (Piel, Pual, Hithpael); after the article or a prefix it can have other causes.</div></td></tr>`;
+}
+(function () {
+  const _px = pxHTML;
+  pxHTML = function (front) {
+    const h = _px.apply(this, arguments); if (!h) return h;
+    try {
+      const x = PX[front]; const tpl = pxTemplate(x[1]);
+      const fin = c => c.replace(/[ךםןףץ]/g, m => ({ 'ך': 'כ', 'ם': 'מ', 'ן': 'נ', 'ף': 'פ', 'ץ': 'צ' }[m]));
+      const cons = new Set([...fin(String(front).replace(/[^א-ת]/g, ''))]), rl = x[0] && x[0] !== '—' ? [...x[0]].filter(c => /[א-ת]/.test(c)) : [];
+      const hid = rl.filter(c => !cons.has(fin(c)));
+      return h.replace(/ <span class="small muted">\(hidden in this word: .*?\)<\/span>/, hid.length ? ` <span class="small muted">(hidden in this word: ${hid.map(c => H(c)).join(', ')})</span>` : '').replace('<tr><th>Parsing</th>', pxVowelRow(front, tpl) + '<tr><th>Parsing</th>');
+    } catch (e) { console.error(e); return h; }
+  };
+})();
+// Pronunciation fixes: ָ read as short “o” (qamets hatuf) in Hophal forms and stem names.
+const PR_FIX = Object.assign({ 'הָפְעַל': 'hof-AL', 'הָרְאֵיתָ': 'hor-E-ta', 'מָרְאֶה': 'mor-EH', 'הָשְׁלַךְ': 'hosh-LAKH', 'הָפְקַד': 'hof-QAD' }, typeof VK_SAY !== 'undefined' ? VK_SAY : {});
+(function () { const _pr = PR; PR = function (he) { const k = String(he || '').replace(/[֑-ֽ֯]/g, ''); return PR_FIX[k] ? `<div class="pr" title="How to say it. CAPITALS = stressed syllable.">${PR_FIX[k]}</div>` : _pr.apply(this, arguments); }; })();
+</script>
+<script>
 // Colour mode: dark (default), light, or the same as the computer. Remembered on this device.
 (function () {
   const order = ['dark', 'light', 'auto'], lab = { dark: '☾ Dark', light: '☀ Light', auto: '◐ Auto' };
@@ -9336,5 +9471,5 @@ function startReviewSlides(o = {}) {
   const b = document.getElementById('btn-theme'); if (b) b.onclick = () => { t = order[(order.indexOf(t) + 1) % order.length]; try { localStorage.setItem('het-theme', t); } catch {} apply(); };
 })();
 </script>
-<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='8dc0d2ecbd';</script>
+<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='e3355f1d22';</script>
 </body></html>
