@@ -9476,8 +9476,8 @@ async function buildPQ(ch) {
   const L = d.lines, k = 'sp' + ch;
   let qi = 0;
   const items = fsFinish(D.items.map(x => x[0] === 'c'
-    ? { ...fsCompItem(k, 'q' + (qi++), x.slice(1)), cat: 'review' }
-    : { ...fsParseItem(k, L, [x[1], x[2], x[3], x[4], x[5], null, x[6]]), cat: 'review' }));
+    ? { ...fsCompItem(k, 'q' + (qi++), x.slice(1)), cat: 'review', ...(x[6] ? { his: x[6] } : {}) }
+    : { ...fsParseItem(k, L, [x[1], x[2], x[3], x[4], x[5], null, x[6]]), cat: 'review', ...(x[7] ? { his: x[7] } : {}) }));
   const ref = `${PQ_TAG}Ch. ${ch}: ${d.title}`, min = Math.max(10, Math.round(items.length * 3));
   BLUEPRINTS.sp.name = 'Story practice · ' + ref;
   return { id: 'a' + Date.now().toString(36), type: 'sp', blueprint: 'sp', spCh: ch, pqCh: ch, items, limits: [], limitMs: min * 60000, created: Date.now(),
@@ -9497,7 +9497,7 @@ function pqRelabel(root) { const w = document.createTreeWalker(root, NodeFilter.
     if (!EX || !EX.pqCh) return r;
     const v = $('#v-session'); if (!v) return r;
     pqRelabel(v);
-    if (EX.phase === 'intro') { const n = v.querySelector('h1 + .note'); if (n) n.innerHTML = `<b>The professor’s own Ch. ${EX.pqCh} quiz</b>, his questions in his order (${EX.items.length} items). The whole story is on the left; the line numbers are the app’s (his paper may differ by a few lines). Answer the questions <b>in Hebrew, with words from the text</b>; parse every verb fully. You did this quiz in class, so it counts as review, not as an unseen test.`; }
+    if (EX.phase === 'intro') { const n = v.querySelector('h1 + .note'); if (n) n.innerHTML = `<b>The professor’s own Ch. ${EX.pqCh} quiz</b>, his questions in his order (${EX.items.length} items). The whole story is above; the line numbers are the ones printed on your story pages (his Ch. 16 quiz counted lines straight through, so there his numbers run up to 4 higher). Answer the questions <b>in Hebrew, with words from the text</b>; parse every verb fully. You did this quiz in class, so it counts as review, not as an unseen test.`; }
     return r;
   };
   const _rv = renderExamReview;
@@ -9525,6 +9525,43 @@ function pqRelabel(root) { const w = document.createTreeWalker(root, NodeFilter.
 })();
 </script>
 <script>
+// ---------- Line numbers as printed on the class story pages (found Nov 20) ----------
+// The story PDFs number lines in the margin (1, 5, 10…), and the professor's quizzes for Ch. 17–19 and 22 cite those numbers.
+// The printed count restarts on page 2 of Ch. 16, 18 and 19 (…11, then 8, 9, 10…) and repeats or skips a number in a few places.
+// The app keeps its own running count internally; every number shown on a story is the printed one. Breaks: [app line, printed number].
+const PLN_BRK = { 14: [[1, 1]], 15: [[1, 1]], 16: [[1, 1], [12, 8], [48, 43]], 17: [[1, 1], [44, 43]], 18: [[1, 1], [12, 8], [48, 43]], 19: [[1, 1], [12, 8], [48, 43]], 20: [[1, 1]], 21: [[1, 1]], 22: [[1, 1], [71, 72]] };
+function pln(ch, i) { const B = PLN_BRK[ch]; if (!B || !i) return i; let p = i; for (const [a, n] of B) if (i >= a) p = n + (i - a); return p; }
+const plnRange = (ch, ln) => { if (!ln) return ''; const a = pln(ch, ln[0]), b = pln(ch, ln[1]); return b > a ? `${a}–${b}` : `${a}`; };
+const storyChOf = P => { const m = String((P && P.story && P.story.head) || '').match(/Ch\. (\d+)/); return m ? +m[1] : null; };
+(function () {
+  // Exam story panel: printed numbers.
+  const _ph = passageHTML;
+  passageHTML = function () {
+    const h = _ph.apply(this, arguments);
+    if (!EX || !EX.passage || !EX.passage.story) return h;
+    const ch = storyChOf(EX.passage); if (!PLN_BRK[ch]) return h;
+    const i0 = h.indexOf('fs-box'); if (i0 < 0) return h;
+    const i1 = h.indexOf('</details>', i0);
+    const mid = h.slice(i0, i1).replace(/<span class="no">(\d+)<\/span>/g, (m, n) => `<span class="no">${pln(ch, +n)}</span>`);
+    return h.slice(0, i0).replace(/(<summary>[^<]*)(<\/summary>)(?![\s\S]*<summary>)/, '$1 · line numbers as printed on your pages$2') + mid + h.slice(i1);
+  };
+  // "The text this question is about" box above a question.
+  const _ql = qLines;
+  qLines = async function (it) {
+    const L = await _ql.apply(this, arguments);
+    const m = L && String(L.head || '').match(/^Ch\. (\d+): (.*), lines \d+/);
+    if (!m || !PLN_BRK[+m[1]] || !it.ln) return L;
+    const ch = +m[1];
+    return { head: `Ch. ${ch}: ${m[2]}, lines ${plnRange(ch, it.ln)}`, rows: L.rows.map(r => ({ ...r, no: typeof r.no === 'number' ? pln(ch, r.no) : r.no })) };
+  };
+  // Item labels ("lines 11–16", "story line 59") in the printed numbers, for every story test built from now on.
+  const relabel = ex => { const ch = storyChOf(ex && ex.passage); if (!PLN_BRK[ch]) return ex; ex.items.forEach(it => { if (!it.ln || (it.sec !== 'comp' && it.sec !== 'parse')) return; if (it.his) { const [a, b] = it.his; if (it.kind === 'write') it.lines = b > a ? `${a}–${b}` : `${a}`; else it.ref = `story line ${a} (his quiz)`; return; } if (it.kind === 'write') it.lines = plnRange(ch, it.ln); else if (it.ref) it.ref = `story line ${pln(ch, it.ln[0])}`; }); return ex; };
+  const _bf = buildFS; buildFS = async function () { return relabel(await _bf.apply(this, arguments)); };
+  const _bs = buildSP; buildSP = async function () { return relabel(await _bs.apply(this, arguments)); };
+  const _bq = buildPQ; buildPQ = async function () { return relabel(await _bq.apply(this, arguments)); };
+})();
+</script>
+<script>
 // Colour mode: dark (default), light, or the same as the computer. Remembered on this device.
 (function () {
   const order = ['dark', 'light', 'auto'], lab = { dark: '☾ Dark', light: '☀ Light', auto: '◐ Auto' };
@@ -9534,5 +9571,5 @@ function pqRelabel(root) { const w = document.createTreeWalker(root, NodeFilter.
   const b = document.getElementById('btn-theme'); if (b) b.onclick = () => { t = order[(order.indexOf(t) + 1) % order.length]; try { localStorage.setItem('het-theme', t); } catch {} apply(); };
 })();
 </script>
-<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='9cdbd06dff';</script>
+<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='9a16bc1376';</script>
 </body></html>
