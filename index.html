@@ -9562,6 +9562,178 @@ const storyChOf = P => { const m = String((P && P.story && P.story.head) || '').
 })();
 </script>
 <script>
+// ---------- "How to tell" in the parse answer grid (asked Nov 21) ----------
+// Under each row (root, stem, form, person, gender, number): what in THIS word shows it, then the general pattern to remember.
+// Word-specific lines are built only from what is certain (letters present or absent, prefix vowel, dot in the 2nd root letter); otherwise only the pattern is shown.
+const HT_FIN = { 'ך': 'כ', 'ם': 'מ', 'ן': 'נ', 'ף': 'פ', 'ץ': 'צ' };
+const HT_V = { a: /[ֲַָ]/, ie: /[ֱִֵֶ]/, uo: /[ֳֹֻ]/, sh: /ְ/ };
+const htClusters = f => { const out = []; String(f || '').normalize('NFC').replace(/[֑-ֽֿ֯׀׃]/g, '').replace(/([א-ת])([ְ-ׇ]*)/g, (m, L, k) => { out.push({ L: HT_FIN[L] || L, raw: L, k }); return m; }); return out; };
+const htRoot = r => [...String(r || '').split('|')[0].replace(/[^א-ת]/g, '')].map(L => HT_FIN[L] || L);
+const htVowel = k => HT_V.a.test(k) ? 'a' : HT_V.ie.test(k) ? 'ie' : HT_V.uo.test(k) ? 'uo' : HT_V.sh.test(k) ? 'sh' : '';
+const htVName = { a: 'a-vowel', ie: 'i/e-vowel', uo: 'u/o-vowel', sh: 'shewa' };
+const htHas = (k, ch) => k.includes(ch);
+const DAG = 'ּ', BGDKPT = 'בגדכפת';
+// Root letters matched from the end of the word (prefixes are at the front).
+// The letters that belong to the form, not the root: וְ/וַ, the person prefix, the stem letter (ה, נ, מ, הִתְ), a preposition on an infinitive.
+function htFront(C, it) {
+  const st = String(it.stem || '').split('|')[0], cj = it.conj, out = []; let i = 0;
+  const take = (ok) => { if (C[i] && ok(C[i].L)) { out.push(i); i++; return true; } return false; };
+  if (['wayyiqtol', 'weyiqtol', 'weqatal'].includes(cj)) take(L => L === 'ו');
+  if (['yiqtol', 'wayyiqtol', 'weyiqtol'].includes(cj)) { take(L => 'אתינ'.includes(L)); if (st === 'hithpael') take(L => L === 'ת'); return out; }
+  if (cj === 'inf' && take(L => 'לבכ'.includes(L))) out.prep = out[out.length - 1];
+  if (cj === 'ptc') { if (st === 'niphal') take(L => L === 'נ'); else if (st !== 'qal') { take(L => L === 'מ'); if (st === 'hithpael') take(L => L === 'ת'); } return out; }
+  if (st === 'niphal' && ['qatal', 'weqatal'].includes(cj)) take(L => L === 'נ');
+  if (st === 'niphal' && ['impv', 'inf'].includes(cj)) take(L => L === 'ה');
+  if (['hiphil', 'hophal'].includes(st) && ['qatal', 'weqatal', 'impv', 'inf'].includes(cj)) take(L => L === 'ה');
+  if (st === 'hithpael' && ['qatal', 'weqatal', 'impv', 'inf'].includes(cj)) { take(L => L === 'ה'); take(L => L === 'ת'); }
+  return out;
+}
+function htAlign(C, R, it) {
+  const F = it ? htFront(C, it) : [];
+  const a1 = htAlign1(C, R, new Set(F));
+  if (F.prep == null) return a1;
+  // An infinitive's first ל/ב/כ may be a root letter (לֶכֶת, בֹּא, כְּלוֹת): keep the reading that finds more root letters.
+  const a2 = htAlign1(C, R, new Set(F.filter(i => i !== F.prep)));
+  return a2.filter(x => x >= 0).length > a1.filter(x => x >= 0).length ? a2 : a1;
+}
+function htAlign1(C, R, fr) {
+  const at = Array(R.length).fill(-1); let j = C.length - 1;
+  // A ו/י that only carries a vowel (וּ, וֹ, the י of ִי/ֵי) is a vowel letter, not a root consonant.
+  const vowelLetter = (c, i) => (c.L === 'ו' && (c.k === DAG || /^\u05B9$/.test(c.k))) || (c.L === 'י' && !c.k && i > 0 && /[\u05B4\u05B5\u05B6]/.test(C[i - 1].k));
+  for (let r = R.length - 1; r >= 0; r--) {
+    let k = j;
+    while (k >= 0 && (fr.has(k) || C[k].L !== R[r] || ('וי'.includes(R[r]) && !(r === 1 && R[2] === 'ה') && vowelLetter(C[k], k)) || (r === R.length - 1 && R[r] === 'ה' && k !== C.length - 1))) k--;
+    if (k >= 0) { at[r] = k; j = k - 1; }
+  }
+  at.front = fr;
+  return at;
+}
+function htRootLine(it, C, R, at) {
+  if (R.length !== 3) return '';
+  const used = new Set(at.filter(i => i >= 0)), first = Math.min(...at.filter(i => i >= 0)), last = Math.max(...at.filter(i => i >= 0));
+  const front = [], end = [], inside = [];
+  C.forEach((c, i) => { if (used.has(i)) return; const vowelLetter = (c.L === 'ו' && (c.k === DAG || /ֹ/.test(c.k))) || (c.L === 'י' && !c.k && i > 0 && /[ִֵ]/.test(C[i - 1].k)); (i < first ? front : i > last ? end : inside).push(vowelLetter && i > first && i < last ? c.raw + ' (a vowel letter)' : c.raw); });
+  const miss = R.map((L, r) => at[r] < 0 ? r : -1).filter(r => r >= 0);
+  const bits = [];
+  if (miss[0] === 0 && 'יו'.includes(R[0]) && front.length && front[front.length - 1] === 'ו') front[front.length - 1] = 'ו (= the root’s 1st letter ' + R[0] + ')';
+  if (front.length) bits.push(`in front: <b class="he">${front.join(' ')}</b>`);
+  if (end.length) bits.push(`at the end: <b class="he">${end.join(' ')}</b>`);
+  if (inside.length) bits.push(`inside: <b class="he">${inside.join(' ')}</b>`);
+  let s = bits.length ? `Take away what is not root (${bits.join(' · ')}).` : 'Every letter here is a root letter.';
+  const left = R.filter((L, r) => at[r] >= 0).join(' ');
+  if (!miss.length) return s + ` Left: <b class="he">${left}</b> — three letters, the root.`;
+  const dict = it.root.split('|')[0], nm = miss.length;
+  s += ` Left: <b class="he">${left}</b> — only ${R.length - nm} letter${R.length - nm > 1 ? 's' : ''}, so ${nm > 1 ? nm + ' are' : 'one is'} weak and hidden: `;
+  const msg = m => { const L = R[m];
+    if (m === 1 && 'וי'.includes(L)) return `the middle <b class="he">${L}</b> (a <i>hollow</i> root). Hollow roots are listed with ו/י in the middle: <b class="he">${esc(dict)}</b>.`;
+    else if (R.join('') === 'נתנ') return m === 0 ? 'the first נ of נתן drops (תֵּן, תֵּת).' : 'the last נ of נתן is absorbed: the dot in the ת after it (נָתַתִּי, תִּתֵּן).';
+    else if (L === 'א') return 'the weak letter א: it is silent and is sometimes not written at all.';
+    else if (m === 0 && L === 'נ') return `the first letter <b class="he">נ</b> (I-נ): it is absorbed, and the dot in <b class="he">${R[1]}</b> is the lost נ.`;
+    else if (m === 0 && 'יו'.includes(L)) return `the first letter <b class="he">${L}</b> (I-י/ו): it vanishes after a ֵ prefix (יֵשֵׁב) or shows as וֹ (הוֹ־, יוֹ־, מוֹ־).`;
+    else if (m === 2 && L === 'ה') return `the last letter <b class="he">ה</b> (III-ה): in its place the form ends in ֶה, ָה, ִי, ִית, וּ, or (infinitive) וֹת. Add ה: <b class="he">${esc(dict)}</b>.`;
+    else if (m >= 1 && R[1] === R[2]) return `the repeated letter <b class="he">${L}</b> (a doubled root, like סבב): it is written once, often with a dot.`;
+    else if (m === 0 && L === 'א' && C.some((c, i) => at.front.has(i) && c.L === 'א')) return 'the 1st root letter א: after the prefix א (“I”) only one א is written (אֹמַר = א + [א]מַר).';
+    else if (m === 0 && L === 'ל' && R[1] === 'ק') return 'the ל of לקח, which behaves like נ: the dot in ק is the lost ל.';
+    else if (m === 0 && L === 'ה' && R[1] === 'ל') return 'the ה of הלך, which behaves like a I-י root (יֵלֵךְ, וַיֵּלֶךְ).';
+    else return `<b class="he">${L}</b> — absorbed (look for a dot in the next letter) or dropped (a weak letter).`;
+  };
+  s += miss.map(msg).join(' And ');
+  return s;
+}
+const HT_STEM = {
+  qal: 'No stem letters (no ה, נ, מ or הִתְ in front) and no doubled 2nd root letter. Prefix vowel usually ִ (יִקְטֹל); ָ/ֵ in weak roots (יָקוּם, יֵשֵׁב).',
+  piel: 'Dot in the 2nd root letter (doubling) + prefix with shewa (יְ, תְּ, מְ) + ַ/ִ under the 1st letter (קִטֵּל, יְקַטֵּל). A guttural or ר in 2nd place cannot double: no dot, and often a longer vowel before it (בֵּרַךְ, וַיְכַהֲנוּ).',
+  pual: 'u-vowel ֻ under the 1st root letter + dot in the 2nd (קֻטַּל, יְקֻטַּל, מְקֻטָּל). Passive of Piel.',
+  hiphil: 'ה in front in qatal, imperative and infinitive (הִקְטִיל, הַקְטֵל). Elsewhere the ה disappears and the prefix takes an a-vowel (יַקְטִיל, מַקְטִיל). Theme vowel i (ִי) or e (ֵ) after the 2nd letter; no doubling. Weak: ָ prefix in hollow roots (יָשִׁיב), dot in the 1st letter for I-נ (יַגִּיד), וֹ for I-י (הוֹשִׁיעַ).',
+  hophal: 'u/o-vowel under the prefix: הָ / הֻ / יָ / יֻ / מָ (הָשְׁלַךְ, יֻגַּד, הוּבָא). a-vowel before the last letter. Passive of Hiphil.',
+  niphal: 'נ in front in qatal and participle (נִקְטַל, נִקְטָל). Elsewhere the נ is absorbed: dot in the 1st root letter + ִ prefix (יִקָּטֵל). A guttural 1st letter cannot double: ֵ prefix instead (יֵאָמֵר).',
+  hithpael: 'הִתְ / יִתְ / מִתְ in front + dot in the 2nd root letter (הִתְקַדֵּשׁ). Before ס/שׁ/צ the ת swaps places (הִשְׁתַּמֵּר).'
+};
+function htStemLine(it, C, R, at, stem) {
+  if (R.length !== 3) return '';
+  const obs = [];
+  const r1 = at[0], r2 = at[1];
+  // The stem/person prefix: the last of א ת י נ ה מ before the first root letter we can see.
+  const fr = r1 >= 0 ? r1 : r2 >= 0 ? r2 : -1; let pi = -1; for (let i = fr - 1; i >= 0; i--) if ('אתינהמ'.includes(C[i].L)) { pi = i; break; }
+  if (pi >= 0) { const p = C[pi], nx = C[pi + 1], vl = nx && nx.L === 'ו' && /[\u05B9\u05BC]/.test(nx.k) && pi + 1 < fr; const v = vl ? 'uo' : htVowel(p.k); obs.push(`<b class="he">${p.raw}${p.k}${vl ? nx.raw + nx.k : ''}</b> in front${v ? ` with ${htVName[v]}` : ''}`); }
+  if (r2 >= 0) {
+    const c2 = C[r2], prev = C[r2 - 1];
+    const dot = htHas(c2.k, DAG) && !(c2.L === 'ו' && !htVowel(c2.k.replace(DAG, '')));
+    if (dot && BGDKPT.includes(c2.L) && prev && htVowel(prev.k) === 'sh' && !htHas(prev.k, DAG)) obs.push(`the dot in <b class="he">${c2.raw}</b> only hardens the sound (after a silent shewa) — it is not doubling`);
+    else if (dot && at[0] < 0 && (R[0] === 'נ' || (R[0] === 'ל' && R[1] === 'ק'))) obs.push(`the dot in <b class="he">${c2.raw}</b> is the lost ${R[0]} — not Piel doubling`);
+    else if (dot) obs.push(`dot in the 2nd root letter <b class="he">${c2.raw}</b> = doubling`);
+    else obs.push(`no dot in the 2nd root letter <b class="he">${c2.raw}</b>${'אהחער'.includes(c2.L) ? ' (a guttural/ר cannot double)' : ''}`);
+    const v2 = htVowel(c2.k), nx = C[r2 + 1];
+    if (v2 === 'ie' && nx && nx.L === 'י' && !nx.k) obs.push('ִי after it (theme i)'); else if (v2) obs.push(`${htVName[v2]} under it`);
+  }
+  if (r2 < 0 && r1 >= 0 && at[2] >= 0) { const v = htVowel(C[r1].k); if (v) obs.push(`${htVName[v]} under the 1st root letter <b class="he">${C[r1].raw}</b> (the middle letter is hidden)`); }
+  if (r1 >= 0 && ['piel', 'pual'].includes(stem)) { const v1 = htVowel(C[r1].k); if (v1) obs.push(`${htVName[v1]} under the 1st root letter <b class="he">${C[r1].raw}</b>`); }
+  return obs.length ? 'Here: ' + obs.join('; ') + '.' : '';
+}
+const HT_CONJ = {
+  qatal: 'Perfect: no prefix; the ending tells who (תִּי, תָּ, ָה, וּ…). Context: a finished action.',
+  weqatal: 'וְ (or וּ) + a perfect with its ending, no prefix. Works like the imperfect: future or instructions.',
+  yiqtol: 'Imperfect: one of the prefixes א ת י נ, without וַ before it.',
+  wayyiqtol: 'וַ (ָ before א) + a prefix, usually doubled: the story line, “and he did”.',
+  weyiqtol: 'וְ + a prefix (not וַ): “so that” or a wish.',
+  impv: 'Like the imperfect with the prefix cut off; a command (often after the speaker addresses someone).',
+  ptc: 'Qal: ֹ after the 1st letter (קֹטֵל). Other stems: מ in front (מְקַטֵּל, מַקְטִיל, מִתְקַטֵּל; Niphal נִקְטָל). Endings ִים / וֹת / ָה / ֶת for gender and number; no person.',
+  inf: 'Often ל in front (לִקְטֹל, לְהַקְטִיל) or a preposition/pronoun attached (בְּקָטְלוֹ); no person, gender or number.'
+};
+function htConjLine(it, C) {
+  const f = C.map(c => c.raw + c.k).join(''); const c0 = C[0], c1 = C[1];
+  if (!c0) return '';
+  if (it.conj === 'wayyiqtol' && c0.L === 'ו' && c1) return `Here: <b class="he">${c0.raw}${c0.k}</b> + prefix <b class="he">${c1.raw}${c1.k}</b>${htHas(c1.k, DAG) ? ' (doubled)' : htVowel(c1.k) === 'sh' ? ' (shewa, so no dot)' : c1.L === 'א' ? ' (א cannot double, so וָ)' : ''}.`;
+  if (['yiqtol', 'weyiqtol'].includes(it.conj)) { const p = it.conj === 'weyiqtol' ? c1 : c0; if (p && 'אתינ'.includes(p.L)) return `Here: prefix <b class="he">${p.raw}</b>${it.conj === 'weyiqtol' ? ' after וְ/וּ' : ', and no וַ before it'}.`; }
+  if (it.conj === 'inf' && 'לבכ'.includes(c0.L)) return `Here: <b class="he">${c0.raw}${c0.k}</b> in front.`;
+  if (it.conj === 'ptc' && (c0.L === 'מ' || (c1 && c1.L === 'מ' && 'הו'.includes(c0.L)))) return `Here: <b class="he">מ</b> in front, so not Qal${/[ֹ]|וֹ/.test(f.slice(0, 4)) ? '' : ''}.`;
+  return '';
+}
+const HT_PREF = { '1cs': ['א', '', 'I'], '1cp': ['נ', '', 'we'], '2ms': ['ת', '', 'you (one man)'], '2fs': ['ת', 'ִי', 'you (one woman)'], '2mp': ['ת', 'וּ', 'you (men)'], '2fp': ['ת', 'נָה', 'you (women)'], '3ms': ['י', '', 'he'], '3fs': ['ת', '', 'she'], '3mp': ['י', 'וּ', 'they (men)'], '3fp': ['ת', 'נָה', 'they (women)'] };
+const HT_QAT = { '3ms': ['', 'he'], '3fs': ['ָה', 'she'], '2ms': ['תָּ', 'you (one man)'], '2fs': ['תְּ', 'you (one woman)'], '1cs': ['תִּי', 'I'], '3cp': ['וּ', 'they'], '2mp': ['תֶּם', 'you (men)'], '2fp': ['תֶּן', 'you (women)'], '1cp': ['נוּ', 'we'] };
+const HT_IMPV = { '2ms': ['', 'one man'], '2fs': ['ִי', 'one woman'], '2mp': ['וּ', 'men'], '2fp': ['נָה', 'women'] };
+const HT_PTC = { ms: ['', 'masculine singular'], fs: ['ָה or ֶת', 'feminine singular'], mp: ['ִים', 'masculine plural'], fp: ['וֹת', 'feminine plural'] };
+function htPgnLine(it, k) {
+  const pg = String(it.pgn || '').split('|')[0], cj = it.conj;
+  if (cj === 'inf') return k === 'p' ? 'An infinitive has no person, gender or number: leave all three empty.' : '';
+  if (cj === 'ptc') { const e = HT_PTC[pg.replace(/^[123]/, '')]; return k === 'p' ? 'A participle has no person (it is a verbal adjective).' : e ? `${k === 'g' ? 'Gender' : 'Number'} comes from the ending: ${e[0] ? `<b class="he">${e[0]}</b>` : 'no ending'} = ${e[1]}. Pattern: none = m.sg., ָה/ֶת = f.sg., ִים = m.pl., וֹת = f.pl.` : ''; }
+  if (cj === 'impv') { const e = HT_IMPV[pg]; if (!e) return ''; return k === 'p' ? 'A command is always 2nd person (you).' : `${e[0] ? `Ending <b class="he">${e[0]}</b>` : 'No ending'} = ${e[1]}. Pattern: none = one man, ִי = one woman, וּ = men, נָה = women.`; }
+  if (['qatal', 'weqatal'].includes(cj)) { const e = HT_QAT[pg]; if (!e) return ''; const pat = 'Pattern (perfect): the ending tells all three — none he, ָה she, תָּ you m., תְּ you f., תִּי I, וּ they, תֶּם/תֶּן you pl., נוּ we.'; if (k === 'p') return `${e[0] ? `Ending <b class="he">${e[0]}</b>` : 'No ending'} = “${e[1]}”. ${pat}`; return `${k === 'g' ? (pg[1] === 'c' ? 'Common (men or women)' : pg[1] === 'f' ? 'Feminine' : 'Masculine') : (pg[2] === 'p' ? 'Plural' : 'Singular')}: the same ending ${e[0] ? `<b class="he">${e[0]}</b>` : '(none)'} = “${e[1]}”.`; }
+  if (['yiqtol', 'wayyiqtol', 'weyiqtol'].includes(cj)) {
+    const e = HT_PREF[pg]; if (!e) return '';
+    const both = String(it.pgn).includes('|') || pg === '2ms' || pg === '3fs';
+    if (k === 'p') return `Prefix <b class="he">${e[0]}</b> gives the person${e[0] === 'ת' ? ' (ת = “you” or “she”: the ending and the context decide)' : ''}. Pattern: א = I, נ = we, ת = you / she, י = he / they.${both ? ' Here 2ms and 3fs look the same (תִּקְטֹל): read the context.' : ''}`;
+    if (k === 'n') return `${e[1] === 'וּ' || e[1] === 'נָה' ? `Plural ending <b class="he">${e[1]}</b>` : e[1] ? `Ending <b class="he">${e[1]}</b> is not a plural ending` : 'No plural ending (וּ or נָה)'} → ${/p$/.test(pg) ? 'plural' : 'singular'}${pg[0] === '1' ? ` (the prefix ${e[0]} already says ${pg === '1cp' ? '“we”' : '“I”'})` : ''}.`;
+    return `${e[1] ? `Ending <b class="he">${e[1]}</b>` : 'No ending'} + prefix <b class="he">${e[0]}</b> = “${e[2]}”. Pattern: no ending = singular (m., or she), ִי = you f., וּ = m. plural, נָה = f. plural.`;
+  }
+  return '';
+}
+(function () {
+  const _pa = parseAnswerHTML;
+  parseAnswerHTML = function (it) {
+    const h = _pa.apply(this, arguments);
+    try {
+      if (!it || !it.form || !it.root || !it.conj) return h;
+      const stem = String(it.stem || '').split('|')[0];
+      const C = htClusters(it.form), R = htRoot(it.root), at = htAlign(C, R, it);
+      // A vowel sign written alone (ִי, ֵ, ָ) sits on a dotted circle so it can be seen: ◌ֵ.
+      const dc = t => String(t || '').replace(/(^|[^\u05B0-\u05C7\u05D0-\u05EA\u25CC])([\u05B0-\u05BB\u05C1\u05C2\u05C7]+)/g, '$1\u25CC$2');
+      const box = (spec0, pat0) => { const spec = dc(spec0), pat = dc(pat0); return (spec || pat) ? `<div class="small ht" style="margin-top:4px;padding-top:4px;border-top:1px dashed var(--line)"><b>How to tell:</b> ${spec ? heWrap(spec) : ''}${pat ? `<div class="muted" style="margin-top:2px">${heWrap(esc(pat))}</div>` : ''}</div>` : ''; };
+      const rows = [
+        box(htRootLine(it, C, R, at), ''),
+        box(htStemLine(it, C, R, at, stem), HT_STEM[stem] || ''),
+        box(htConjLine(it, C), HT_CONJ[it.conj] || ''),
+        box(htPgnLine(it, 'p'), ''),
+        box(htPgnLine(it, 'g'), ''),
+        box(htPgnLine(it, 'n'), '')
+      ];
+      let k = 0;
+      return h.replace(/<\/td><\/tr>/g, m => (k < 6 ? rows[k++] : '') + m);
+    } catch (e) { console.error(e); return h; }
+  };
+})();
+</script>
+<script>
 // Colour mode: dark (default), light, or the same as the computer. Remembered on this device.
 (function () {
   const order = ['dark', 'light', 'auto'], lab = { dark: '☾ Dark', light: '☀ Light', auto: '◐ Auto' };
@@ -9571,5 +9743,5 @@ const storyChOf = P => { const m = String((P && P.story && P.story.head) || '').
   const b = document.getElementById('btn-theme'); if (b) b.onclick = () => { t = order[(order.indexOf(t) + 1) % order.length]; try { localStorage.setItem('het-theme', t); } catch {} apply(); };
 })();
 </script>
-<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='bf3dca80ba';</script>
+<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='deb8c1f822';</script>
 </body></html>
