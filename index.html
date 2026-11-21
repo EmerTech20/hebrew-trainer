@@ -9740,6 +9740,70 @@ function htPgnLine(it, k) {
 })();
 </script>
 <script>
+// ---------- Person, gender and number, scored separately (Nov 21) ----------
+// Recomputed from what is already saved: each practice answer keeps the boxes you chose (ev.ans) and the answer key (ev.exp);
+// each test keeps your selection and the item. Nothing is changed in the stored data. Practice and timed tests are shown apart.
+function pgnFromEvent(e) {
+  const x = String(e.exp || '').match(/^(\S+) (\S+) (?:(\S+) )?root (\S+)$/), a = String(e.ans || '').match(/^(\S+) (\S+) (\S)(\S)(\S) root (\S+)$/);
+  if (!x || !a || x[3] === 'root') return null;
+  const d = v => v === '-' ? '' : v;
+  return { item: { stem: x[1], conj: x[2], pgn: x[3] || '', root: x[4] }, sel: { stem: d(a[1]), conj: d(a[2]), p: d(a[3]), g: d(a[4]), n: d(a[5]), root: d(a[6]) } };
+}
+// Which answer-key alternative the grader used (e.g. 2ms|3fs), so the confusions are counted against the right one.
+function pgnBestAlt(item, sel) {
+  const alts = String(item.pgn || '').split('|'); let best = null;
+  for (const alt of alts) { const a = parsePGN(alt); const sc = (sel.p === a.p) + (a.g === 'c' ? !!sel.g : sel.g === a.g) + (sel.n === a.n); if (!best || sc > best.sc) best = { a, sc }; }
+  return best ? best.a : parsePGN('');
+}
+function pgnTally(list) {
+  const T = { p: [0, 0], g: [0, 0], n: [0, 0], ptc: [0, 0], inf: [0, 0], conf: {}, byConj: {} };
+  const bump = (k) => { T.conf[k] = (T.conf[k] || 0) + 1; };
+  for (const { item, sel } of list) {
+    if (!item || !item.conj) continue;
+    const { res } = gradeParse(item, sel), a = pgnBestAlt(item, sel);
+    if (item.conj === 'inf') { T.inf[1]++; if (res.p && res.g && res.n) T.inf[0]++; else bump('infinitive given a person/gender/number'); continue; }
+    if (item.conj === 'ptc') { T.ptc[1]++; if (res.p) T.ptc[0]++; else bump('participle given a person (it has none)'); }
+    else { T.p[1]++; if (res.p) T.p[0]++; else if (sel.p) bump(`person: ${a.p}${['', 'st', 'nd', 'rd'][a.p] || ''} answered as ${sel.p}${['', 'st', 'nd', 'rd'][sel.p] || ''}`); else bump('person left empty'); const c = T.byConj[item.conj] = T.byConj[item.conj] || [0, 0]; c[1]++; if (res.p) c[0]++; }
+    T.g[1]++; if (res.g) T.g[0]++; else bump(sel.g ? `gender: ${a.g === 'f' ? 'fem.' : a.g === 'm' ? 'masc.' : 'common'} answered as ${sel.g === 'f' ? 'fem.' : sel.g === 'm' ? 'masc.' : 'common'}` : 'gender left empty');
+    T.n[1]++; if (res.n) T.n[0]++; else bump(sel.n ? `number: ${a.n === 'p' ? 'plural' : 'singular'} answered as ${sel.n === 'p' ? 'plural' : 'singular'}` : 'number left empty');
+  }
+  return T;
+}
+async function pgnSplitData() {
+  await loadAllEvents();
+  const now = Date.now(), wk = now - 7 * 864e5;
+  const pr = (MEAS.all || []).filter(e => e.k === 'parse' && e.m !== 'assessment' && e.ans && e.ans !== '(gave up)');
+  const P = pr.map(e => ({ ts: e.ts, ...(pgnFromEvent(e) || {}) })).filter(x => x.item);
+  const tests = [];
+  (S.assess || []).filter(a => a.end && Array.isArray(a.items)).forEach(a => a.items.forEach(x => { if (x.kind === 'parse' && x.answered && x.spec && x.answer && x.spec.conj) tests.push({ ts: a.end, item: { stem: x.spec.stem || '', conj: x.spec.conj, pgn: x.spec.pgn || '', root: x.spec.root || '' }, sel: { p: '', g: '', n: '', ...x.answer } }); }));
+  return { week: pgnTally(P.filter(x => x.ts >= wk)), all: pgnTally(P), tests: pgnTally(tests), nWeek: P.filter(x => x.ts >= wk).length, nAll: P.length, nTests: tests.length, skipped: (MEAS.all || []).filter(e => e.k === 'parse' && e.m !== 'assessment').length - P.length };
+}
+function pgnSplitHTML(D) {
+  const cell = ([ok, n]) => n ? `<b>${Math.round(ok / n * 100)}%</b> <span class="muted small">${ok}/${n}</span>` : '<span class="muted">—</span>';
+  const rows = [['Person (finite verbs)', 'p'], ['Gender', 'g'], ['Number', 'n'], ['Participle: person left empty', 'ptc'], ['Infinitive: all three left empty', 'inf']];
+  const worst = ['p', 'g', 'n'].map(k => [k, D.week[k][1] ? D.week[k][0] / D.week[k][1] : null]).filter(x => x[1] != null).sort((a, b) => a[1] - b[1])[0];
+  const conf = Object.entries(D.week.conf).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const confAll = Object.entries(D.all.conf).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const byC = Object.entries(D.all.byConj).filter(([, v]) => v[1] >= 3).map(([c, v]) => `${c} ${Math.round(v[0] / v[1] * 100)}% (${v[0]}/${v[1]})`).join(' · ');
+  return `<div class="panel" id="pgn-split"><h2 style="margin-top:0">Person, gender and number — scored separately</h2>
+    <p class="small muted">Recomputed from the boxes you chose in every parse you have saved (nothing is changed). Practice and timed tests are kept apart: practice includes repeats and hints; the test column is answers given under exam conditions.</p>
+    ${tableHTML(['', 'Practice, last 7 days', 'All practice', 'Timed tests'], rows.map(([l, k]) => [l, cell(D.week[k]), cell(D.all[k]), cell(D.tests[k])]))}
+    ${worst ? `<p style="margin:.6em 0 .2em"><b>Weakest this week: ${({ p: 'person', g: 'gender', n: 'number' })[worst[0]]}</b> (${Math.round(worst[1] * 100)}%).</p>` : ''}
+    ${conf.length ? `<p class="small" style="margin:.2em 0"><b>Most frequent misses, last 7 days:</b> ${conf.map(([k, n]) => `${esc(k)} <b>×${n}</b>`).join(' · ')}</p>` : ''}
+    ${confAll.length ? `<p class="small muted" style="margin:.2em 0">All practice: ${confAll.map(([k, n]) => `${esc(k)} ×${n}`).join(' · ')}</p>` : ''}
+    ${byC ? `<p class="small muted" style="margin:.2em 0">Person right, by form (all practice): ${esc(byC)}</p>` : ''}
+    <p class="small muted" style="margin:.4em 0 0">Practice parses counted: ${D.nWeek} this week, ${D.nAll} in all${D.skipped > 0 ? ` (${D.skipped} older ones saved without the boxes you chose are left out)` : ''}; test parses: ${D.nTests}. Small numbers move a lot — read them as a direction, not a measurement.</p></div>`;
+}
+(function () {
+  const _rp = renderProgress;
+  renderProgress = async function () {
+    const r = await _rp.apply(this, arguments);
+    try { if (S.tab !== 'progress') return r; const v = $('#v-progress'); if (!v || $('#pgn-split')) return r; const D = await pgnSplitData(); if (S.tab !== 'progress' || $('#pgn-split')) return r; v.insertAdjacentHTML('afterbegin', pgnSplitHTML(D)); } catch (e) { console.error(e); }
+    return r;
+  };
+})();
+</script>
+<script>
 // Colour mode: dark (default), light, or the same as the computer. Remembered on this device.
 (function () {
   const order = ['dark', 'light', 'auto'], lab = { dark: '☾ Dark', light: '☀ Light', auto: '◐ Auto' };
@@ -9749,5 +9813,5 @@ function htPgnLine(it, k) {
   const b = document.getElementById('btn-theme'); if (b) b.onclick = () => { t = order[(order.indexOf(t) + 1) % order.length]; try { localStorage.setItem('het-theme', t); } catch {} apply(); };
 })();
 </script>
-<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='f18466776e';</script>
+<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='e06d874fd9';</script>
 </body></html>
