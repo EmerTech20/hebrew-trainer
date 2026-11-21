@@ -9804,6 +9804,191 @@ function pgnSplitHTML(D) {
 })();
 </script>
 <script>
+// ---------- Nov 21 feedback: Hebrew questions, real context, prose explanations, suffixes, stale notebook items ----------
+// (1) "Who…?" and "who is who" questions are asked in Hebrew (pronunciation; English only on request), with the lines of the class story around them.
+// (2) Mistakes-notebook items are refreshed from the current question bank; old versions of the "who is who" questions (shown without their verse) no longer count.
+// (3) Noun suffixes explained in full (סוּסָיו = סוּס + ָיו).
+// (4) "Evidence" and "Trap" notes in plain prose.
+const MC_HEQ = [
+  // [the English question as written in the bank (end of q), Hebrew question, English of the question]
+  ['who might die?', 'מִי יָמוּת?', 'Who might die?'],
+  ['who died?', 'מִי מֵת?', 'Who died?'],
+  ['who consecrated?', 'מִי קִדֵּשׁ?', 'Who consecrated?'],
+  ['who must not go out?', 'מִי לֹא יֵצֵא?', 'Who must not go out?'],
+  ['whose body is washed?', 'אֶת־בְּשַׂר מִי יִרְחַץ?', 'Whose body will he wash?'],
+  ['for whom does the priest atone?', 'בְּעַד מִי כִּפֶּר הַכֹּהֵן?', 'For whom did the priest make atonement?'],
+  ['who are “they”?', 'מִי הִקְרִיבוּ אֵשׁ זָרָה?', 'Who offered the strange fire?'],
+  ['what did Aaron do?', 'מֶה עָשָׂה אַהֲרֹן?', 'What did Aaron do?']
+];
+const mcHeQ = q => { const t = String(q || '').replace(/<[^>]+>/g, '').trim(); const m = MC_HEQ.find(([en]) => t.endsWith(en)); return m || null; };
+// Story lines around a Hebrew phrase (class stories, imported privately); printed line numbers.
+const MC_STORY = { lines: null };
+async function mcStoryLines() {
+  if (MC_STORY.lines) return MC_STORY.lines;
+  const out = [];
+  for (const ch of STORY_CHS) { try { const d = await storyDoc(ch); if (d && d.lines) d.lines.forEach((l, i) => out.push({ ch, title: d.title, i: i + 1, l, c: AN.cons(AN.normHe(l)) })); } catch { } }
+  MC_STORY.lines = out; return out;
+}
+async function mcStoryCtx(snip) {
+  const c = AN.cons(AN.normHe(snip)); if (c.length < 4) return null;
+  const L = await mcStoryLines(); if (!L.length) return null;
+  for (let k = 0; k < L.length; k++) {
+    const a = L[k], b = L[k + 1] && L[k + 1].ch === a.ch ? L[k + 1] : null;
+    const one = a.c.includes(c), two = !one && b && (a.c + b.c).includes(c) && !b.c.includes(c);
+    if (!one && !two) continue;
+    const ch = a.ch, all = L.filter(x => x.ch === ch), hit = [a.i, two ? b.i : a.i];
+    const from = Math.max(1, hit[0] - 3), to = Math.min(all.length, hit[1] + 1);
+    return { ch, title: a.title, hit, rows: all.filter(x => x.i >= from && x.i <= to) };
+  }
+  return null;
+}
+function mcStoryHTML(S0) {
+  const P = i => (typeof pln === 'function' ? pln(S0.ch, i) : i);
+  return `<div class="panel" style="padding:8px 12px;margin-bottom:8px"><div class="small muted">From the story · Ch. ${S0.ch}: ${esc(S0.title)}, lines ${P(S0.rows[0].i)}–${P(S0.rows[S0.rows.length - 1].i)}</div>
+    <div class="he" dir="rtl" lang="he" style="font-size:1.25rem;line-height:1.8">${S0.rows.map(r => `<div style="${r.i >= S0.hit[0] && r.i <= S0.hit[1] ? 'background:var(--hl, rgba(250,204,21,.18));border-radius:4px' : ''}"><span class="small muted" style="font-family:var(--f-ui);margin-left:8px">${P(r.i)}</span>${esc(r.l)}</div>`).join('')}</div></div>`;
+}
+(function () {
+  // (1) Rebuild these bank questions: the Hebrew text stays, the English question becomes a Hebrew question.
+  const _wp = wpMC;
+  wpMC = function (wp, i) {
+    const it = _wp.apply(this, arguments);
+    try {
+      const m = mcHeQ(it.q); if (!m) return it;
+      let he = String(it.q);
+      he = /<br>\s*In /.test(he) ? he.replace(/<br>\s*In [\s\S]*$/, '') : he.replace(/\s*:\s*[^:<]*$/, '');
+      const snip = (String(it.q).match(/<br>\s*In ([\s\S]*?),\s*[^,]*$/) || [])[1] || he;
+      return { ...it, q: `<div class="mc-he" style="font-size:1.15em">${he}</div>${qTri(m[1], m[2], { hideEn: true })}`, qhe: m[1], qe: m[2], ctxSnip: String(snip).replace(/<[^>]+>/g, '') };
+    } catch (e) { console.error(e); return it; }
+  };
+  const _di = drawItem;
+  drawItem = function () {
+    const r = _di.apply(this, arguments);
+    try {
+      const it = SES && SES.items[SES.i], v = $('#v-session'); if (!it || !v || !it.qhe) return r;
+      const b = $('#b-tr'); if (b) b.remove();
+      v.querySelectorAll('.qen-btn').forEach(x => x.onclick = () => { x.hidden = true; const e = x.nextElementSibling; if (e) e.hidden = false; });
+      const qt = v.querySelector('.qtext');
+      mcStoryCtx(it.ctxSnip || '').then(S0 => { if (S0 && qt && qt.isConnected && !v.querySelector('.mc-story')) { qt.insertAdjacentHTML('beforebegin', `<div class="mc-story">${mcStoryHTML(S0)}</div>`); const h = qt.querySelector('.mc-he'); if (h) h.hidden = true; } }).catch(() => { });
+    } catch (e) { console.error(e); }
+    return r;
+  };
+})();
+// (2) Mistakes notebook: use the current wording of a question when the bank still has it (same answer options).
+function mcFreshItem(item) {
+  try {
+    const k = String(item && item.key || ''); let f = null;
+    let m = k.match(/^wpm\|(\w+)\|(\d+)$/); if (m && WP_MC[m[1]] && WP_MC[m[1]][+m[2]]) f = wpMC(m[1], +m[2]);
+    m = k.match(/^mq(\d+)$/); if (m && MCQ[+m[1]]) f = mcqItem(+m[1]);
+    if (!f) return null;
+    const norm = o => (o || []).map(x => String(x).replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()).sort().join('|');
+    return norm(f.o) === norm(item.o) ? f : null;
+  } catch { return null; }
+}
+function mcRefreshNotebook() {
+  try {
+    if (!S.prog || !Array.isArray(S.prog.mistakes)) return;
+    let ch = false; S.prog.voidIds = S.prog.voidIds || [];
+    S.prog.mistakes.forEach(m => {
+      const f = mcFreshItem(m.item); if (!f) return;
+      if (AN.itemId(f) === AN.itemId(m.item) && f.x === m.item.x) return;
+      // An old "who is who" question shown without its verse: its past answers are removed from the record.
+      if (/^wpm\|context\|/.test(m.key) && !/<br>/.test(String(m.item.q))) { const id = AN.itemId(m.item); if (!S.prog.voidIds.includes(id)) S.prog.voidIds.push(id); m._drop = true; }
+      m.item = { ...f }; ch = true;
+    });
+    // Those old versions also leave the notebook: they were unfair questions, not mistakes.
+    const before = S.prog.mistakes.length; S.prog.mistakes = S.prog.mistakes.filter(m => !m._drop); if (S.prog.mistakes.length !== before) ch = true;
+    if (ch) saveProg();
+  } catch (e) { console.error(e); }
+}
+// Take a voided answer out of the topic level too: drop its history line and recompute the level from the remaining history when that history is complete.
+function mcVoidMastery(gone) {
+  S.prog.voidDone = S.prog.voidDone || []; let ch = false;
+  for (const e of gone) {
+    const id = e.i + '@' + e.ts; if (S.prog.voidDone.includes(id)) continue; S.prog.voidDone.push(id); ch = true;
+    const t = e.t, H0 = S.prog.history || [];
+    const k = H0.findIndex(h => h.k === t && Math.abs((h.t || 0) - e.ts) < 5000 && (h.s || 0) === Math.round((e.s || 0) * 100) / 100);
+    if (k < 0) continue;
+    H0.splice(k, 1);
+    const m = S.prog.mastery[t]; if (!m) continue;
+    const rows = H0.filter(h => h.k === t);
+    if (rows.length === m.n - 1) { let sv = .5, n = 0; rows.forEach(h => { const a = Math.max(.15, 1 / (n + 2)); sv = Math.max(0, Math.min(1, sv + a * (h.s - sv))); n++; }); m.s = sv; m.n = n; }
+    else m.n = Math.max(0, m.n - 1);
+  }
+  if (ch) saveProg();
+}
+(function () {
+  const _la = loadAllEvents;
+  loadAllEvents = async function () {
+    const all = await _la.apply(this, arguments);
+    try { const V = new Set((S.prog && S.prog.voidIds) || []); if (V.size && Array.isArray(all)) { const gone = all.filter(e => V.has(e.i)), keep = all.filter(e => !V.has(e.i)); if (gone.length) { MEAS.excluded = MEAS.excluded || {}; MEAS.excluded.voided = gone.length; all.length = 0; keep.forEach(e => all.push(e)); mcVoidMastery(gone); } } } catch (e) { console.error(e); }
+    return all;
+  };
+  const _ss = startSession;
+  startSession = function (opts) { mcRefreshNotebook(); if (opts && Array.isArray(opts.items)) opts.items = opts.items.map(x => { const f = x && x.kind === 'mc' && !x.qhe ? mcFreshItem(x) : null; return f || x; }); return _ss.apply(this, arguments); };
+  setTimeout(mcRefreshNotebook, 3000);
+})();
+// (3) Suffixes on nouns.
+(function () {
+  const fix = (re, x) => { const m = MCQ.find(q => re.test(String(q.q))); if (m) m.x = x; };
+  fix(/סוּסֵנוּ/, `${H('סוּסֵנוּ')} is ${H('סוּס')} “horse” + the ending ${H('ֵנוּ')} “our”: <b>our horse</b>. There is no ${H('י')} before the ending, so the noun is singular. With a plural noun the same “our” has a ${H('י')}: ${H('סוּסֵינוּ')} “our horses”.`);
+  fix(/סוּסָיו/, `${H('סוּסָיו')} is ${H('סוּס')} “horse” + ${H('ָיו')} “his”: <b>his horses</b>. Why plural, when there is no ${H('ִים')}? Because a noun drops its plural ending ${H('ִים')} when a pronoun ending is added, and the plural is then shown by the ${H('י')} inside the ending: ${H('סוּסִים')} “horses” → ${H('סוּסָיו')} “his horses”. With one horse “his” is just ${H('וֹ')}: ${H('סוּסוֹ')} “his horse”. So: ${H('וֹ')} = his (one thing); ${H('ָיו')} = his (several things). The same ${H('י')} shows up in ${H('סוּסֶיהָ')} “her horses”, ${H('סוּסֵינוּ')} “our horses”, ${H('סוּסֵיהֶם')} “their horses”.`);
+  fix(/בָּם/, `${H('בָּם')} is the preposition ${H('בְּ')} “in, with” + the ending ${H('ָם')} “them”: <b>in them</b>. Prepositions take the same pronoun endings as nouns (${H('בּוֹ')} in him, ${H('בָּהּ')} in her, ${H('בָּנוּ')} in us).`);
+})();
+// (4) Evidence and Trap in plain prose (the course-specific parse notes).
+const PX_PROSE = {
+  'דִּבֶּר': ['Look at the middle root letter ב: its dot doubles it (dib-BER). A doubled middle root letter is the mark of the Piel, and the ḥireq under the first letter is how a Piel perfect begins (קִטֵּל → דִּבֶּר).', 'There are two dots, and only one matters. The dot in the first ד is the “hard sound” dot every בגדכפת letter gets at the start of a word. Only the dot in ב, the middle root letter, doubles it.'],
+  'וַיְדַבֵּר': ['After וַ the prefix יְ has only a shewa, the middle root letter ב is doubled, and the vowels run a–e (דַ…בֵּ). Shewa prefix + doubled middle letter + a–e is the Piel pattern, here as a wayyiqtol: “and he spoke”.', 'Do not call it Qal because it is so common: a Qal wayyiqtol starts וַיִּ (ḥireq under the prefix) and doubles no root letter. And the יְ has no dot even though wayyiqtol usually doubles its prefix: a י with shewa drops the dot.'],
+  'וַיְקַדֵּשׁ': ['Same picture as וַיְדַבֵּר: shewa under the prefix יְ, the middle root letter ד doubled, vowels a–e (קַ…דֵּ). A Piel in the wayyiqtol form: “and he consecrated”.', 'Keep the two questions apart: “Piel” answers the stem (בִּנְיָן), “wayyiqtol” answers the form (נְטִיָּה). The grid asks for both, separately.'],
+  'מְקַדֵּשׁ': ['The word starts with מְ (shewa) and the middle root letter ד is doubled. In the derived stems a מ in front marks a participle, and מְ + doubling is the Piel participle: “consecrating, the one who consecrates”.', 'A מ in front does not by itself mean Piel. The Qal participle has no מ at all (אֹמֵר), and the Hiphil participle has מַ with pataḥ and no doubling (מַקְרִיב). Check the vowel under מ and the middle letter.'],
+  'לְכַפֵּר': ['לְ in front, then the Piel vowels a–e (כַ…פֵּ) with the middle root letter פ doubled. לְ + a Piel stem is the Piel infinitive construct: “to make atonement”.', 'It is an infinitive, so it has no person, gender or number: leave those three boxes empty.'],
+  'וַיְמַלֵּא': ['Shewa under the prefix (יְ) and the middle root letter ל doubled: Piel. In the Qal מלא means “be full”; the Piel makes it active, “fill (someone with something)”.', ''],
+  'וַיְכַהֲנוּ': ['The prefix יְ has a shewa and the first root letter כ has an a-vowel: the Piel pattern. The ending וּ makes it “they”: “and they served as priests”.', 'The usual Piel dot is missing, and that is the trap. The middle root letter is ה, a guttural, and gutturals cannot be doubled. So “no dot” does not mean “not Piel”.'],
+  'וַיְחַטֵּא': ['Shewa under the prefix, an a-vowel under ח, and the middle root letter ט doubled: Piel wayyiqtol. In the Piel, חטא “sin” becomes “purify from sin”.', ''],
+  'לִמַּד': ['Ḥireq under the first letter (לִ) and the middle root letter מ doubled: a Piel perfect. Qal למד is “learn”; the Piel is “teach”.', 'The last vowel is pataḥ (מַּד), not the tsere of קִטֵּל. That happens in some Piel perfects; the ḥireq and the doubling still make it Piel.'],
+  'לְלַמֵּד': ['The first ל is the preposition “to”. After it comes the Piel stem: a–e vowels with the middle root letter מ doubled. Piel infinitive construct: “to teach”.', ''],
+  'בִּקְשׁוּ': ['Ḥireq under the first letter ב is the Piel perfect sign (as in דִּבֶּר). The ending וּ makes it “they”: “they sought”.', 'You would expect a dot in ק, the middle letter, and it is missing. Some letters (remember SQiN’M LeWY) drop the doubling dot when they carry a shewa. It is still Piel.'],
+  'בֵּרַךְ': ['The middle root letter ר cannot be doubled, so the Piel dot is missing. To make up for it, the vowel before it grows from ḥireq to tsere (בֵּ instead of בִּ) — “compensatory lengthening”. Piel perfect: “he blessed”.', ''],
+  'שַׁלַּח': ['Pataḥ under the first letter and the middle root letter ל doubled: the Piel imperative, “send away! let go!”', 'Compare the Qal imperative שְׁלַח: shewa under the first letter and no doubling. The Piel strengthens the meaning: not just “send”, but “send away, release”.'],
+  'הִמְלִיךְ': ['A ה with ḥireq in front (הִ) and ִי before the last root letter: Hi-phil. The Hiphil perfect: “he made (someone) king”.', ''],
+  'וַיַּמְלֵךְ': ['After וַ the prefix יַ has pataḥ, an a-vowel. A prefix with an a-vowel and no doubled middle letter is the Hiphil (here its short wayyiqtol form, Ha-phel): “and he made (someone) king”.', 'There is no ה, and it is still Hiphil. The Hiphil ה drops out when a prefix comes before it (יְהַמְלֵךְ → יַמְלֵךְ); what stays is the a-vowel under the prefix.'],
+  'וַיַּקְרֵב': ['The prefix יַ has an a-vowel, the first root letter ק a shewa, the middle root letter ר a tsere, and nothing is doubled. Prefix a-vowel + one vowel inside the root + no doubling = Hiphil (short Ha-phel form): “and he brought near”.', 'The Hiphil ה has disappeared after the prefix. Read the vowel under the prefix: pataḥ (a) points to Hiphil; ḥireq (i) would point to Qal or Niphal.'],
+  'וַיַּלְבֵּשׁ': ['The prefix יַ has an a-vowel, then לְ has a shewa: the Ha-phel pattern of the Hiphil. Qal לבשׁ is “wear”; the Hiphil is “clothe (make someone wear)”.', 'The dot in ב is not doubling. ב comes right after a silent shewa, and a בגדכפת letter gets a dot there only to harden its sound (b, not v). Only a dot in the middle root letter after a full vowel means Piel.'],
+  'הַקְהֵל': ['ה with pataḥ in front, then ק with a shewa, then tsere under ה: haq-HEL. That pattern (הַ + shewa + tsere) is the Hiphil imperative, Ha-phel: “assemble (the people)!”', 'It looks like the article “the” (הַ). But the article doubles the next letter, and the noun has qameṣ: הַקָּהָל “the assembly”. Here ק has a shewa and no dot, so הַ is the Hiphil prefix, not “the”.'],
+  'וַיְקַדְּשֵׁהוּ': ['Shewa under the prefix יְ and the middle root letter ד doubled: Piel wayyiqtol. At the end, ֵהוּ is an object suffix, “him / it”: “and he consecrated it”.', 'Read the ending as the object (“…it”), not as part of the root, and the verb as “consecrated”, not “covered”.'],
+  'יֵדַע': ['There is a prefix (יֵ, with tsere) and only two root letters after it, ד and ע. The first root letter of ידע is י, and in the imperfect it drops out while the prefix takes tsere. Qal imperfect: “he knows / he will know”.', 'On the midterm you marked this as a perfect. The rule: a prefix letter in front (א ת י נ) means a prefix form, the imperfect. A perfect has no prefix, only endings.'],
+  'הַכָּתוּב': ['Look at the vowels inside the root: qameṣ under the first letter, then וּ (u) before the last: a–u. That a–u pattern (קָטוּל) is the Qal passive participle, “written”. The הַ in front is the article: “what is written”.', 'On the midterm you read it as “good”. The root is כתב, “write”.'],
+  'כִּפֶּר': ['Ḥireq under the first letter and the middle root letter פ doubled: Piel perfect, “he made atonement”.', 'The last vowel is segol (פֶּר), not tsere. כִּפֶּר is one of the few Piel perfects with segol there (like דִּבֶּר); the stem is the same.'],
+  'וַיַּשְׁלֵךְ': ['The prefix יַ has an a-vowel, then שְׁ a shewa, and tsere before the last letter: the same Ha-phel pattern as וַיַּקְרֵב. Hiphil wayyiqtol: “and he threw”.', ''],
+  'מֵאֵן': ['Tsere under מ instead of the usual ḥireq. The middle root letter א is a guttural and cannot be doubled, so the vowel before it lengthens (as in בֵּרַךְ). A Piel: “he refused”.', 'No dot anywhere, and still Piel: the longer vowel makes up for the missing doubling.'],
+  'צִוָּה': ['Ḥireq under צ, the middle root letter ו doubled (tsiv-VAH), and the ending ָה of a III-ה verb: Piel perfect, “he commanded”.', 'A ו with a dot is not always the vowel “u”. Here the ו carries its own vowel (qameṣ), so it is a consonant, doubled. That is why this is not a hollow verb.'],
+  'מְגַלֶּה': ['מְ with a shewa in front, then the middle root letter ל doubled: Piel participle, “uncovering, revealing”.', 'Compare the Hiphil participle מַגְלֶה: pataḥ under מ and no doubling. The vowel under מ and the dot in the middle letter tell them apart.'],
+  'לְהַבְדִּיל': ['After the preposition לְ the Hiphil ה is still visible (הַ), and there is ִי before the last root letter: Ha-phil. The Hiphil infinitive construct: “to separate, to distinguish”.', 'The dot in ד is not doubling: ד follows the silent shewa under ב, so the dot only hardens its sound. And do not add “and”: the text has לְהַבְדִּיל, not וּלְהַבְדִּיל.'],
+  'בְּהַקְרִיבָם': ['After the preposition בְּ comes הַ…ִי, the Hiphil infinitive (Ha-phil): “when … brought near, offered”. The ending ָם says who did it: “when they offered”.', 'The ending ָם tells who acted, but the verb itself is an infinitive, so in the grid it has no person, gender or number.'],
+  'וַיִּדֹּם': ['After וַ the prefix יִ has ḥireq: the Qal wayyiqtol pattern (as in וַיִּשְׁמַע). “And he was silent” — Aaron.', 'The dot in ד is not a Piel dot. The root is דמם, with the same letter twice; in this kind of root the first root letter can be doubled instead. A Piel wayyiqtol would begin וַיְ with a shewa.'],
+  'לְכַהֵן': ['לְ in front, then a–e vowels (כַ…הֵ): the Piel infinitive construct, “to serve as priest”.', 'There is no doubling dot because the middle root letter ה is a guttural. Same verb and same reason as וַיְכַהֲנוּ.'],
+  'יָמוּת': ['The prefix י (with qameṣ) means “he”, and there is no ending: “he will die / he might die”.', 'The וּ in the middle is not a plural ending: it is the middle letter of the root מות, a hollow verb. A plural ending comes after the last root letter (תָּמֻתוּ).'],
+  'תָּמֻתוּ': ['The prefix ת plus the ending וּ after the last root letter means “you (plural, men)”: “you will die”.', 'With פֶּן in front (פֶּן־תָּמֻתוּ) it means “lest you die”, “so that you do not die”.'],
+  'וַיָּמֻתוּ': ['וַ + the prefix יָּ (doubled, as wayyiqtol usually is) + the ending וּ = “and they …”: “and they died”.', 'Compare יָמוּת “he dies”: no ending, so singular. The final וּ after the root is what makes it plural.'],
+  'תֵצְאוּ': ['The prefix ת with tsere and the ending וּ give “you (plural)”. The root is יצא: its first letter י drops out in the imperfect, and the prefix takes tsere (as in יֵדַע).', 'With לֹא in front, the imperfect is a firm prohibition: “you must not go out”, not a simple prediction.'],
+  'קִדַּשְׁתִּי': ['Ḥireq under the first letter ק and the middle root letter ד doubled: Piel perfect. The ending ־תִּי means “I”: “I consecrated”.', 'In הֲלוֹא קִדַּשְׁתִּי, הֲלוֹא asks “did I not …?” and expects the answer “yes”: “Did I not consecrate …? (I certainly did).”']
+};
+(function () {
+  const _ex = extraHTML;
+  extraHTML = function (it) {
+    const P = it && PX_PROSE[it.form]; if (!P) return _ex.apply(this, arguments);
+    const x = (typeof PARSE_EXTRA !== 'undefined' && PARSE_EXTRA[it.form]) || {};
+    return `<div class="small stack" style="gap:6px;margin-top:6px;line-height:1.55">${x.tr ? `<div><b>Say it:</b> ${esc(x.tr)}</div>` : ''}<div><b>How to see it.</b> ${heWrap(esc(P[0]))}</div>${P[1] ? `<div><b>The trap.</b> ${heWrap(esc(P[1]))}</div>` : ''}${x.quiz ? `<div><b>Your quiz:</b> ${heWrap(esc(x.quiz))}</div>` : ''}</div>`;
+  };
+  // The short bank note repeats the prose: hide it when the prose is shown.
+  const _ap = answerParse;
+  answerParse = function () {
+    const r = _ap.apply(this, arguments);
+    try { const it = SES && SES.items[SES.i]; if (it && PX_PROSE[it.form] && it.note) $$('#fb .small').forEach(d => { if (d.textContent.trim() === String(it.note).trim()) d.remove(); }); } catch (e) { console.error(e); }
+    return r;
+  };
+})();
+</script>
+<script>
 // Colour mode: dark (default), light, or the same as the computer. Remembered on this device.
 (function () {
   const order = ['dark', 'light', 'auto'], lab = { dark: '☾ Dark', light: '☀ Light', auto: '◐ Auto' };
@@ -9813,5 +9998,5 @@ function pgnSplitHTML(D) {
   const b = document.getElementById('btn-theme'); if (b) b.onclick = () => { t = order[(order.indexOf(t) + 1) % order.length]; try { localStorage.setItem('het-theme', t); } catch {} apply(); };
 })();
 </script>
-<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='e06d874fd9';</script>
+<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='5f15f0b4fb';</script>
 </body></html>
