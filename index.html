@@ -10391,6 +10391,154 @@ function fsCardHTML() {
 })();
 </script>
 <script>
+// ---------- Nov 21 (night): GPT's answer key and grading protocol for Final simulations 5–9 (the GPT mock finals) ----------
+// Emerson's instruction: GPT's key is the grading framework for those five papers. 100 points each (A 32 · B 30 · C 26 · D 12).
+// A: forms 1–13 = 2 pts, 14–15 = 3 pts; fields root, stem, form, PGN, meaning equal (the app's grid has no meaning box, so the four
+// fields it has share the item; PGN is proportional: person/gender/number for finite verbs, gender/number for participles, none for infinitives).
+// B: five meaning units per verse, each 1 / ½ / 0. C: Q1–14 = 1 pt, Q15–20 = 2 pts; right / partly / wrong. D: 2 pts each.
+// Alternative readings the key accepts are accepted; questions it flags as defective are labelled and never counted as your errors.
+// Answers stay hidden until you submit (as in every simulation).
+(function () {
+  const _pi = fsParseItem;
+  fsParseItem = function (k, L, x) { const it = _pi.apply(this, arguments); if (x[7]) it.gl = x[7]; if (x[8]) it.pts = x[8]; return it; };
+  const _ci = fsCompItem;
+  fsCompItem = function (k, i, x) {
+    const it = _ci.apply(this, arguments);
+    if (x[6]) it.pts = x[6];
+    if (x[5]) it.model += ` · Also accept: ${x[5]}`;
+    if (x[7]) { it.broad = x[7]; it.model += ` · ${x[7]}`; }
+    return it;
+  };
+  const _bf = buildFS;
+  buildFS = async function (k) {
+    const ex = await _bf.apply(this, arguments);
+    try {
+      const D = await fsDef('simdefs/' + k); if (!D || !D.gpt) return ex;
+      ex.gptKey = 1;
+      ex.items.forEach(it => {
+        it.gpt = 1;
+        const m = String(it.key || '').match(/\|t\|(\d+):(\d+)$/);
+        if (m && D.units && D.units[m[2]]) { it.units = D.units[m[2]]; if (D.unote) it.unote = D.unote; it.pts = 5; }
+        if (it.sec === 'syntax') it.pts = 2;
+      });
+    } catch (e) { console.error(e); }
+    return ex;
+  };
+  // A: the key's parse scoring.
+  const _gp = gradeParse;
+  gradeParse = function (item, sel) {
+    const g = _gp.apply(this, arguments);
+    if (!item || !item.gpt) return g;
+    const r = g.res, c = item.conj;
+    const parts = c === 'inf' ? ['p', 'g', 'n'] : c === 'ptc' ? ['g', 'n'] : ['p', 'g', 'n'];
+    const pgn = parts.filter(k => r[k]).length / parts.length;
+    return { ...g, score: (+!!r.root + +!!r.stem + +!!r.conj + pgn) / 4, gptScore: 1 };
+  };
+  // Item points inside a section (A: 2 or 3, C: 1 or 2).
+  const _ss = AN.scoreSections;
+  AN.scoreSections = function (items, weights) {
+    if (!items.some(x => x && x.spec && x.spec.pts)) return _ss.apply(this, arguments);
+    const sec = {};
+    for (const it of items) { const p = (it.spec && it.spec.pts) || 1; const o = sec[it.sec] = sec[it.sec] || { n: 0, sum: 0, pts: 0, answered: 0 }; o.n++; o.pts += p; o.sum += (it.score || 0) * p; if (it.answered) o.answered++; }
+    let tw = 0, tot = 0;
+    for (const [k, o] of Object.entries(sec)) { o.acc = o.sum / o.pts; const w = weights[k] || 0; tw += w; tot += w * o.acc; }
+    const answered = items.filter(i => i.answered).length;
+    return { total: tw ? Math.round(tot / tw * 1000) / 10 : null, sections: sec, completion: items.length ? answered / items.length : 0 };
+  };
+  // B: score each verse by the key's five meaning units.
+  const _rs = renderSelfScore;
+  renderSelfScore = function (res, still) {
+    _rs.apply(this, arguments);
+    if (!still.some(r => r.it.gpt || r.it.sec === 'comp')) return;
+    if (still.some(r => r.it.gpt)) { const p = $('#v-session h2 + p'); if (p) p.insertAdjacentHTML('afterend', '<div class="note small"><b>GPT’s grading protocol for this paper.</b> Story questions: right = full points, partly = half (a correct answer only in English is “partly”, because Hebrew was asked; vowels, exact wording and full sentences are not required). Translation: score each of the five meaning units; English style does not matter. Syntax: one point per part asked. Questions marked as a defect of the paper: accept any clearly defensible answer.</div>'); }
+    still.forEach(r => {
+      const box = $(`[data-ss="${r.i}"]`); if (!box) return;
+      if (r.it.units) {
+        const row = box.querySelector('.row.small'); if (row) row.outerHTML = `<div class="stack small" style="gap:4px"><b>Score each meaning unit (the key: 1 = right, ½ = partly, 0 = missing or wrong; style does not matter):</b>${r.it.units.map((u, j) => `<div class="row" style="gap:8px;align-items:flex-start"><span style="flex:1">${j + 1}. ${heWrap(esc(u))}</span>${[['1', '1'], ['.5', '½'], ['0', '0']].map(([v, l]) => `<label><input type="radio" name="u${r.i}_${j}" value="${v}"> ${l}</label>`).join('')}</div>`).join('')}${r.it.unote ? `<div class="muted">${heWrap(esc(r.it.unote))}</div>` : ''}</div>`;
+      }
+      if (r.it.sec === 'comp' && r.it.model) { const he = String(r.it.model).split(' — ')[0]; const m = box.querySelector('.small'); if (m && /[א-ת]/.test(he)) m.insertAdjacentHTML('beforeend', `<br><b>Say it:</b> ${PRi(he)}`); }
+    });
+    if (!still.some(r => r.it.units)) return;
+    const go = $('#ss-go'); const old = go.onclick;
+    go.onclick = () => {
+      const U = still.filter(r => r.it.units);
+      for (const r of U) { let s = 0; r.it.units.forEach((u, j) => { const ch = $(`input[name="u${r.i}_${j}"]:checked`); s += ch ? +ch.value : 0; }); r.score = s / r.it.units.length; r.crit = { units: r.it.units.map((u, j) => { const ch = $(`input[name="u${r.i}_${j}"]:checked`); return ch ? +ch.value : 0; }) }; r.sc = 'self'; r.pending = false; }
+      // the original handler scores the others (it would overwrite the units items, so they are taken out first)
+      const keep = U.map(r => [r, still.indexOf(r)]); keep.sort((a, b) => b[1] - a[1]).forEach(([, i]) => still.splice(i, 1));
+      old();
+    };
+  };
+})();
+
+// ---------- What each simulation tells you, by skill (all simulations) ----------
+function simSkills(recs) {
+  const T = {}; const add = (k, ok, n = 1) => { const o = T[k] = T[k] || [0, 0]; o[0] += ok; o[1] += n; };
+  for (const rec of recs) for (const x of rec.items || []) {
+    const it = x.spec || {}; if (x.kind === 'parse') {
+      const a = x.answer || {}; const { res } = gradeParse(it, { p: a.p || '', g: a.g || '', n: a.n || '', conj: a.conj || '', stem: a.stem || '', root: a.root || '' });
+      add('root', +!!res.root); add('stem', +!!res.stem); add('conj', +!!res.conj);
+      if (!['ptc', 'inf'].includes(it.conj)) add('p', +!!res.p);
+      if (it.conj !== 'inf') { add('g', +!!res.g); add('n', +!!res.n); }
+    } else if (x.sec === 'translation') { add('tr', x.score || 0); if (x.crit && x.crit.lex != null) add('voc', x.crit.lex); }
+    else if (x.sec === 'comp') { if (!(it.broad && (x.score || 0) < 1)) add('comp', x.score || 0); }
+    else if (x.sec === 'syntax') add('syn', x.score || 0);
+  }
+  return T;
+}
+function simSkillsHTML(recs, title) {
+  const T = simSkills(recs); if (!Object.keys(T).length) return '';
+  const R = [['root', 'Root (שֹׁרֶשׁ)'], ['stem', 'Stem (בִּנְיָן)'], ['conj', 'Form (נְטִיָּה)'], ['p', 'Person (גּוּף)'], ['g', 'Gender (מִגְדָּר)'], ['n', 'Number (מִסְפָּר)'], ['mean', 'Verb meaning'], ['voc', 'Vocabulary (in the translation)'], ['tr', 'Ruth translation'], ['comp', 'Story questions in Hebrew'], ['syn', 'Ruth syntax']];
+  const cell = k => k === 'mean' ? '<span class="muted">not asked in the app’s grid: check the meaning line in the review</span>' : T[k] ? `<b>${Math.round(T[k][0] / T[k][1] * 100)}%</b> <span class="muted small">(${Math.round(T[k][0] * 10) / 10} of ${T[k][1]})</span>` : '<span class="muted">—</span>';
+  return `<div class="panel stack" style="gap:6px"><h3 style="margin:0">${esc(title)}</h3>${tableHTML(['Skill', 'Right'], R.map(([k, l]) => [heWrap(esc(l)), cell(k)]))}<p class="small muted" style="margin:0">Questions the answer key marks as defective are left out when you missed them: they are not your errors.</p></div>`;
+}
+(function () {
+  // The review: the key's corrections (Hebrew, pronunciation, English), defects labelled, and the skill table.
+  const _ie = itemExplainHTML;
+  itemExplainHTML = function (x) {
+    let h = _ie.apply(this, arguments); const it = x.spec || {};
+    try {
+      if (it.kind === 'parse' && (it.gl || x.score < 1)) {
+        const line = `<div class="small" style="margin-top:4px"><b>Correct:</b> ${H(esc(it.form))} ${PRi(it.form)} — root ${H(esc(it.root))}, ${esc(String(it.stem).split('|')[0])} ${esc(it.conj)}${it.pgn ? ' ' + esc(String(it.pgn).split('|')[0]) : ''}${it.gl ? ` — “${esc(it.gl)}”` : ''}</div>`;
+        h = h.replace(/<\/div>\s*$/, line + '</div>');
+      }
+      if (it.sec === 'comp' && it.model) {
+        const he = String(it.model).split(' — ')[0];
+        if (/[א-ת]/.test(he)) h = h.replace(/<\/div>\s*$/, `<div class="small"><b>Say it:</b> ${PRi(he)}</div></div>`);
+      }
+      if (it.broad) h = h.replace('<span class="row" style="gap:4px">', '<span class="row" style="gap:4px"><span class="chip warn" title="The answer key marks this question as defective: not counted as your error">exam defect</span>');
+      if (x.crit && x.crit.units && it.units) h = h.replace(/<\/div>\s*$/, `<div class="small"><b>Meaning units (the key):</b> ${it.units.map((u, j) => `${heWrap(esc(u))} <b>${x.crit.units[j] === 1 ? '✓' : x.crit.units[j] ? '½' : '✗'}</b>`).join(' · ')}</div></div>`);
+    } catch (e) { console.error(e); }
+    return h;
+  };
+  const _rv = renderExamReview;
+  renderExamReview = function (rec) {
+    const r = _rv.apply(this, arguments);
+    try {
+      if (rec && /^fs\d$/.test(rec.type || '')) {
+        const v = $('#v-session'), h1 = v && v.querySelector('h1');
+        const t = simSkillsHTML([rec], 'This simulation, by skill');
+        if (h1 && t) { const anchor = h1.nextElementSibling && h1.nextElementSibling.tagName === 'P' ? h1.nextElementSibling : h1; anchor.insertAdjacentHTML('afterend', t + (rec.items.some(x => x.spec && x.spec.gpt) ? '<p class="small muted">Scored with GPT’s answer key and protocol (forms 1–13 = 2 points, 14–15 = 3; questions 1–14 = 1 point, 15–20 = 2). The meaning of each verb is not asked in the app’s grid, so the other four fields share each parse item.</p>' : '')); }
+      }
+    } catch (e) { console.error(e); }
+    return r;
+  };
+  // The Final rescue card: all simulations together, by skill; and the seven-stem supplement (not scored).
+  const _rr = renderRescue;
+  renderRescue = function () {
+    _rr.apply(this, arguments);
+    const c = $('#fs-card'); if (!c || $('#fs-skills')) return;
+    const recs = FS_KEYS.flatMap(k => fsResults(k));
+    c.insertAdjacentHTML('beforeend', `<div id="fs-skills">${recs.length ? simSkillsHTML(recs, `All simulations so far, by skill (${recs.length} taken)`) : ''}<div class="row" style="justify-content:space-between;margin-top:6px"><div><b>Seven-stem supplement</b> <span class="small muted">(GPT’s 14 paradigm forms of קטל; not scored, not part of any 100)</span></div><button class="btn sm" id="ss7-go">Practise</button></div></div>`);
+    $('#ss7-go').onclick = () => startSevenStem();
+  };
+})();
+function startSevenStem() {
+  const F = [['קָטַל', 'qal', 'qatal', '3ms'], ['יִקְטֹל', 'qal', 'yiqtol', '3ms'], ['נִקְטַל', 'niphal', 'qatal', '3ms'], ['יִקָּטֵל', 'niphal', 'yiqtol', '3ms'], ['קִטֵּל', 'piel', 'qatal', '3ms'], ['יְקַטֵּל', 'piel', 'yiqtol', '3ms'], ['קֻטַּל', 'pual', 'qatal', '3ms', [{ conj: 'inf', pgn: '' }]], ['יְקֻטַּל', 'pual', 'yiqtol', '3ms'], ['הִתְקַטֵּל', 'hithpael', 'qatal', '3ms', [{ conj: 'impv', pgn: '2ms' }, { conj: 'inf', pgn: '' }]], ['יִתְקַטֵּל', 'hithpael', 'yiqtol', '3ms'], ['הִקְטִיל', 'hiphil', 'qatal', '3ms'], ['יַקְטִיל', 'hiphil', 'yiqtol', '3ms'], ['הָקְטַל', 'hophal', 'qatal', '3ms', [{ conj: 'inf', pgn: '' }]], ['יָקְטַל', 'hophal', 'yiqtol', '3ms']];
+  const items = F.map(([form, stem, conj, pgn, alts]) => ({ kind: 'parse', key: 'ss7|' + form, form, root: 'קטל', stem, conj, pgn, ...(alts ? { alts } : {}), gloss: 'kill', t: stem === 'qal' ? 'qal_weak' : PB_STEM_TOPIC[stem] || stem, cat: 'review' }));
+  startSession({ title: 'Seven-stem supplement (GPT’s paradigm forms of קטל · not scored)', items, back: 'rescue', noVary: true, mode: 'review' });
+}
+</script>
+<script>
 // Colour mode: dark (default), light, or the same as the computer. Remembered on this device.
 (function () {
   const order = ['dark', 'light', 'auto'], lab = { dark: '☾ Dark', light: '☀ Light', auto: '◐ Auto' };
@@ -10400,5 +10548,5 @@ function fsCardHTML() {
   const b = document.getElementById('btn-theme'); if (b) b.onclick = () => { t = order[(order.indexOf(t) + 1) % order.length]; try { localStorage.setItem('het-theme', t); } catch {} apply(); };
 })();
 </script>
-<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='9190a138ff';</script>
+<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='dc088e4df6';</script>
 </body></html>
