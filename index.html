@@ -2228,7 +2228,7 @@ function gradeParse(item, sel) {
     const a = parsePGN(alt); const r = {};
     if (!inf) {
       if (!ptc) r.p = sel.p === a.p;
-      r.g = a.g === 'c' ? !!sel.g && sel.g !== '-' : sel.g === a.g;
+      r.g = a.g === 'c' ? sel.g === 'c' : sel.g === a.g;
       r.n = sel.n === a.n;
     } else { r.p = !sel.p || sel.p === '-'; r.g = !sel.g || sel.g === '-'; r.n = !sel.n || sel.n === '-'; }
     if (ptc) r.p = !sel.p || sel.p === '-';
@@ -4951,7 +4951,7 @@ async function startExam(type, paper) {
   EX = { ...ex, paper: !!paper, phase: paper ? 'print' : 'intro', ans: {}, ms: {}, cur: 0, elapsed: 0, interrupts: 0, writeMs: 0, entryMs: 0 };
   exSave(); renderExam();
 }
-function resumeExam() { if (EX && EX.phase !== 'done') { renderExam(); return true; } const d = lsGet('exam'); if (!d || d.phase === 'done') return false; EX = d; EX.interrupts = (EX.interrupts || 0) + 1; EX.segStart = null; exSave(); renderExam(); return true; }
+function resumeExam() { if (EX && EX.phase !== 'done') { renderExam(); return true; } const d = lsGet('exam'); if (!d || d.phase === 'done') return false; EX = d; EX.interrupts = (EX.interrupts || 0) + 1; if (EX.segStart && (EX.phase === 'taking' || EX.phase === 'writing')) (EX.gaps = EX.gaps || []).push([EX.seen || EX.segStart, Date.now()]); else EX.segStart = null; exSave(); renderExam(); return true; }
 function exElapsed() { return (EX.elapsed || 0) + (EX.segStart ? Date.now() - EX.segStart : 0); }
 function exClockStart() { if (!EX.segStart) { EX.segStart = Date.now(); EX.startTs = EX.startTs || EX.segStart; } clearInterval(EX_TICK); EX_TICK = setInterval(exTick, 1000); }
 function exClockStop() { if (EX.segStart) { EX.elapsed = exElapsed(); EX.segStart = null; } clearInterval(EX_TICK); }
@@ -4959,6 +4959,8 @@ function exTick() {
   const el = $('#ex-clock'); if (!EX) { clearInterval(EX_TICK); return; }
   const left = EX.limitMs - exElapsed();
   if (el) { const s = Math.max(0, Math.round(left / 1000)); el.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; el.style.color = left < 5 * 60000 ? 'var(--bad)' : ''; }
+  if (EX.segStart && (!EX._hb || Date.now() - EX._hb > 10000)) { EX.seen = EX._hb = Date.now(); exSave(); }
+  if ((EX.phase === 'taking' || EX.phase === 'writing') && left > 0) { if (left < 10 * 60000 && !EX.warn10) { EX.warn10 = 1; exSave(); flash('10 minutes left.'); } if (left < 5 * 60000 && !EX.warn5) { EX.warn5 = 1; exSave(); flash('5 minutes left.'); } }
   if (left <= 0 && EX.phase === 'taking') { EX.timeUp = true; exLeaveItem(); submitExam(); }
   if (left <= 0 && EX.phase === 'writing') { EX.timeUp = true; finishWriting(); }
 }
@@ -5003,7 +5005,7 @@ function renderExam() {
     v.innerHTML = `<div class="panel stack" style="max-width:720px;margin:0 auto"><div class="eyebrow">${esc(bp.name)} · ${bp.id}</div><h1>${EX.items.length} items · ${Math.round(EX.limitMs / 60000)} minutes</h1>
       <ul class="small" style="margin:0;padding-left:1.2em">${Object.entries(bp.sections).map(([k, s]) => `<li>${esc(s.label)}: ${EX.items.filter(x => x.sec === k).length} items</li>`).join('')}</ul>
       <p class="small">Item types: ${Object.entries(cats).map(([k, n]) => `${esc(CAT_LABEL[k] || k)} ${n}`).join(' · ')}. Each item shows its label.</p>
-      <div class="note">Exam conditions: no hints, no pronunciation, no answers until you submit. Your first answers are saved once and never changed. After you submit, you see an explanation for every item and can try the misses again (that second try is recorded separately).</div>
+      ${typeof exPolicyHTML === 'function' ? exPolicyHTML() : ''}
       ${EX.limits.length ? `<div class="note">${EX.limits.map(esc).join(' ')}</div>` : ''}
       <div class="row"><button class="btn primary" id="ex-go">Start the clock</button><button class="btn" id="ex-paper">Do it on paper instead</button><button class="btn ghost" id="ex-x">Cancel</button></div></div>`;
     $('#ex-go').onclick = () => { EX.phase = 'taking'; exSave(); renderExam(); };
@@ -5016,12 +5018,12 @@ function renderExam() {
   if (EX.phase === 'entry') return renderEntry(v);
   // taking
   exClockStart();
-  const it = EX.items[EX.cur], a = EX.ans[EX.cur] = EX.ans[EX.cur] || {};
+  const it = EX.items[EX.cur], a = EX.ans[EX.cur] = EX.ans[EX.cur] || {}; (EX.vis = EX.vis || {})[EX.cur] = 1;
   v.innerHTML = `<div class="sess-head"><b>${esc(bp.name)}</b><div class="progress"><i style="width:${EX.items.filter((x, i) => exAnswered(x, EX.ans[i])).length / EX.items.length * 100}%"></i></div><b id="ex-clock" style="font-variant-numeric:tabular-nums">--:--</b></div>
     ${EX.passage && (/^(sim|fs\d|sp$)/.test(EX.type) ? ['comp', 'parse', 'translation', 'syntax'] : EX.type === 'mock' ? ['comp', 'parse', 'translation'] : ['comp']).includes(it.sec) ? passageHTML() : ''}
     <div class="panel qbox" style="max-width:760px;width:100%;margin:0 auto">${exItemHTML(it, a, EX.cur + 1)}
-      <div class="row" style="justify-content:space-between"><div class="row"><button class="btn" id="ex-prev" ${EX.cur ? '' : 'disabled'}>← Previous</button><button class="btn primary" id="ex-next">${EX.cur + 1 < EX.items.length ? 'Next →' : 'Review & submit'}</button></div><button class="btn ghost sm" id="ex-sub">Submit now</button></div>
-      <div class="row" style="gap:4px">${EX.items.map((x, i) => `<button class="btn sm ${i === EX.cur ? 'primary' : ''}" data-xi="${i}" style="min-width:34px;${exAnswered(x, EX.ans[i]) ? '' : 'opacity:.55'}">${i + 1}</button>`).join('')}</div></div>`;
+      <div class="row" style="justify-content:space-between"><div class="row"><button class="btn" id="ex-prev" ${EX.cur ? '' : 'disabled'}>← Previous</button><button class="btn primary" id="ex-next">${EX.cur + 1 < EX.items.length ? 'Next →' : 'Review & submit'}</button></div><div class="row"><button class="btn sm" id="ex-flag">${(EX.flag || {})[EX.cur] ? '⚑ Marked for review' : '⚐ Mark for review'}</button><button class="btn ghost sm" id="ex-sub">Review &amp; submit</button></div></div>
+      ${typeof exNavHTML === 'function' ? exNavHTML() : ''}</div>`;
   startTimer(it); exTick();
   wireExItem(v, it, a, exSave);
   const goTo = i => { exLeaveItem(); EX.cur = i; exSave(); renderExam(); };
@@ -5029,20 +5031,24 @@ function renderExam() {
   $('#ex-next').onclick = () => EX.cur + 1 < EX.items.length ? goTo(EX.cur + 1) : confirmSubmit();
   $('#ex-sub').onclick = confirmSubmit;
   $$('[data-xi]', v).forEach(b => b.onclick = () => goTo(+b.dataset.xi));
+  $$('[data-xs]', v).forEach(b => b.onclick = () => goTo(+b.dataset.xs));
+  $('#ex-flag').onclick = () => { EX.flag = EX.flag || {}; EX.flag[EX.cur] = !EX.flag[EX.cur]; goTo(EX.cur); };
 }
 function confirmSubmit() {
   exLeaveItem();
   const open = EX.items.filter((x, i) => !exAnswered(x, EX.ans[i])).length;
-  const v = $('#v-session');
-  v.querySelector('.qbox').insertAdjacentHTML('beforeend', `<div class="note" id="ex-conf">${open ? `${open} item${open > 1 ? 's are' : ' is'} still empty and will score 0. ` : ''}Submit now? Your answers cannot be changed afterwards. <button class="btn sm primary" id="ex-yes">Submit</button> <button class="btn sm" id="ex-no">Keep working</button></div>`);
+  const v = $('#v-session'); const old = $('#ex-conf'); if (old) old.remove();
+  v.querySelector('.qbox').insertAdjacentHTML('beforeend', `<div class="note" id="ex-conf">${typeof exOverviewHTML === 'function' ? exOverviewHTML() : (open ? `${open} item${open > 1 ? 's are' : ' is'} still empty and will score 0. ` : '')}Submit now? After this your answers cannot be changed; then every item is graded and explained. <button class="btn sm primary" id="ex-yes">Submit</button> <button class="btn sm" id="ex-no">Keep working</button></div>`);
   $('#ex-yes').onclick = submitExam; $('#ex-no').onclick = () => { $('#ex-conf').remove(); renderExam(); };
+  $$('#ex-conf [data-xj]').forEach(b => b.onclick = () => { EX.cur = +b.dataset.xj; exSave(); renderExam(); });
+  $('#ex-conf').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 // ---- Paper mode
 function renderPaper(v) {
   v.innerHTML = `<div class="panel stack" style="max-width:820px;margin:0 auto"><div class="eyebrow">Paper exam · ${esc(BLUEPRINTS[EX.type].name)}</div>
     <p class="small">Write your answers by hand (like the real exam). Print this page or copy the items onto paper. Press “Start the clock” when you begin writing, and “I’ve finished writing” when you stop. Then type in what you wrote (or upload a photo for Claude to read). Writing time and typing time are recorded separately.</p>
     <div class="row"><button class="btn" id="pp-print">Print</button><button class="btn primary" id="pp-go">Start the clock</button></div>
-    <div id="pp-sheet" class="stack">${passageHTML()}${EX.items.map((it, i) => `<div style="border-top:1px solid var(--line);padding-top:8px"><b>${i + 1}.</b> <span class="small muted">${esc(CAT_LABEL[it.cat] || '')}</span> ${paperPrompt(it)}</div>`).join('')}</div></div>`;
+    <div id="pp-sheet" class="stack">${passageHTML()}${EX.items.map((it, i) => `<div style="border-top:1px solid var(--line);padding-top:8px;break-inside:avoid"><b>${i + 1}.</b> ${paperPrompt(it)}<div class="pp-write" style="height:${it.sub === 'translate2' ? '8em' : it.kind === 'parse' ? '2.6em' : '3.6em'};border-bottom:1px dotted var(--line)"></div></div>`).join('')}</div></div>`;
   $('#pp-print').onclick = () => { try { window.print(); } catch { flash('Printing is not available here. Copy the items onto paper instead.'); } };
   $('#pp-go').onclick = () => { EX.phase = 'writing'; EX.writeStart = Date.now(); exSave(); renderExam(); };
 }
@@ -5119,6 +5125,7 @@ async function submitExam() {
       for (const x of out.items || []) { const r = pend.find(p => p.i === (x.n | 0) - 1); if (!r) continue; r.score = Math.max(0, Math.min(1, Number(x.score) || 0)); r.crit = x.crit || null; r.err = (x.errors || []).filter(c => AN.ERR[c]); r.fb = String(x.feedback || ''); r.sc = 'ai'; r.pending = false; }
     } catch (e) { console.error(e); }
   }
+  if (res.some(r => r.pending) && typeof exAutoEstimate === 'function') exAutoEstimate(res.filter(r => r.pending));
   const still = res.filter(r => r.pending);
   if (still.length) return renderSelfScore(res, still);
   finalizeExam(res);
@@ -5140,9 +5147,9 @@ async function finalizeExam(res) {
   const items = res.map(r => {
     const { it, a } = r; const f = r.f || (it.kind === 'parse' && r.res ? { root: +!!r.res.root, stem: +!!r.res.stem, conj: +!!r.res.conj, pgn: +['p', 'g', 'n'].every(x => !(x in r.res) || r.res[x]) } : null);
     const ev = { k: it.kind === 'write' ? (it.sub === 'comp' ? 'comp' : it.sub === 'memory' ? 'mem' : 'tr') : it.kind, sk: skillOf(it), s: r.score || 0, f, ms: EX.paper ? null : (EX.ms[r.i] || null) };
-    const err = r.score >= 1 ? (ev.ms && AN.SLOW[ev.sk] && ev.ms > AN.SLOW[ev.sk] ? ['SL'] : []) : AN.tagErrors(ev, { root: it.root, suffix: hasSuffix(it), wp: it.wp, chosen: r.chosen, target: it.kind === 'mc' ? AN.normHe(String(it.o[it.a]).replace(/<[^>]+>/g, '')) : '', extra: r.err || [] });
+    const err = !r.answered ? [] : r.score >= 1 ? (ev.ms && AN.SLOW[ev.sk] && ev.ms > AN.SLOW[ev.sk] ? ['SL'] : []) : AN.tagErrors(ev, { root: it.root, suffix: hasSuffix(it), wp: it.wp, chosen: r.chosen, target: it.kind === 'mc' ? AN.normHe(String(it.o[it.a]).replace(/<[^>]+>/g, '')) : '', extra: r.err || [] });
     const spec = { ...it }; delete spec._t0; delete spec._h0; delete spec._order;
-    return { n: r.i + 1, iid: it.iid, cid: it.cid, sec: it.sec, cat: it.cat, kind: it.kind, sub: it.sub || '', answered: r.answered ? 1 : 0, answer: a, score: Math.round((r.score || 0) * 1000) / 1000, sc: r.sc, f, crit: r.crit || null, fb: r.fb || '', err, ms: ev.ms, diff: it.diff, spec };
+    return { n: r.i + 1, iid: it.iid, cid: it.cid, sec: it.sec, cat: it.cat, kind: it.kind, sub: it.sub || '', answered: r.answered ? 1 : 0, st: r.answered ? 'answered' : ((EX.vis || {})[r.i] || EX.ms[r.i]) ? 'visited_blank' : EX.timeUp ? 'timeout_unreached' : 'unvisited', answer: a, score: Math.round((r.score || 0) * 1000) / 1000, sc: r.sc, f, crit: r.crit || null, fb: r.fb || '', err, ms: ev.ms, diff: it.diff, spec, ...(r.est ? { est: r.est } : {}), ...(r.chk ? { chk: 1 } : {}), ...((EX.flag || {})[r.i] ? { flag: 1 } : {}) };
   });
   const weights = Object.fromEntries(Object.entries(bp.sections).map(([k, s]) => [k, s.w]));
   const all = AN.scoreSections(items, weights);
@@ -5154,7 +5161,7 @@ async function finalizeExam(res) {
     total: all.total, sections: Object.fromEntries(Object.entries(all.sections).map(([k, o]) => [k, { n: o.n, acc: Math.round(o.acc * 1000) / 1000, answered: o.answered }])), completion: Math.round(all.completion * 1000) / 1000,
     indep: ind.total, nIndep: indItems.length, indepSections: Object.fromEntries(Object.entries(ind.sections).map(([k, o]) => [k, { n: o.n, acc: Math.round(o.acc * 1000) / 1000 }])),
     diff: indItems.length ? Math.round(indItems.reduce((s, x) => s + (x.diff || 1.5), 0) / indItems.length * 100) / 100 : null,
-    selfScored: items.filter(x => x.sc === 'self').length, aiScored: items.filter(x => x.sc === 'ai').length, items };
+    selfScored: items.filter(x => x.sc === 'self').length, aiScored: items.filter(x => x.sc === 'ai').length, estimated: items.filter(x => x.sc === 'est').length, toCheck: items.filter(x => x.chk).length, gaps: EX.gaps || [], scoring: { policy: typeof SCORING_V !== 'undefined' ? SCORING_V : 'v1', deduction: 'not applied (professor rule unconfirmed)', parse: 'six boxes; common gender = c' }, items };
   // Closing rules (cycle-v2): with no earlier test, a test is the baseline unless the week's checklist is already complete.
   // Later tests close the week only when the evidence checklist is complete and at least 75% of the test was answered; otherwise they are extra measurements.
   const cs = cycleState(rec.end - 1);
@@ -5170,7 +5177,7 @@ async function finalizeExam(res) {
   // Events (one per item, mode 'assessment') and exposure (flag: used in an assessment).
   for (const x of items) {
     const it = EX.items[x.n - 1];
-    pushEvent({ ts: rec.end, sid: rec.id, aid: rec.id, i: x.iid, c: x.cid, k: x.kind === 'write' ? (x.sub === 'comp' ? 'comp' : x.sub === 'memory' ? 'mem' : 'tr') : x.kind, sk: skillOf(it), t: it.t || '', m: 'assessment', cat: x.cat, as: 'none', g: expGet(x.cid) ? Math.round((rec.end - expGet(x.cid)[2]) / 864e5 * 1000) / 1000 : -1, x: expGet(x.cid) ? expGet(x.cid)[0] : 0, s: x.score, ms: x.ms, sc: x.sc, d: x.diff, f: x.f || undefined, h: AN.normHe(it.form || it.he || (AN.heRuns(it.q || '')[0]) || '').slice(0, 40) || undefined, env: APP_ENV, grade: x.score >= 1 ? 'correct' : x.score > 0 ? 'partial' : 'incorrect', q: exPromptText(it), exp: exExpectedText(it), ans: exAnswerText(it, x.answer), rvs: exRubric(it, x.sc), cn: [it.t, it.wp, it.stem ? String(it.stem).split('|')[0] : '', it.conj || ''].filter(Boolean), e: x.err.length ? x.err : undefined, paper: rec.paper || undefined, rv: AN.VERSION.blueprint[rec.type], att: 1, chg: (x.answer && x.answer._chg) || 0, skip: x.answered ? undefined : 1, src: itemSource(it), ...(it.root && (it.kind === 'parse' || it.kind === 'root' || it.mk) ? { wk: AN.weakRoot(it.root) ? 1 : 0, sf: hasSuffix(it) ? 1 : 0, st2: it.stem ? String(it.stem).split('|')[0] : undefined, cj: it.conj || undefined } : {}) });
+    pushEvent({ ts: rec.end, sid: rec.id, aid: rec.id, i: x.iid, c: x.cid, k: x.kind === 'write' ? (x.sub === 'comp' ? 'comp' : x.sub === 'memory' ? 'mem' : 'tr') : x.kind, sk: skillOf(it), t: it.t || '', m: 'assessment', cat: x.cat, as: 'none', g: expGet(x.cid) ? Math.round((rec.end - expGet(x.cid)[2]) / 864e5 * 1000) / 1000 : -1, x: expGet(x.cid) ? expGet(x.cid)[0] : 0, s: x.score, ms: x.ms, sc: x.sc, d: x.diff, f: x.f || undefined, h: AN.normHe(it.form || it.he || (AN.heRuns(it.q || '')[0]) || '').slice(0, 40) || undefined, env: APP_ENV, grade: !x.answered ? 'unanswered' : x.score >= 1 ? 'correct' : x.score > 0 ? 'partial' : 'incorrect', q: exPromptText(it), exp: exExpectedText(it), ans: exAnswerText(it, x.answer), rvs: exRubric(it, x.sc), cn: [it.t, it.wp, it.stem ? String(it.stem).split('|')[0] : '', it.conj || ''].filter(Boolean), e: x.err.length ? x.err : undefined, paper: rec.paper || undefined, rv: AN.VERSION.blueprint[rec.type], att: 1, chg: (x.answer && x.answer._chg) || 0, skip: x.answered ? undefined : 1, src: itemSource(it), ...(it.root && (it.kind === 'parse' || it.kind === 'root' || it.mk) ? { wk: AN.weakRoot(it.root) ? 1 : 0, sf: hasSuffix(it) ? 1 : 0, st2: it.stem ? String(it.stem).split('|')[0] : undefined, cj: it.conj || undefined } : {}) });
     expTouch(x.cid, x.score, 2); if (it.verseCid) expTouch(it.verseCid, null, 2); if (it.formCid) expTouch(it.formCid, null, 2); (it.verseCids || []).forEach(c => expTouch(c, null, 2));
   }
   if (EX.passage) EX.passage.verses.forEach(x => expTouch(x.cid, null, 2));
@@ -5337,7 +5344,7 @@ function cycleBannerHTML() {
   const nw = S.prog.flags && S.prog.flags.newWeek && S.weeks.find(w => w.id === S.prog.flags.newWeek);
   const ready = nw ? `<div class="banner"><p><b>Your ${esc(weekLabel(nw))} report is ready.</b> Independent score ${nw.metrics.independent ? nw.metrics.independent.score + '%' : '—'}, compared with earlier weeks, plus next week's plan and the reasons for it.</p><button class="btn primary" id="cy-report">Open the report</button></div>` : '';
   const draft = lsGet('exam');
-  if (draft && draft.phase && draft.phase !== 'done') return ready + `<div class="banner"><p><b>You have an unfinished ${esc(BLUEPRINTS[draft.type].name.toLowerCase())}.</b> The clock was paused when you left; the interruption is recorded.</p><button class="btn primary" id="cy-resume">Resume</button></div>`;
+  if (draft && draft.phase && draft.phase !== 'done') return ready + `<div class="banner"><p><b>You have an unfinished ${esc(((BLUEPRINTS[draft.type] || {}).name || 'test').toLowerCase())}.</b> The clock kept running while you were away (as in a real exam); the interruption is recorded.</p><button class="btn primary" id="cy-resume">Resume</button></div>`;
   const c = cycleState(); const cov = c.cov;
   const done = cov.rows.filter(r => r.status === 'done').length, need = cov.rows.filter(r => r.status !== 'unavailable').length;
   const dots = [1, 2, 3, 4, 5, 6, 7].map(d => `<span class="cy-dot ${d === c.day ? 'on' : d < c.day ? 'past' : ''}" title="${esc(DAY_ROLE(d))}">${d === 6 ? '✎' : d === 7 ? '☾' : d}</span>`).join('');
@@ -10949,6 +10956,414 @@ function xvHTML(it, o = {}) {
 })();
 </script>
 <script>
+// ---------- Nov 22 (night): the final moves to Wed Nov 25; GPT's Sun–Wed plan; paper-like exam navigation; automatic grading; complete correction ----------
+// Sources: GPT's “Ultimate Final Intensive Report” v2.1 + implementation brief (Nov 22, 00:26) and the parallel session report.
+// Rules kept: historical records are never rewritten (new grades are overlays), no answers or grades before you submit,
+// the professor's reported “1 point off per wrong or blank answer” is NOT applied until he confirms how it works.
+const EXAM_DAY = '2026-11-25';
+const SCORING_V = 'earned-credit-v2';
+
+// ===== 1. Dates (only what lies ahead; past records keep their dates) =====
+(function () {
+  const _as = anSet;
+  anSet = function () { const a = _as.apply(this, arguments); if (a && !a.v4) { if (a.examDate === '2026-11-23') a.examDate = EXAM_DAY; a.v4 = 1; } return a; };
+  try {
+    const f = SCHEDULE.find(x => x.target === 't-final');
+    if (f) { f.d = EXAM_DAY; f.t = 'Your final (Wednesday, Nov 25)'; f.sub = 'Moved from Mon Nov 23 with the professor’s approval · time still to confirm · parsing 32 · Ruth translation 30 · story questions in Hebrew 26 · Ruth syntax 12'; }
+    if (!SCHEDULE.some(x => x.d === '2026-11-23' && /class/i.test(x.t))) SCHEDULE.push({ d: '2026-11-23', t: 'Class final (the rest of the class)', sub: 'You take yours on Wednesday morning' });
+    SCHEDULE.sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : 0));
+  } catch (e) { console.error(e); }
+  RESCUE.final = EXAM_DAY;
+  Object.assign(RX_DAY, { '2026-11-24': 8, '2026-11-25': 9 });
+  RX_DAYS.splice(5, RX_DAYS.length - 5,
+    ['2026-11-22', 'Sun 22', 'Retrieval, stems, forms + person/gender/number; every story (Ch. 14–22) and Ruth 1–4'],
+    ['2026-11-23', 'Mon 23', 'Paper simulation (140 min) + the complete correction'],
+    ['2026-11-24', 'Tue 24', 'Repairs: parses, story questions, Ruth translation + syntax'],
+    ['2026-11-25', 'Wed 25', 'Exam morning: 20–35 minute warm-up only']);
+  for (const k of Object.keys(typeof SIM_DEF !== 'undefined' ? SIM_DEF : {})) if (BLUEPRINTS[k] && !/diagnostic/.test(BLUEPRINTS[k].name)) BLUEPRINTS[k].name = BLUEPRINTS[k].name.replace(/^Final simulation (\d+)/, 'Practice final $1 (diagnostic, older 75-min format)');
+})();
+
+// ===== 2. The plan, Sun 22 – Wed 25 (GPT report §10; times are yours: Sunday 7–1 and 2–4:30; Mon/Tue movable) =====
+function planChooser(id, title, why, opts) {
+  const v = $('#v-session'); showSection('v-session'); v.classList.remove('exam');
+  v.innerHTML = `<div class="panel stack" style="max-width:760px;margin:0 auto"><div class="eyebrow">Today’s plan · one block</div><h1 style="margin:0">${heWrap(esc(title))}</h1>${why ? `<p class="small">${heWrap(esc(why))}</p>` : ''}
+    <div class="plan">${opts.map((o, i) => `<div class="step"><span class="n">${i + 1}</span><div><b>${heWrap(esc(o.t))}</b>${o.s ? `<div class="small muted">${heWrap(esc(o.s))}</div>` : ''}</div><button class="btn ${i ? '' : 'primary'}" data-och="${i}">Start</button></div>`).join('')}</div>
+    <div class="row"><button class="btn primary" id="pc-done">Mark this block done</button><button class="btn ghost" id="pc-back">Back to Today</button></div></div>`;
+  $$('[data-och]', v).forEach(b => b.onclick = async () => { const o = opts[+b.dataset.och]; try { await o.go(); } catch (e) { console.error(e); flash(String(e.message || e)); } if (SES) SES.back = 'today'; });
+  $('#pc-done').onclick = () => { planMark(id); go('today'); };
+  $('#pc-back').onclick = () => go('today');
+}
+const storyOpts = ch => [
+  { t: `Ch. ${ch}: read the story aloud`, s: 'Read tab. Out loud, once; underline the verbs you cannot parse at sight.', go: () => { go('read'); try { renderRead('s' + ch); } catch { } } },
+  { t: `Ch. ${ch}: 8 verbs (six boxes)`, s: 'Verbs from the story, with the line shown.', go: () => startStoryDrill({ ch, n: 8 }) },
+  { t: `Ch. ${ch}: questions in Hebrew`, s: 'Answer in Hebrew by copying words from the story.', go: () => startStoryQuestions(ch, 6) },
+];
+const RUTH_CHUNK = { 1: [[1, 6], [7, 12], [13, 18], [19, 22]], 2: [[1, 6], [7, 12], [13, 18], [19, 23]], 3: [[1, 6], [7, 12], [13, 18]], 4: [[1, 6], [7, 12], [13, 17], [17, 22]] };
+const ruthChunk = c => RUTH_CHUNK[c].map(([a, b]) => [c, a, b]).map((b, i) => [b, r6Done(b), i]).sort((x, y) => x[1] - y[1] || x[2] - y[2])[0][0];
+const ruthOpts = c => [
+  { t: `Ruth ${c}: read the chapter aloud`, s: 'Read tab. Say every verb’s subject as you read (“he”, “she”, “they f.”).', go: () => { go('read'); try { renderRead('ruthT' + c); } catch { } } },
+  { t: `Ruth ${c}: translate 4–6 verses blind`, s: 'The 30-point part. Strict English first (Hebrew order), then smooth English. Never leave a verse blank.', go: () => startRuth6(ruthChunk(c)) },
+  { t: `Ruth ${c}: questions in Hebrew`, s: 'With the verses shown.', go: () => startRuthChapterQuestions(c, 8) },
+  { t: 'Syntax questions (8)', s: 'The 12-point part: particles, forms, suffixes.', go: () => rxSession('Syntax questions', exSyntax(8).map(x => ({ ...x, cat: 'review' })), null) },
+];
+function planBlockList(d) {
+  const B = [], add = (id, min, title, sub, act, x = {}) => B.push({ id, min, title, sub, act, ...x });
+  const ch = (id, title, why, opts) => () => planChooser(id, title, why, opts);
+  const fsToday = () => FS_KEYS.some(k => fsResults(k).some(a => dayKey(new Date(a.end)) === d));
+  const lastFS = () => FS_KEYS.flatMap(k => fsResults(k)).sort((a, b) => b.end - a.end)[0];
+  if (d === '2026-11-22') {
+    add('vc', 10, '07:00 · Vocabulary contrasts: כֵּן / חֵן · אַתָּה / עַתָּה · הָלַךְ / כָּלָה / כַּלָּה', 'Why: GPT’s session showed these are retrieved by sound. Type the meaning, then the same words in Ruth sentences.', () => startVocabContrast({ planBlock: 'vc' }));
+    add('ret', 15, '07:10 · Fast retrieval: question words + vocabulary you know', 'Why: your strongest skill (vocabulary 78%, n=230). Keep it fast: answer in under 5 seconds.', ch('ret', 'Fast retrieval', 'Two short decks. Answer before you think too long; a fast right answer is the goal.', [
+      { t: 'Question words and grammar terms (15)', s: 'מָה, מִי, אָנָה, לָמָּה, כַּמָּה… as in the exam questions.', go: () => startRecall({ deck: 'terms', n: 15 }) },
+      { t: 'Vocabulary: type the meaning (20)', s: 'Your hardest words first.', go: () => startRecall({ n: 20 }) }]));
+    add('stm', 35, '07:25–08:00 · The stems by pattern (all seven)', 'First the seven models of קטל (5–7 min, not scored), then forms where you name stem + form.', ch('stm', 'The stems by pattern', 'A sheva alone or a dagesh alone does not prove a stem: read the whole pattern (prefix, vowel under root 1, doubling, vowel under root 2).', [
+      { t: 'Seven-stem models of קטל (14 forms, not scored)', s: 'Each answer opens the full explanation: why this stem, why not the others.', go: () => startSevenStem() },
+      { t: 'Stem + form drill (20 forms)', s: 'Only בִּנְיָן and נְטִיָּה.', go: () => rxSession('Stem + form drill (20)', sfItems(20), null) }]));
+    add('pgn', 50, '08:10–09:00 · Forms (נְטִיָּה) and person/gender/number', 'Why: person/gender/number is your weakest skill (33%, n=126) and it is three of the six boxes in every parse.', ch('pgn', 'Forms and person/gender/number', 'Order: the eight prompts from GPT’s session, then the contrast pairs from your Nov 21 simulation, then the drill.', [
+      { t: 'GPT’s eight prompts (blind, then the answers)', s: 'Vocabulary contrasts, יְקַטֵּל, קַטֵּל, מִתְהַלֵּךְ, stem vs form, the doubled letter.', go: () => startEightPrompts() },
+      { t: 'Contrast pairs from your simulation (12 forms)', s: 'אֶקָּבֵר / נִקְבַּר, יַפְרִיד / הִפְרִיד, לָגוּר / גָּר, שֹׁבְנָה / שׁוּבִי, הַמֵּתִים / לְדַבֵּר, לַהֲמִיתֶךָ, תָּמֻתוּ, וַתִּשְׁתַּחוּ…', go: () => startContrastForms() },
+      { t: 'Person · gender · number drill (30 forms)', s: 'Prefix AND ending together; participles have no person, infinitives none of the three.', go: () => startPgnDrill({ n: 30 }) },
+      { t: 'Subject or object? Pronoun endings', s: 'Who does it vs. whom it is done to (וַיִּשְׂנְאֻהוּ = they hated HIM).', go: () => startNominal() }]));
+    add('st1', 50, '09:10–10:00 · Story review: Ch. 14, 15, 16', 'Why: 58 of the 100 points come from one of these stories (parsing + questions).', ch('st1', 'Story review: Ch. 14, 15, 16', 'About 15 minutes per story: read, 8 verbs, a few questions. Coverage matters more than perfection today.', [14, 15, 16].flatMap(storyOpts)));
+    add('r1', 50, '10:10–11:00 · Ruth 1', 'Why: the translation is 30 points and your lowest-tested part (38% in practice).', ch('r1', 'Ruth 1', 'Read, translate blind, answer in Hebrew.', ruthOpts(1)));
+    add('st2', 50, '11:10–12:00 · Story review: Ch. 17, 18, 19', '', ch('st2', 'Story review: Ch. 17, 18, 19', 'About 15 minutes per story.', [17, 18, 19].flatMap(storyOpts)));
+    add('r2', 50, '12:10–13:00 · Ruth 2', 'Lunch 1–2 is protected.', ch('r2', 'Ruth 2', 'Read, translate blind, answer in Hebrew.', ruthOpts(2)));
+    add('st3', 45, '14:00–14:45 · Story review: Ch. 20, 21, 22', '', ch('st3', 'Story review: Ch. 20, 21, 22', 'About 15 minutes per story.', [20, 21, 22].flatMap(storyOpts)));
+    add('r3', 45, '14:55–15:40 · Ruth 3', '', ch('r3', 'Ruth 3', 'Read, translate blind, answer in Hebrew.', ruthOpts(3)));
+    add('r4', 40, '15:50–16:30 · Ruth 4', 'Then stop: dinner from 4:30 is protected. Optional: 10–15 minutes of recall in the evening, nothing more.', ch('r4', 'Ruth 4', 'Read, translate blind, answer in Hebrew.', ruthOpts(4)));
+  } else if (d === '2026-11-23') {
+    add('ret', 30, 'Retrieval: the contrast words in new sentences + vocabulary', 'Fresh contexts this time (yesterday’s are not repeated first).', ch('ret', 'Retrieval', '', [
+      { t: 'Vocabulary contrasts (in Ruth sentences first)', go: () => startVocabContrast({ fresh: true }) },
+      { t: 'Vocabulary: type the meaning (20)', go: () => startRecall({ n: 20 }) }]));
+    add('cov', 40, 'Story coverage: the stories you reviewed least', 'Any story can be on the exam. Pick the ones you skipped yesterday.', ch('cov', 'Story coverage', 'Read + 8 verbs for each story you did not reach on Sunday.', STORY_CHS.map(c => ({ t: `Ch. ${c}: 8 verbs`, go: () => startStoryDrill({ ch: c, n: 8 }) }))));
+    add('mock', 140, `Paper simulation (${FS_MIN} min): Final simulation ${typeof simNo === 'function' ? simNo(fsNextSim()) : fsNextSim().slice(2)}`, 'Real conditions: print it or choose “Do it on paper”, phone away, paper lexicon allowed. Do parsing and the Ruth translation FIRST, then the story questions. Never leave a verse blank.', () => startFS(fsNextSim()), { check: fsToday });
+    add('rev', 50, 'The complete correction of that simulation (every item)', 'Correct items too: why they are right and how to be faster. Then send the grading file to Claude for the translation.', () => { const r = lastFS(); if (r) renderExamReview(r); else flash('Take the simulation first.'); }, { manual: true });
+    add('rr', 40, 'Fresh Ruth repair: 4–6 verses blind', 'A part of Ruth you have not translated yet.', () => startRuth6(null, { planBlock: 'rr' }));
+  } else if (d === '2026-11-24') {
+    add('spd', 25, 'Speed and recall: the contrasts that are not stable yet', '', ch('spd', 'Speed and recall', '', [
+      { t: 'Contrast pairs (12 forms)', go: () => startContrastForms() },
+      { t: 'Vocabulary contrasts', go: () => startVocabContrast({ fresh: true }) },
+      { t: 'Vocabulary (20)', go: () => startRecall({ n: 20 }) }]));
+    add('prp', 55, 'Parse repairs: your misses + mixed full parses', 'Every miss of Monday’s simulation first.', ch('prp', 'Parse repairs', '', [
+      { t: 'Fix my mistakes', go: () => startMistakes() },
+      { t: 'Full parses, mixed (15)', go: () => rxSession('Full parses, mixed', rxMixed(15), null) },
+      { t: 'Person · gender · number (20)', go: () => startPgnDrill({ n: 20 }) }]));
+    add('sq', 55, 'Story comprehension in Hebrew', '26 points: short Hebrew answers copied from the story.', ch('sq', 'Story questions in Hebrew', 'Six questions per story; do as many stories as fit.', STORY_CHS.map(c => ({ t: `Ch. ${c}: questions in Hebrew`, go: () => startStoryQuestions(c, 6) }))));
+    add('rts', 65, 'Ruth translation and syntax', '30 + 12 points.', ch('rts', 'Ruth translation and syntax', '', [
+      { t: 'Translate 4–6 verses blind', go: () => startRuth6() },
+      { t: 'Syntax questions (8)', go: () => rxSession('Syntax questions', exSyntax(8).map(x => ({ ...x, cat: 'review' })), null) },
+      { t: 'Ruth 4 syntax lesson', go: () => rxSession('Ruth 4 syntax', [lessonItem('ruth4')], null) }]));
+    add('con', 40, 'Consolidation + a short paper check', 'Optional extended day (340 min): replace blocks 3–5 with a second paper simulation and its correction.', ch('con', 'Consolidation', '', [
+      { t: 'Full parses, mixed (10)', go: () => rxSession('Full parses, mixed', rxMixed(10), null) },
+      { t: 'Re-read: how to take the final', go: () => rxLesson(['exam'], [], null) },
+      { t: `Optional: a second simulation (${FS_MIN} min)`, go: () => startFS(fsNextSim()) }]));
+  } else if (d === '2026-11-25') {
+    add('w1', 10, 'Warm-up: 15 pattern cards', 'Just to wake the patterns up. Nothing new.', () => rxCards(['pgn', 'stems', 'weak'], 15, 'w1'));
+    add('w2', 10, 'Warm-up: 5 full parses', 'Easy rhythm: form → who → stem → root.', () => rxSession('Warm-up parses', rxMixed(5), 'w2'));
+    add('w3', 5, 'Read: how to take the final', 'Parsing and translation first; never leave a verse blank.', () => rxLesson(['exam'], [], 'w3'));
+    add('w4', 0, 'Before you leave: paper lexicon, pens, the confirmed time and room', 'If the time is still not confirmed, write to the professor first thing.', null, { manual: true });
+  }
+  return B;
+}
+(function () {
+  const NEW = d => ['2026-11-22', '2026-11-23', '2026-11-24', '2026-11-25'].includes(d);
+  const _rb = rescueBlocks;
+  rescueBlocks = function () { const d = dayKey(); if (NEW(d)) return planBlockList(d); return _rb.apply(this, arguments); };
+  const DAYNAME = { '2026-11-22': 'Sunday, Nov 22', '2026-11-23': 'Monday, Nov 23 (movable blocks)', '2026-11-24': 'Tuesday, Nov 24 (movable blocks)', '2026-11-25': 'Wednesday, Nov 25 · exam day' };
+  const _pc = planCardHTML;
+  planCardHTML = function () {
+    const d = dayKey(); if (!NEW(d)) return _pc.apply(this, arguments);
+    const B = planBlocks(), isDone = b => b.check ? b.check() : planDone(b.id), n = B.filter(isDone).length, tot = B.reduce((s, b) => s + b.min, 0);
+    const days = Math.round((parseDay(EXAM_DAY).getTime() - parseDay(d).getTime()) / 864e5);
+    return `<div class="panel stack" id="plan-card" style="border-color:var(--accent)">
+      <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><h2 style="margin:0">Today’s plan · ${DAYNAME[d]}</h2><span class="chip ${days <= 1 ? 'warn' : 'acc'}">${days === 0 ? 'Final today' : days + ' day' + (days === 1 ? '' : 's') + ' to your final (Wed Nov 25, time to confirm)'}</span><button class="btn" onclick="go('rescue')">Open the Final rescue tab</button></div>
+      <p class="small muted">GPT’s plan from your Nov 21 session · about ${tot} minutes · ${n} of ${B.length} blocks done. Target: 65–70 on the final; aim for 75–80 in practice. Lunch, dinner and sleep are protected.</p>
+      <div class="plan">${B.map((b, i) => `<div class="step ${isDone(b) ? 'done' : ''}"><span class="n">${isDone(b) ? '✓' : i + 1}</span><div><b>${heWrap(esc(b.title))}</b><div class="small muted">${heWrap(esc(b.sub))}${b.min ? ` · ${b.min} min` : ''}</div></div><div class="row" style="gap:6px">${b.act ? `<button class="btn sm ${isDone(b) ? '' : 'primary'}" data-pb="${b.id}">${isDone(b) ? 'Again' : 'Start'}</button>` : ''}${(b.manual || !b.check) && !isDone(b) ? `<button class="btn sm" data-pm="${b.id}">Done</button>` : ''}</div></div>`).join('')}</div></div>`;
+  };
+  const _rr = renderRescue;
+  renderRescue = function () {
+    _rr.apply(this, arguments);
+    try { const v = $('#v-rescue'), e = v && v.querySelector('.eyebrow'); if (e && /Nov 17–23/.test(e.textContent)) e.textContent = 'Final rescue · Nov 17–25 (your final: Wednesday, Nov 25)'; } catch { }
+  };
+})();
+
+// ===== 3. Drills from GPT's report: vocabulary contrasts, the eight prompts, contrast pairs =====
+const VC_WORDS = [
+  ['כֵּן', 'so; thus; yes', 'כ (kaf) with tsere. Course: Ch. 14 story, line 43 (כֵּן עָשׂוּ “so they did”); Ch. 18 story, line 136. Do not confuse with חֵן (ח, ḥet) = favor.'],
+  ['חֵן', 'favor; grace', 'ח (ḥet) with tsere. Ruth 2:10 מָצָאתִי חֵן בְּעֵינֶיךָ “I found favor in your eyes”; Ch. 15 story, line 113; Ch. 22 story, line 80. Do not confuse with כֵּן (kaf) = so.'],
+  ['אַתָּה', 'you (m. sg.)', 'א (alef). Ruth 4:6 גְּאַל־לְךָ אַתָּה “you redeem it for yourself”; Ch. 19 story, line 152 (בֶּן־מִי אַתָּה “whose son are you?”). Same sound as עַתָּה (ע) = now; only the spelling tells them apart.'],
+  ['עַתָּה', 'now', 'ע (ayin). Ruth 3:11 וְעַתָּה בִּתִּי “and now, my daughter”; Ruth 3:2, 3:12; Ch. 22 story, line 124. Do not confuse with אַתָּה (alef) = you.'],
+  ['הָלַךְ', 'he went; to go, walk', 'Root ה־ל־ך. Ruth 1:21 הָלַכְתִּי “I went”. It is NOT “come to an end” (that is כ־ל־ה).'],
+  ['כָּלָה', 'it came to an end; to be finished', 'Root כ־ל־ה (a verb): qamets, qamets, no doubling. Ruth 2:23 עַד־כְּלוֹת “until the end (completion) of”.'],
+  ['כַּלָּה', 'daughter-in-law; bride', 'A noun: pataḥ and a doubled ל (לּ). Ruth 1:22 כַלָּתָהּ “her daughter-in-law”; Ruth 1:7 כַּלֹּתֶיהָ “her daughters-in-law”.'],
+];
+const VC_CTX = [
+  ['Ruth 3:11', 'וְעַתָּה בִּתִּי אַל־תִּירְאִי', 'עַתָּה', ['now', 'you (m. sg.)', 'so, thus', 'favor'], 'ע (ayin) + pataḥ: עַתָּה = now. אַתָּה (alef) = you.'],
+  ['Ruth 2:10', 'מַדּוּעַ מָצָאתִי חֵן בְּעֵינֶיךָ', 'חֵן', ['favor', 'so, thus', 'now', 'life'], 'ח (ḥet): חֵן = favor. כֵּן (kaf) = so.'],
+  ['Ruth 4:6', 'גְּאַל־לְךָ אַתָּה אֶת־גְּאֻלָּתִי', 'אַתָּה', ['you (m. sg.)', 'now', 'with her', 'she'], 'אַתָּה (alef) = you. Compare אִתָּהּ (Ruth 1:18) = with her, and עַתָּה = now.'],
+  ['Ruth 1:21', 'אֲנִי מְלֵאָה הָלַכְתִּי', 'הָלַכְתִּי', ['I went', 'I came to an end', 'my daughter-in-law', 'I returned'], 'ה־ל־ך + תִּי (I): “I went (away) full”.'],
+  ['Ruth 2:23', 'עַד־כְּלוֹת קְצִיר־הַשְּׂעֹרִים', 'כְּלוֹת', ['the end (completion) of', 'the daughters-in-law of', 'the going of', 'all of'], 'Infinitive of כ־ל־ה “to be finished”: “until the barley harvest was finished”.'],
+  ['Ruth 1:22', 'וְרוּת הַמּוֹאֲבִיָּה כַלָּתָהּ עִמָּהּ', 'כַלָּתָהּ', ['her daughter-in-law', 'she finished', 'she went', 'all of her'], 'כַּלָּה (doubled ל) = daughter-in-law + ָהּ “her”.'],
+];
+function vcRecall(w) { return { kind: 'recall', key: 'vcx|' + w[0], cid: 'vcx:' + AN.hash(w[0]), he: w[0], gloss: w[1], extra: w[2], t: 'vocab' }; }
+function vcContext(c) { return { kind: 'mc', key: 'vcc|' + c[0], t: 'vocab', q: `${esc(c[0])}: ${H(c[1])}${PRi(c[1])}<br>What does ${H(c[2])}${PRi(c[2])} mean here?`, o: c[3], a: 0, x: heWrap(esc(c[4])) }; }
+function startVocabContrast(o = {}) {
+  const rec = VC_WORDS.map(vcRecall), ctx = VC_CTX.map(vcContext);
+  const items = o.fresh ? [...shuffle(ctx), ...shuffle(rec)] : [...rec, ...ctx];
+  startSession({ title: 'Vocabulary contrasts: same sound, different word', items, back: 'today', noVary: true, mode: 'practice', planBlock: o.planBlock, rescue: !!o.planBlock });
+}
+const P8_MC = [
+  { kind: 'mc', key: 'p8|7', t: 'terminology', q: `Prompt 7. What is the difference between ${H('בִּנְיָן')}${PRi('בִּנְיָן')} and ${H('נְטִיָּה')}${PRi('נְטִיָּה')}?`, o: ['בִּנְיָן = the stem (Qal, Niphal, Piel…); נְטִיָּה = the conjugation or form (qatal, yiqtol, imperative…)', 'בִּנְיָן = the root; נְטִיָּה = the stem', 'בִּנְיָן = person; נְטִיָּה = number', 'They are two names for the same thing'], a: 0, x: 'Two different boxes of the parse: בִּנְיָן “building” = stem; נְטִיָּה “inflection” = form.' },
+  { kind: 'mc', key: 'p8|8', t: 'derived_stems', q: 'Prompt 8. Why is a dot (dagesh) in the second root letter not by itself proof of Piel?', o: ['Pual and Hithpael double the second root letter too, so check the vowels and the prefix (Piel yiqtol = sheva, A, E: יְקַטֵּל; Pual = sheva, U, A: יְקֻטַּל; Hithpael has תְ: יִתְקַטֵּל)', 'Because that dot is always the article', 'Because Piel never doubles a letter', 'Because only the Niphal doubles a letter'], a: 0, x: 'Doubling of root 2 belongs to Piel, Pual and Hithpael. The vowels under root 1 and root 2, and the prefix, decide.' },
+];
+function startEightPrompts() {
+  const P = (form, root, stem, conj, pgn, gloss, note, alts) => ({ kind: 'parse', key: 'p8|' + form, form, root, stem, conj, pgn, gloss, note, ...(alts ? { alts } : {}), t: PB_STEM_TOPIC[stem] || stem, cat: 'review' });
+  const items = [
+    ...VC_WORDS.map(vcRecall),
+    P('יְקַטֵּל', 'קטל', 'piel', 'yiqtol', '3ms', 'he will kill (model)', 'Prompt 4 · constructed model, not from a story. Vowels in order: sheva (יְ), A (קַ), E (טֵּ) + doubled ט. Not Pual (Pual is sheva, U, A: יְקֻטַּל).'),
+    P('קַטֵּל', 'קטל', 'piel', 'impv', '2ms', 'kill! / to kill (model)', 'Prompt 5 · constructed model. קַטֵּל is Piel imperative 2ms OR infinitive construct (same shape); only the context decides. קִטֵּל (I, E) is the Piel qatal 3ms.', [{ conj: 'inf', pgn: '' }]),
+    P('מִתְהַלֵּךְ', 'הלך', 'hithpael', 'ptc', 'ms', 'walking about', 'Prompt 6 · מִתְ + doubled ל = Hithpael participle ms. A participle has no person (leave “person” empty).'),
+    ...P8_MC,
+  ];
+  startSession({ title: 'GPT’s eight prompts (blind first; the answer appears after each)', items, back: 'today', noVary: true, mode: 'practice' });
+}
+function startContrastForms() {
+  const P = (form, root, stem, conj, pgn, gloss, ref, note, alts) => { const m = /^Ruth (\d):(\d+)$/.exec(ref || ''); const x = m ? ruthVerse(+m[1], +m[2]) : null; return { kind: 'parse', key: 'cf|' + form, form, root, stem, conj, pgn, gloss, ref, note, ctx: x ? x.he : '', ...(alts ? { alts } : {}), t: stem === 'qal' ? 'qal_weak' : PB_STEM_TOPIC[stem] || stem, cat: 'review' }; };
+  const items = [
+    P('אֶקָּבֵר', 'קבר', 'niphal', 'yiqtol', '1cs', 'I will be buried', 'Ruth 1:17', 'Niphal yiqtol: prefix א (I) + doubled first root letter (קּ), A under root 1, E under root 2. In the simulation you chose qatal: a prefix means yiqtol. First person is “common”: gender c.'),
+    P('נִקְבַּר', 'קבר', 'niphal', 'qatal', '3ms', 'he was buried (model)', 'model', 'Constructed model. Niphal qatal: נִ in front, no doubling, A under root 2. Compare אֶקָּבֵר (yiqtol: prefix + doubling).'),
+    P('יַפְרִיד', 'פרד', 'hiphil', 'yiqtol', '3ms', 'he/it will separate', 'Ruth 1:17', 'Hiphil yiqtol: prefix with pataḥ (יַ) + ִי before the last root letter. You chose qatal in the simulation: יַ is a prefix, so it is yiqtol.'),
+    P('הִפְרִיד', 'פרד', 'hiphil', 'qatal', '3ms', 'he separated (model)', 'model', 'Constructed model. Hiphil qatal: הִ in front (not a person prefix) + ִי. Compare יַפְרִיד.'),
+    P('לָגוּר', 'גור', 'qal', 'inf', '', 'to sojourn', 'Ruth 1:1', 'לְ + infinitive of a hollow root (ו visible). An infinitive has no person, gender or number: leave all three empty.'),
+    P('גָּר', 'גור', 'qal', 'qatal', '3ms', 'he sojourned / sojourning', 'model', 'Hollow root without its ו: Qal qatal 3ms; the same shape is also the participle ms (context decides).', [{ conj: 'ptc', pgn: 'ms' }]),
+    P('שֹׁבְנָה', 'שוב', 'qal', 'impv', '2fp', 'return! (you women)', 'Ruth 1:11', 'No prefix + ending נָה = imperative 2nd feminine plural (Naomi to her two daughters-in-law).'),
+    P('שׁוּבִי', 'שוב', 'qal', 'impv', '2fs', 'return! (you, one woman)', 'Ruth 1:15', 'No prefix + ending ִי = imperative 2nd feminine singular (Naomi to Ruth alone).'),
+    P('הַמֵּתִים', 'מות', 'qal', 'ptc', 'mp', 'the dead (ones)', 'Ruth 1:8', 'The dot in מּ is the ARTICLE’s doubling (הַ), not a stem sign. Qal participle mp of a hollow root.'),
+    P('לְדַבֵּר', 'דבר', 'piel', 'inf', '', 'to speak', 'Ruth 1:18', 'Here the dot in בּ is the Piel doubling of root 2 (A under root 1, E under root 2). Compare הַמֵּתִים, where the dot comes from the article.'),
+    P('לַהֲמִיתֶךָ', 'מות', 'hiphil', 'inf', '', 'to kill you', 'Ch. 22 story', 'לְ + Hiphil infinitive (הֲמִית, causative of “die” = kill) + ךָ “you” = the OBJECT: “to kill you”. Infinitive: no person, gender or number.'),
+    P('תָּמֻתוּ', 'מות', 'qal', 'yiqtol', '2mp', 'you (pl.) will die', 'Ch. 20 story', 'The U is the hollow root’s own vowel (מוּת), not the Pual U; there is no doubled letter. Prefix ת + ending וּ = you (m. pl.).'),
+    P('וַתִּשְׁתַּחוּ', 'חוה', 'hishtaphel', 'wayyiqtol', '3fs', 'and she bowed down', 'Ruth 2:10', 'The final וּ belongs to the root (ח־ו־ה), it is NOT a plural ending: Ruth alone bows. Prefix ת after וַ = she.'),
+  ];
+  startSession({ title: 'Contrast pairs from your simulation (parse each, then compare)', items, back: 'today', noVary: true, mode: 'practice' });
+}
+
+// ===== 4. The exam screen: neutral navigator, mark for review, section jump, overview before submitting, scoring policy =====
+const FS_POINTS = { parse: 32, translation: 30, comp: 26, syntax: 12 };
+function exSecList() {
+  const bp = BLUEPRINTS[EX.type], out = [];
+  EX.items.forEach((it, i) => { let s = out.find(x => x.k === it.sec); if (!s) out.push(s = { k: it.sec, label: (bp.sections[it.sec] || {}).label || it.sec, first: i, idx: [] }); s.idx.push(i); });
+  return out;
+}
+function exNavHTML() {
+  const vis = EX.vis || {}, fl = EX.flag || {};
+  const st = i => exAnswered(EX.items[i], EX.ans[i]) ? 'answered' : (vis[i] || EX.ms[i]) ? 'visited, blank' : 'not visited';
+  const btn = i => { const s = st(i); const css = s === 'answered' ? '' : s === 'visited, blank' ? 'border-style:dashed;' : 'opacity:.55;'; return `<button class="btn sm ${i === EX.cur ? 'primary' : ''}" data-xi="${i}" title="Item ${i + 1}: ${s}${fl[i] ? ', marked for review' : ''}" style="min-width:34px;${css}">${i + 1}${fl[i] ? '⚑' : ''}</button>`; };
+  const secs = exSecList();
+  return `<div class="row small" style="gap:6px;flex-wrap:wrap"><span class="muted">Go to:</span>${secs.map(s => `<button class="btn sm ghost" data-xs="${s.first}">${esc(s.label)} · ${s.idx.length} items, first #${s.first + 1}</button>`).join('')}</div>
+    <div class="row" style="gap:4px;flex-wrap:wrap">${EX.items.map((x, i) => btn(i)).join('')}</div>
+    <div class="small muted">Plain = answered · dashed = seen but blank · faded = not seen yet · ⚑ = marked for review. Nothing here shows right or wrong.</div>`;
+}
+function exOverviewHTML() {
+  const fl = EX.flag || {}, secs = exSecList(), pts = /^fs\d$/.test(EX.type) ? FS_POINTS : null;
+  const open = EX.items.map((x, i) => i).filter(i => !exAnswered(EX.items[i], EX.ans[i])), marked = Object.keys(fl).filter(i => fl[i]).map(Number);
+  const jump = i => `<button class="btn sm" data-xj="${i}">${i + 1}</button>`;
+  return `<div class="stack" style="gap:6px;margin-bottom:8px"><b>Before you submit</b>
+    ${tableHTML(['Section', 'Answered', pts ? 'Points' : ''].filter(Boolean), secs.map(s => [esc(s.label), `${s.idx.filter(i => exAnswered(EX.items[i], EX.ans[i])).length} of ${s.idx.length}`, ...(pts ? [String(pts[s.k] || '')] : [])]))}
+    ${open.length ? `<div>Still blank (they score 0): <span class="row" style="gap:4px;display:inline-flex;flex-wrap:wrap">${open.map(jump).join('')}</span></div>` : '<div>Every item has an answer.</div>'}
+    ${marked.length ? `<div>Marked for review: <span class="row" style="gap:4px;display:inline-flex;flex-wrap:wrap">${marked.map(jump).join('')}</span></div>` : ''}
+    <div class="small muted">Time left: ${Math.max(0, Math.round((EX.limitMs - exElapsed()) / 60000))} min.</div></div>`;
+}
+function exPolicyHTML() {
+  const fs = /^fs\d$/.test(EX.type);
+  return `<div class="note stack" style="gap:6px"><b>How this works (like the paper exam)</b>
+    <div>• Go back and forth freely: Previous / Next, the numbered buttons, or jump to a section. Skip anything and come back. Mark items with ⚐ to return to them. You can change any answer until you submit.</div>
+    <div>• The clock runs without stopping, also if you close the app or the phone sleeps (as in the real exam). A warning appears at 10 and 5 minutes. At 0 the test is submitted as it is.</div>
+    <div>• Nothing tells you right or wrong while the test is open: no hints, no answers, no colours for correctness.</div>
+    <div>• After you submit: every item is graded and explained (also the correct ones and the blank ones). Parsing is graded by rule; your Hebrew answers, syntax answers and translations get an automatic estimate first, marked “to be checked”, and you can send them to Claude for the final grade. You never have to grade yourself.</div>
+    ${fs ? `<div>• Points: parsing 32 · Ruth translation 30 · story questions in Hebrew 26 · Ruth syntax 12 = 100. Each item earns its share (parsing: six boxes; translation: meaning units). <b>The professor’s reported rule “one point off for a wrong or blank answer” is not applied</b>: how it works (from the item’s points or an extra penalty; per question or per box) is not confirmed. Ask him.</div>` : ''}
+    <div>• Tip from your data: do the parsing and the Ruth translation first, then the questions. A rough translation of every verse earns far more than a perfect one of half the verses.</div></div>`;
+}
+
+// ===== 5. Grading after you submit: rules, then an automatic estimate (never a required self-score) =====
+const AG = (function () {
+  const HE_STOP = new Set(['כי', 'את', 'אשר', 'על', 'אל', 'עם', 'הוא', 'היא', 'הם', 'הנ', 'גמ', 'לא', 'כל', 'זה', 'זאת', 'מנ', 'אמ', 'או', 'יש', 'אינ', 'עד', 'כה', 'אתו', 'אתה', 'לו', 'לה', 'להמ', 'שמ', 'הנה']);
+  const EN_STOP = new Set('a an the and or of to in on at for from by with as is are was were be been being it its he she they them his her their him this that these those who whom which what when where why how not no so then there here into upon unto also yet but if will shall would should do did does have has had i you we me us my our your one ones'.split(' '));
+  const SYN = { yahweh: 'lord', jehovah: 'lord', went: 'go', gone: 'go', goes: 'go', going: 'go', walk: 'go', walked: 'go', came: 'come', comes: 'come', coming: 'come', said: 'say', says: 'say', saying: 'say', told: 'say', tell: 'say', spoke: 'speak', spoken: 'speak', returned: 'return', returning: 'return', turned: 'return', died: 'die', dead: 'die', death: 'die', dwelt: 'dwell', lived: 'dwell', stayed: 'dwell', sojourn: 'dwell', sojourned: 'dwell', live: 'dwell', took: 'take', taken: 'take', gave: 'give', given: 'give', saw: 'see', seen: 'see', heard: 'hear', wife: 'woman', women: 'woman', wives: 'woman', sons: 'son', children: 'son', daughters: 'daughter', men: 'man', husband: 'man', land: 'country', field: 'country', fields: 'country', famine: 'hunger', arose: 'rise', rose: 'rise', got: 'rise', 'daughter-in-law': 'daughterinlaw', 'daughters-in-law': 'daughterinlaw', kindness: 'kindness', hesed: 'kindness', lovingkindness: 'kindness', redeemer: 'redeem', redeem: 'redeem', kinsman: 'redeem' };
+  const heTok = s => String(s || '').replace(/<[^>]+>/g, ' ').replace(/־/g, ' ').replace(/[֑-ׇ]/g, '').replace(/[ךםןףץ]/g, c => ({ 'ך': 'כ', 'ם': 'מ', 'ן': 'נ', 'ף': 'פ', 'ץ': 'צ' }[c])).replace(/[^א-ת\s]/g, ' ').split(/\s+/).filter(Boolean);
+  const heStem = t => { let x = t; while (x.length > 3 && 'והבכלמ'.includes(x[0])) x = x.slice(1); return x; };
+  const enTok = s => String(s || '').toLowerCase().replace(/<[^>]+>/g, ' ').replace(/[֐-׿]+/g, ' ').replace(/[“”"’'(),.;:!?\[\]—–/]/g, ' ').split(/\s+/).filter(Boolean).map(w => SYN[w] || w).map(w => w.length > 4 ? w.replace(/(ing|ed|es|s)$/, '') : w).map(w => SYN[w] || w).filter(w => !EN_STOP.has(w));
+  function heCover(model, ans) {
+    const m = heTok(model), a = heTok(ans); if (!m.length) return { cov: 0, mlen: 0, alen: a.length };
+    const content = m.filter(t => !HE_STOP.has(t)); const M = content.length ? content : m;
+    const A = new Set(a), As = new Set(a.map(heStem));
+    const hit = M.filter(t => A.has(t) || As.has(heStem(t))).length;
+    return { cov: hit / M.length, mlen: M.length, alen: a.length };
+  }
+  function enCover(model, ans) { const M = [...new Set(enTok(model))], A = new Set(enTok(ans)); if (!M.length) return { cov: 0, mlen: 0, alen: A.size }; return { cov: M.filter(t => A.has(t)).length / M.length, mlen: M.length, alen: A.size }; }
+  const hasHe = s => /[א-ת]/.test(String(s || ''));
+  function compModels(it) {
+    const m = String(it.model || ''), he = m.split(' — ')[0], en = (m.split(' → ')[1] || '').split(' · ')[0];
+    const alt = (/Also accept: ([^·]+)/.exec(m) || [])[1];
+    return { he: [he, ...(alt ? alt.split(/;|\s\/\s|,\s(?=[א-ת])/).map(s => s.trim()).filter(hasHe) : [])].filter(Boolean), en };
+  }
+  function comp(it, text) {
+    const M = compModels(it);
+    if (hasHe(text)) {
+      let best = { cov: 0 }; for (const m of M.he) { const c = heCover(m, text); if (c.cov > best.cov || best.mlen == null) best = c; }
+      const score = best.cov >= .99 ? 1 : best.cov >= .5 ? .5 : 0;
+      const long = best.mlen && best.alen > 3 * best.mlen + 3;
+      const conf = best.cov >= .99 && !long ? 'high' : 'low';
+      return { score, conf, how: `Hebrew words of the model found in your answer: ${Math.round(best.cov * 100)}%${long ? '; your answer is much longer than needed' : ''}` };
+    }
+    const c = enCover(M.en, text); const score = c.cov >= .6 ? .5 : c.cov >= .3 ? .25 : 0;
+    return { score, conf: 'low', how: `Answer in English only (the question asks for Hebrew: at most “partly”); English words of the model found: ${Math.round(c.cov * 100)}%` };
+  }
+  function syntax(it, text) {
+    const model = String(it.model || ''); const c = enCover(model, text), h = hasHe(model) && hasHe(text) ? heCover(model.replace(/[A-Za-z].*$/s, ''), text) : null;
+    const cov = Math.max(c.cov, h ? h.cov : 0); const score = cov >= .6 ? 1 : cov >= .3 ? .5 : 0;
+    return { score, conf: 'low', how: `Key words of the model answer found: ${Math.round(cov * 100)}%` };
+  }
+  function unitsOf(it) {
+    if (it.units && it.units.length) return it.units.map(String);
+    return String(it.model || '').split(/[,;:.]|\s(?=and\s)/).map(s => s.trim()).filter(s => enTok(s).length >= 2);
+  }
+  function translation(it, a) {
+    const text = `${a.strict || ''} ${a.text || ''}`; const U = unitsOf(it); if (!U.length) return { score: 0, conf: 'low', how: 'no reference units' };
+    const A = new Set(enTok(text));
+    const us = U.map(u => { const w = [...new Set(enTok(u))]; if (!w.length) return 1; const c = w.filter(t => A.has(t)).length / w.length; return c >= .75 ? 1 : c >= .4 ? .5 : 0; });
+    return { score: us.reduce((s, x) => s + x, 0) / us.length, units: us, unitText: it.units ? null : U, conf: 'low', how: `${U.length} meaning units compared by key words (synonyms and word order are not judged: Claude checks it)` };
+  }
+  return { comp, syntax, translation, heTok, enTok, heCover, enCover };
+})();
+function exAutoEstimate(still) {
+  for (const r of still) {
+    const { it, a } = r; let g = null;
+    if (it.sub === 'translate2') g = AG.translation(it, a);
+    else if (it.kind === 'write' && it.sec === 'syntax') g = AG.syntax(it, a.text || '');
+    else if (it.kind === 'write') g = AG.comp(it, a.text || '');
+    if (!g) continue;
+    r.score = Math.round(g.score * 1000) / 1000; r.sc = 'est'; r.pending = false; r.est = { conf: g.conf, how: g.how, v: 'auto-est-v1' }; r.chk = g.conf !== 'high';
+    if (g.units) r.crit = { units: g.units, est: 1, unitText: g.unitText || undefined };
+  }
+}
+(function () {
+  // Rubric label and the record: estimates are marked, blank items carry no error tags, status of every item is kept.
+  const _rub = exRubric;
+  exRubric = function (it, sc) { return sc === 'est' ? _rub(it) + ' (automatic estimate, to be checked)' : _rub.apply(this, arguments); };
+})();
+
+// ===== 6. The complete correction: navigator, filters, box-by-box parse, blanks without false diagnosis, Claude's grades as an overlay =====
+const itemStatus = x => x.answered ? 'answered' : x.st || (x.ms ? 'visited_blank' : 'not_reached');
+const ST_LABEL = { answered: 'answered', visited_blank: 'seen, left blank', timeout_unreached: 'not reached (time ran out)', unvisited: 'not opened', not_reached: 'not reached' };
+function parseBoxesHTML(it, a) {
+  if (!it || it.kind !== 'parse') return '';
+  const sel = { p: a.p || '', g: a.g || '', n: a.n || '', conj: a.conj || '', stem: a.stem || '', root: a.root || '' };
+  const g = gradeParse(it, sel), r = g.res || {}, alt = String(it.pgn || '').split('|')[0], P = alt ? parsePGN(alt) : {};
+  const show = v => v && v !== '-' ? esc(v) : '—';
+  const why = {
+    p: it.conj === 'inf' || it.conj === 'ptc' ? `leave empty: ${it.conj === 'inf' ? 'an infinitive' : 'a participle'} has no person` : `should be ${P.p || '—'}`,
+    g: it.conj === 'inf' ? 'leave empty: an infinitive has no gender' : P.g === 'c' ? 'should be c (common): first person and 3rd plural qatal have no gender of their own' : `should be ${P.g || '—'}`,
+    n: it.conj === 'inf' ? 'leave empty: an infinitive has no number' : `should be ${P.n || '—'}`,
+    conj: `should be ${esc(it.conj)}`, stem: `should be ${esc(String(it.stem).split('|')[0])}`, root: `should be ${esc(it.root)}`,
+  };
+  const L = [['p', 'person', sel.p], ['g', 'gender', sel.g], ['n', 'number', sel.n], ['conj', 'form', sel.conj], ['stem', 'stem', sel.stem], ['root', 'root', sel.root]];
+  const rule = it.gpt ? 'GPT key protocol: root, stem and form ¼ each; person/gender/number share ¼' : 'six boxes, each 1/6';
+  return `<div class="small"><b>Box by box</b> <span class="muted">(${rule})</span>: ${L.map(([k, lab, v]) => `${lab} ${k === 'root' ? H(show(v)) : show(v)} ${r[k] ? '✓' : `✗ <span class="muted">(${why[k]})</span>`}`).join(' · ')}</div>`;
+}
+function ovFor(rec) { try { const o = HET.live('grades/' + rec.id); return o && o.items ? o : null; } catch { return null; } }
+function recWithOverlay(rec, ov) {
+  const items = rec.items.map(x => { const g = ov.items[x.n] || ov.items[String(x.n)]; return g && g.s != null ? { ...x, score: g.s, sc: 'claude', fb: g.fb || x.fb, crit: g.units ? { units: g.units } : x.crit, ov: { from: x.score, by: ov.grader || 'Claude' }, chk: false } : x; });
+  const all = AN.scoreSections(items, rec.weights || {});
+  const ind = AN.scoreSections(items.filter(x => x.cat === 'protected' || x.cat === 'transfer'), rec.indepWeights || INDEP_W);
+  return { ...rec, items, total: all.total, indep: ind.total, sections: Object.fromEntries(Object.entries(all.sections).map(([k, o]) => [k, { n: o.n, acc: Math.round(o.acc * 1000) / 1000, answered: o.answered }])), _ov: ov };
+}
+function gradingRequest(rec) {
+  const items = rec.items.map(x => { const it = x.spec || {}; const a = { ...(x.answer || {}) }; delete a._chg; return { n: x.n, sec: x.sec, kind: x.kind, sub: x.sub || undefined, status: itemStatus(x), prompt: exStrip(it.q || it.he || it.form || ''), ref: it.ref || undefined, model: exStrip(it.model || '') || undefined, units: it.units || undefined, accepted: it.kind === 'parse' ? { root: it.root, stem: it.stem, conj: it.conj, pgn: it.pgn, alts: it.alts } : undefined, pts: it.pts || undefined, answer: a, autoScore: x.score, scoredBy: x.sc, toCheck: x.chk ? 1 : undefined }; });
+  return { app: 'hebrew-trainer', kind: 'grading-request', v: 1, made: new Date().toISOString(), assessment: { id: rec.id, type: rec.type, name: (BLUEPRINTS[rec.type] || {}).name, end: new Date(rec.end).toISOString(), checksum: rec.checksum, total: rec.total, sections: rec.sections, scoring: rec.scoring || null }, rubric: { translation: TR_RUBRIC, protocol: 'Grade every item. Return an update file with docs["grades/<id>"] = { d: { v: "overlay-1", grader, ts, items: { <n>: { s: 0..1, fb, units? } } }, u: <ms> }. Never change the original record.' }, items };
+}
+(function () {
+  const _ie = itemExplainHTML;
+  itemExplainHTML = function (x) {
+    const blank = !x.answered;
+    let h = _ie.call(this, blank ? { ...x, err: [] } : x);
+    try {
+      const it = x.spec || {}, st = itemStatus(x);
+      h = h.replace('<div class="panel stack" style="gap:6px">', `<div class="panel stack rv-item" data-ri="${x.n}" data-sec="${esc(x.sec || '')}" data-res="${blank ? 'blank' : x.score >= 1 ? 'right' : x.score > 0 ? 'partly' : 'wrong'}" data-chk="${x.chk ? 1 : 0}" style="gap:6px">`);
+      if (blank) h = h.replace(/(<span class="chip bad">not answered<\/span>)/, `$1<span class="chip">${esc(ST_LABEL[st] || st)}</span>`);
+      const add = [];
+      if (blank) add.push(`<div class="small muted">No diagnosis: a blank answer shows nothing about what you know. The correct answer and how to find it are below, so you can learn it.</div>`);
+      if (it.kind === 'parse' && !blank) {
+        add.push(parseBoxesHTML(it, x.answer || {}));
+        if (!it.gpt) { const a = x.answer || {}; const g = gradeParse(it, { p: a.p || '', g: a.g || '', n: a.n || '', conj: a.conj || '', stem: a.stem || '', root: a.root || '' }); if (Math.abs(g.score - (x.ov ? x.ov.from : x.score)) > .01) add.push(`<div class="small muted">With today’s rules (first person and 3rd plural qatal: gender must be “c”, common) this item would score ${Math.round(g.score * 100)}%. Your saved score (${Math.round((x.ov ? x.ov.from : x.score) * 100)}%) is not changed.</div>`); }
+      }
+      if (x.sc === 'est') add.push(`<div class="small"><span class="chip warn">automatic estimate${x.chk ? ' · to be checked by Claude' : ''}</span> ${esc((x.est && x.est.how) || '')}</div>`);
+      if (x.sc === 'self') add.push('<div class="small muted">Self-scored at the time (kept as it was).</div>');
+      if (x.ov) add.push(`<div class="small"><span class="chip good">graded by ${esc(x.ov.by)}</span> earlier score ${Math.round((x.ov.from || 0) * 100)}% (kept in the original record)</div>`);
+      if (x.crit && x.crit.unitText && !it.units) add.push(`<div class="small"><b>Meaning units (estimate):</b> ${x.crit.unitText.map((u, j) => `${esc(u)} <b>${x.crit.units[j] === 1 ? '✓' : x.crit.units[j] ? '½' : '✗'}</b>`).join(' · ')}</div>`);
+      if (x.score >= 1 && x.ms > 120000 && !blank) add.push('<div class="small muted">Right, but slow: next time find the prefix or ending first, then the stem; aim for half this time.</div>');
+      if (add.length) h = h.replace(/<\/div>\s*$/, add.join('') + '</div>');
+    } catch (e) { console.error(e); }
+    return h;
+  };
+  const _rv = renderExamReview;
+  renderExamReview = function (rec) {
+    const ov = rec && rec.items ? ovFor(rec) : null, shown = ov ? recWithOverlay(rec, ov) : rec;
+    const r = _rv.call(this, shown, arguments[1]);
+    try {
+      const v = $('#v-session'), head = v && v.querySelector('.panel'); if (!head || !rec.items) return r;
+      const items = shown.items, est = items.filter(x => x.sc === 'est').length, chk = items.filter(x => x.chk).length, blank = items.filter(x => !x.answered).length;
+      const res = x => !x.answered ? 'blank' : x.score >= 1 ? 'right' : x.score > 0 ? 'partly' : 'wrong';
+      const col = { right: 'var(--good)', partly: 'var(--warn)', wrong: 'var(--bad)', blank: 'var(--line)' };
+      const secs = [...new Set(items.map(x => x.sec))];
+      const SL = k => (BLUEPRINTS[rec.type] && BLUEPRINTS[rec.type].sections[k] || {}).label || k;
+      head.insertAdjacentHTML('beforeend', `<div class="stack" style="gap:8px;border-top:1px solid var(--line);padding-top:8px">
+        ${ov ? `<div class="note small"><b>Grades by ${esc(ov.grader || 'Claude')}</b> (${esc(ov.v || 'overlay')}, ${ov.ts ? new Date(ov.ts).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''}). The original record is kept: ${rec.total}% all items, independent ${rec.indep}%.</div>` : ''}
+        ${est ? `<div class="note small">${est} answers have an <b>automatic estimate</b>${chk ? `; ${chk} are marked “to be checked”` : ''}. For the final grade: download the grading file and send it to Claude; the grades come back as an update file (Library → Add material) and appear here, without changing this record.</div>` : ''}
+        <div class="small muted">Scoring: earned credit per item (${esc((rec.scoring && rec.scoring.policy) || 'practice rubric')}); the professor’s reported “1 point off per wrong or blank answer” is not applied (not confirmed). Completion: ${items.length - blank} of ${items.length} answered.</div>
+        <div class="row" style="gap:4px;flex-wrap:wrap">${items.map(x => `<button class="btn sm" data-rj="${x.n}" title="Item ${x.n}: ${res(x)}" style="min-width:34px;border-color:${col[res(x)]};${res(x) === 'blank' ? 'opacity:.6' : ''}">${x.n}</button>`).join('')}</div>
+        <div class="row small" style="gap:6px;flex-wrap:wrap"><span class="muted">Show:</span>${[['all', 'All items'], ['miss', 'Wrong + partly'], ['blank', 'Blank'], ['right', 'Right'], ['chk', 'To be checked'], ...secs.map(s => ['sec:' + s, SL(s)])].map(([k, l], i) => `<button class="btn sm ${i ? '' : 'primary'}" data-rf="${esc(k)}">${esc(l)}</button>`).join('')}</div>
+        <div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn sm" id="rv-grade">Download for Claude’s grading</button><button class="btn sm" id="rv-print">Print this correction</button><button class="btn sm" id="rv-next">Next item →</button></div></div>`);
+      const panels = () => $$('.rv-item', v);
+      $$('[data-rj]', v).forEach(b => b.onclick = () => { const p = v.querySelector(`.rv-item[data-ri="${b.dataset.rj}"]`); if (p) { p.hidden = false; p.scrollIntoView({ behavior: 'smooth', block: 'start' }); } });
+      $$('[data-rf]', v).forEach(b => b.onclick = () => {
+        const f = b.dataset.rf; $$('[data-rf]', v).forEach(x => x.classList.toggle('primary', x === b));
+        panels().forEach(p => { const r = p.dataset.res; p.hidden = !(f === 'all' || (f === 'miss' && (r === 'wrong' || r === 'partly')) || (f === 'blank' && r === 'blank') || (f === 'right' && r === 'right') || (f === 'chk' && p.dataset.chk === '1') || (f.startsWith('sec:') && p.dataset.sec === f.slice(4))); });
+      });
+      let cur = 0; $('#rv-next').onclick = () => { const ps = panels().filter(p => !p.hidden); if (!ps.length) return; const p = ps[cur % ps.length]; cur++; p.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+      $('#rv-print').onclick = () => { panels().forEach(p => p.hidden = false); $$('.rv-item details').forEach(d => d.open = true); try { window.print(); } catch { flash('Printing is not available here.'); } };
+      $('#rv-grade').onclick = async () => { await saveFile(`hebrew-grade-request-${rec.id}.json`, JSON.stringify(gradingRequest(rec), null, 1)); flash('Saved. Send this file to Claude for grading.'); };
+    } catch (e) { console.error(e); }
+    return r;
+  };
+})();
+
+// ===== 7. Small corrections to the GPT mocks (V3 audit, verified against the class stories) =====
+(function () {
+  const _bf = buildFS;
+  buildFS = async function (k) {
+    const ex = await _bf.apply(this, arguments);
+    try {
+      for (const it of ex.items || []) {
+        // Mock 5 A9: alone, the form can be 2ms or 3fs; the story context (“you”) is the target, both are accepted.
+        if (k === 'fs9' && it.kind === 'parse' && it.root === 'מצא' && it.stem === 'niphal' && it.conj === 'yiqtol') it.pgn = '2ms|3fs';
+        // Mock 3 A7: the object suffix in the meaning.
+        if (k === 'fs7' && it.kind === 'parse' && it.root === 'ירשׁ' && /^he will inherit/.test(it.gl || '')) it.gl = 'he will inherit you (be your heir); ךָ = “you”, the object';
+      }
+    } catch (e) { console.error(e); }
+    return ex;
+  };
+})();
+
+// Skill tables: blank items are not evidence of a weakness (they count as 0 points, but not in the skill percentages).
+(function () {
+  const _sk = simSkills;
+  simSkills = function (recs) { return _sk.call(this, (recs || []).map(r => ({ ...r, items: (r.items || []).filter(x => x.answered) }))); };
+  const _sh = simSkillsHTML;
+  simSkillsHTML = function () { const h = _sh.apply(this, arguments); return h ? h.replace('</h3>', '</h3><p class="small muted" style="margin:0">Answered items only: a blank item scores 0 points but says nothing about which skill is weak.</p>') : h; };
+})();
+
+</script>
+<script>
 // Colour mode: dark (default), light, or the same as the computer. Remembered on this device.
 (function () {
   const order = ['dark', 'light', 'auto'], lab = { dark: '☾ Dark', light: '☀ Light', auto: '◐ Auto' };
@@ -10958,5 +11373,5 @@ function xvHTML(it, o = {}) {
   const b = document.getElementById('btn-theme'); if (b) b.onclick = () => { t = order[(order.indexOf(t) + 1) % order.length]; try { localStorage.setItem('het-theme', t); } catch {} apply(); };
 })();
 </script>
-<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='eed30479d5';</script>
+<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='85a38c77c4';</script>
 </body></html>
