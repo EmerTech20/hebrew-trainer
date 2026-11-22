@@ -7731,16 +7731,16 @@ function drawRecall(it) {
     <div id="fb"></div>
     <div class="row" id="ctl"><button class="btn primary" id="b-check">Check</button><button class="btn ghost" id="b-idk">I don't know yet</button></div></div>`;
   $('#s-exit').onclick = () => { try { savers.prog.now(); } catch {} if (SES.results.length) finishSession(true); else go(SES.back || 'practice'); };
-  const host = $('#wi-pre'); host.innerHTML = '<div class="small muted">Looking up the grammar and a sentence…</div>';
-  vxIndex().then(idx => { if (SES.items[SES.i] !== it || !$('#wi-pre')) return; it._vx = vxExamples(it.he, idx, it.gloss)[0] || null; $('#wi-pre').innerHTML = vxPreHTML(it.he, it._vx, it.gloss); }).catch(() => { host.innerHTML = ''; });
+  const host = $('#wi-pre'); if (!it.noVx) host.innerHTML = '<div class="small muted">Looking up the grammar and a sentence…</div>';
+  if (!it.noVx) vxIndex().then(idx => { if (SES.items[SES.i] !== it || !$('#wi-pre')) return; it._vx = vxExamples(it.he, idx, it.gloss)[0] || null; $('#wi-pre').innerHTML = vxPreHTML(it.he, it._vx, it.gloss); }).catch(() => { host.innerHTML = ''; });
   const inp = $('#rc-in'); inp.focus(); inp.oninput = () => { if (it._fa == null) it._fa = activeMs(it); };
   inp.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); $('#b-check') && $('#b-check').click(); } };
   const finish = (score, how) => {
     SES.answered = true; it._ms = it._ms || activeMs(it); inp.readOnly = true; const pre = $('#wi-pre'); if (pre) pre.remove();
-    $('#fb').innerHTML = `<div class="fb ${score === 1 ? 'ok' : 'no'}"><b class="t">${score === 1 ? 'Right.' : how === 'idk' ? 'Here is the answer.' : 'Wrong.'}</b>${it._typed ? `<div>You wrote: “${esc(it._typed)}”</div>` : ''}<div class="vx-post"></div></div>`;
+    $('#fb').innerHTML = `<div class="fb ${score === 1 ? 'ok' : 'no'}"><b class="t">${score === 1 ? 'Right.' : how === 'idk' ? 'Here is the answer.' : 'Wrong.'}</b>${it._typed ? `<div>You wrote: “${esc(it._typed)}”</div>` : ''}<div class="vx-post"></div>${it.noVx && it.extra ? `<div class="small" style="margin-top:6px"><b>Meaning:</b> ${esc(it.gloss)}<br>${heWrap(esc(it.extra))}</div>` : ''}</div>`;
     try { if (score === 1 && it.card) rateCard(it.card, 2); } catch (e) { console.error(e); }
     nextBtn(); logResult(it, score);
-    vxIndex().then(idx => { if (it._vx === undefined) it._vx = vxExamples(it.he, idx, it.gloss)[0] || null; const b = document.querySelector('#fb .vx-post'); if (b) b.innerHTML = vxPostHTML(it.he, it.gloss, it._vx); }).catch(() => {});
+    if (!it.noVx) vxIndex().then(idx => { if (it._vx === undefined) it._vx = vxExamples(it.he, idx, it.gloss)[0] || null; const b = document.querySelector('#fb .vx-post'); if (b) b.innerHTML = vxPostHTML(it.he, it.gloss, it._vx); }).catch(() => {});
   };
   it._finish = finish;
   $('#b-check').onclick = () => {
@@ -11000,7 +11000,32 @@ const storyOpts = ch => [
 ];
 const RUTH_CHUNK = { 1: [[1, 6], [7, 12], [13, 18], [19, 22]], 2: [[1, 6], [7, 12], [13, 18], [19, 23]], 3: [[1, 6], [7, 12], [13, 18]], 4: [[1, 6], [7, 12], [13, 17], [17, 22]] };
 const ruthChunk = c => RUTH_CHUNK[c].map(([a, b]) => [c, a, b]).map((b, i) => [b, r6Done(b), i]).sort((x, y) => x[1] - y[1] || x[2] - y[2])[0][0];
+// GPT §6: the words of Ruth 1 that blocked you in the Nov 21 simulation (learn them in their clause).
+const R1_WORDS = [
+  ['בִּימֵי', 'in the days of', 'Ruth 1:1 בִּימֵי שְׁפֹט הַשֹּׁפְטִים: בְּ + יְמֵי (construct plural of יוֹם, day).'],
+  ['שְׁפֹט', 'judging; to judge, rule', 'Ruth 1:1: Qal infinitive construct of שׁפט; הַשֹּׁפְטִים = the judges (participle used as a noun).'],
+  ['לָגוּר', 'to sojourn; to live as a foreigner', 'Ruth 1:1: לְ + Qal infinitive of גור (hollow root).'],
+  ['שְׂדֵי', 'fields of; country of', 'Ruth 1:1 בִּשְׂדֵי מוֹאָב “in the country of Moab” (שָׂדֶה, field).'],
+  ['וַיִּשְׂאוּ', 'and they took (lifted)', 'Ruth 1:4 וַיִּשְׂאוּ לָהֶם נָשִׁים: root נשׂא (the נ is gone), NOT עשׂה “do”.'],
+  ['הָאַחַת', 'the one (f.)', 'Ruth 1:4 שֵׁם הָאַחַת עָרְפָּה “the name of the one was Orpah”.'],
+  ['הַשֵּׁנִית', 'the second (f.)', 'Ruth 1:4 וְשֵׁם הַשֵּׁנִית רוּת.'],
+  ['כְּעֶשֶׂר שָׁנִים', 'about ten years', 'Ruth 1:4: כְּ “about” + עֶשֶׂר “ten” + שָׁנִים “years”.'],
+  ['וַתִּשָּׁאֵר', 'and she was left; remained', 'Ruth 1:3, 1:5: Niphal wayyiqtol 3fs of שׁאר (the ש is doubled: the Niphal נ).'],
+  ['יְלָדֶיהָ', 'her children', 'Ruth 1:5 מִשְּׁנֵי יְלָדֶיהָ: a noun (יֶלֶד, child) + “her”, not a verb “was born”.'],
+  ['וַתָּקָם', 'and she arose', 'Ruth 1:6: Qal wayyiqtol 3fs of קום.'],
+  ['פָקַד', 'he visited; attended to', 'Ruth 1:6 כִּי־פָקַד יְהוָה אֶת־עַמּוֹ.'],
+  ['לָתֵת', 'to give', 'Ruth 1:6: Qal infinitive of נתן.'],
+  ['חֶסֶד', 'kindness; loyal love', 'Ruth 1:8 יַעַשׂ יְהוָה עִמָּכֶם חֶסֶד.'],
+  ['הַמֵּתִים', 'the dead (ones)', 'Ruth 1:8: Qal participle mp of מות with the article.'],
+  ['מְנוּחָה', 'rest; a resting place', 'Ruth 1:9 וּמְצֶאןָ מְנוּחָה.'],
+  ['תְּשַׂבֵּרְנָה', 'you (f. pl.) would wait / hope', 'Ruth 1:13: Piel yiqtol 2fp of שׂבר (sin).'],
+  ['דָּבְקָה', 'she clung', 'Ruth 1:14 וְרוּת דָּבְקָה בָּהּ: Qal qatal 3fs of דבק.'],
+  ['הַמָּוֶת', 'death', 'Ruth 1:17 כִּי הַמָּוֶת יַפְרִיד בֵּינִי וּבֵינֵךְ.'],
+  ['כַּלָּה', 'daughter-in-law', 'Ruth 1:6–8 כַּלֹּתֶיהָ “her daughters-in-law”.'],
+];
+function startRuth1Words() { startSession({ title: 'Ruth 1: the words that blocked you on Nov 21 (type the meaning)', items: R1_WORDS.map(w => ({ kind: 'recall', key: 'r1w|' + w[0], cid: 'r1w:' + AN.hash(w[0]), he: w[0], gloss: w[1], extra: w[2], t: 'vocab', noVx: 1 })), back: 'today', noVary: true, mode: 'practice' }); }
 const ruthOpts = c => [
+  ...(c === 1 ? [{ t: 'Ruth 1: the 20 words that blocked you on Nov 21', s: 'From GPT’s error map of your simulation: type the meaning, then read the clause.', go: () => startRuth1Words() }] : []),
   { t: `Ruth ${c}: read the chapter aloud`, s: 'Read tab. Say every verb’s subject as you read (“he”, “she”, “they f.”).', go: () => { go('read'); try { renderRead('ruthT' + c); } catch { } } },
   { t: `Ruth ${c}: translate 4–6 verses blind`, s: 'The 30-point part. Strict English first (Hebrew order), then smooth English. Never leave a verse blank.', go: () => startRuth6(ruthChunk(c)) },
   { t: `Ruth ${c}: questions in Hebrew`, s: 'With the verses shown.', go: () => startRuthChapterQuestions(c, 8) },
@@ -11105,7 +11130,7 @@ const VC_CTX = [
   ['Ruth 2:23', 'עַד־כְּלוֹת קְצִיר־הַשְּׂעֹרִים', 'כְּלוֹת', ['the end (completion) of', 'the daughters-in-law of', 'the going of', 'all of'], 'Infinitive of כ־ל־ה “to be finished”: “until the barley harvest was finished”.'],
   ['Ruth 1:22', 'וְרוּת הַמּוֹאֲבִיָּה כַלָּתָהּ עִמָּהּ', 'כַלָּתָהּ', ['her daughter-in-law', 'she finished', 'she went', 'all of her'], 'כַּלָּה (doubled ל) = daughter-in-law + ָהּ “her”.'],
 ];
-function vcRecall(w) { return { kind: 'recall', key: 'vcx|' + w[0], cid: 'vcx:' + AN.hash(w[0]), he: w[0], gloss: w[1], extra: w[2], t: 'vocab' }; }
+function vcRecall(w) { return { kind: 'recall', key: 'vcx|' + w[0], cid: 'vcx:' + AN.hash(w[0]), he: w[0], gloss: w[1], extra: w[2], t: 'vocab', noVx: 1 }; }
 function vcContext(c) { return { kind: 'mc', key: 'vcc|' + c[0], t: 'vocab', q: `${esc(c[0])}: ${H(c[1])}${PRi(c[1])}<br>What does ${H(c[2])}${PRi(c[2])} mean here?`, o: c[3], a: 0, x: heWrap(esc(c[4])) }; }
 function startVocabContrast(o = {}) {
   const rec = VC_WORDS.map(vcRecall), ctx = VC_CTX.map(vcContext);
@@ -11373,5 +11398,5 @@ function gradingRequest(rec) {
   const b = document.getElementById('btn-theme'); if (b) b.onclick = () => { t = order[(order.indexOf(t) + 1) % order.length]; try { localStorage.setItem('het-theme', t); } catch {} apply(); };
 })();
 </script>
-<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='85a38c77c4';</script>
+<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='cc1f0d7662';</script>
 </body></html>
