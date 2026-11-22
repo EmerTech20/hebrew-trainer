@@ -9816,7 +9816,7 @@ const MC_HEQ = [
   ['who consecrated?', 'מִי קִדֵּשׁ?', 'Who consecrated?'],
   ['who must not go out?', 'מִי לֹא יֵצֵא?', 'Who must not go out?'],
   ['whose body is washed?', 'אֶת־בְּשַׂר מִי יִרְחַץ?', 'Whose body will he wash?'],
-  ['for whom does the priest atone?', 'בְּעַד מִי כִּפֶּר הַכֹּהֵן?', 'For whom did the priest make atonement?'],
+  ['for whom does the priest atone?', 'בְּעַד מִי יְכַפֵּר הַכֹּהֵן?', 'For whom will the priest make atonement?'],
   ['who are “they”?', 'מִי הִקְרִיבוּ אֵשׁ זָרָה?', 'Who offered the strange fire?'],
   ['what did Aaron do?', 'מֶה עָשָׂה אַהֲרֹן?', 'What did Aaron do?']
 ];
@@ -9989,6 +9989,330 @@ const PX_PROSE = {
 })();
 </script>
 <script>
+// ---------- Nov 21 audit fixes: things asked for earlier that were still missing ----------
+// Nothing here touches the simulation engine or stored history. Each fix is a small wrapper or a data change.
+(function () {
+  // 1. "Ready for the final?" uses the professor's weights (announced Nov 17): parsing 32, Ruth translation 30, Hebrew questions 26, syntax 12.
+  try {
+    RD_SECTIONS.splice(0, RD_SECTIONS.length, ['parse', 'Parsing', 32], ['translation', 'Ruth translation', 30], ['comp', 'Questions in Hebrew', 26], ['syntax', 'Grammar / syntax questions', 12]);
+    const _rh = readinessHTML;
+    readinessHTML = function () {
+      let h = _rh.apply(this, arguments);
+      h = h.replace(/Weighted like the final \([^)]*\)\./, 'Weighted like the professor’s final: parsing 32, Ruth translation 30, questions in Hebrew 26, syntax 12. The grammar questions here stand in for the syntax part.');
+      const sims = ['fs1', 'fs2', 'fs3'].flatMap((k, i) => fsResults(k).map(a => `Simulation ${i + 1} (${fmtDay(dayKey(new Date(a.end)))}): <b>${a.total}</b> / 100`));
+      h = h.replace(/<p class="small muted">No timed final yet\.[^<]*<\/p>/, '');
+      return h.replace(/<\/div>$/, `<p class="small"><b>Final simulations (the professor’s format):</b> ${sims.length ? sims.join(' · ') : 'none taken yet. They are in Final rescue → Final simulations.'}</p></div>`);
+    };
+  } catch (e) { console.error(e); }
+
+  // 2. The old "real format" final (built Nov 3, before the professor announced the format) is labelled as what it is,
+  //    and the buttons that promised a "full final" open the next Final simulation instead.
+  const nextSim = () => { const ks = ['fs1', 'fs2', 'fs3']; const k = ks.find(k => !fsResults(k).length); if (k) return k; return ks.map(k => [k, fsResults(k).slice(-1)[0].end]).sort((a, b) => a[1] - b[1])[0][0]; };
+  const simNo = k => +k.slice(2);
+  try {
+    BLUEPRINTS.final.name = 'Practice final (older format, Nov 3)';
+    const ex = RX_LESSONS.find(L => L.id === 'exam');
+    if (ex) { const j = ex.drills.findIndex(d => /Full timed final/.test(d[0])); if (j >= 0) ex.drills[j] = ['Next final simulation (the professor’s format, 140 min)', () => startFS(nextSim())]; }
+    RX_DAYS.forEach(d => { if (d[0] === '2026-11-21') d[2] = 'Final simulations (two tonight) + fix the misses'; if (d[0] === '2026-11-22') d[2] = 'The last simulation if one is left; then re-read, missed cards, sleep'; });
+  } catch (e) { console.error(e); }
+
+  // 3. The plan for Sat 21 offers the first simulations not yet taken (it used to force Simulation 2), and Sun 22 the one left.
+  const _rb = rescueBlocks;
+  rescueBlocks = function () {
+    const B = _rb.apply(this, arguments), d = dayKey(); if (!B || (d !== '2026-11-21' && d !== '2026-11-22')) return B;
+    const today = k => fsResults(k).some(a => dayKey(new Date(a.end)) === d);
+    const blk = (k, id, opt) => ({ id, min: FS_MIN, title: `Final simulation ${simNo(k)} (${FS_MIN} min, the professor’s format)${opt ? ' — if you have the time' : ''}`, sub: 'Whole story: 15 parses + 20 questions in Hebrew. Ruth: 6 verses to translate + 4 syntax questions. Paper lexicon allowed, phone away.', act: () => startFS(k), check: () => today(k) });
+    const ks = ['fs1', 'fs2', 'fs3'].filter(k => today(k) || !fsResults(k).length).slice(0, d === '2026-11-21' ? 2 : 1);
+    const i = B.findIndex(b => b.id === 'mock'); if (i >= 0) B.splice(i, 1);
+    ks.forEach((k, j) => B.splice(Math.min(B.length, (i >= 0 ? i : 1) + j), 0, blk(k, j ? 'mock2' : 'mock', d === '2026-11-22')));
+    return B;
+  };
+
+  // 5. Pual / Hophal / Hithpael topic notes: the class rules instead of the old placeholders (the Hophal one put the a-vowel in the wrong place).
+  try {
+    const T = id => TOPICS.find(t => t.id === id);
+    const hp = s => H(s);
+    if (T('pual')) T('pual').notes = `<p><b>How to recognise it.</b> A Pual has a short u-vowel (qibbuts ${hp('ֻ')}) under the <b>first</b> root letter, and a dagesh that doubles the <b>middle</b> root letter, followed by an a-vowel: ${hp('קֻטַּל')} (perfect), ${hp('יְקֻטַּל')} (yiqtol), ${hp('מְקֻטָּל')} (participle, with qamets). The doubling tells you it belongs to the Piel family; the u-vowel tells you it is passive.</p><p><b>Meaning.</b> It is the passive of the Piel. The Piel ${hp('כִּבֵּד')} means “he honoured”; the Pual ${hp('כֻּבַּד')} means “he was honoured”. <i>En español: la voz pasiva del Piel, «fue honrado».</i></p><p><b>Do not confuse it with the Hophal.</b> In the Hophal the u/o sits under the <b>prefix</b> (${hp('הָ')} / ${hp('יָ')} / ${hp('מָ')}) and nothing is doubled. And ${hp('יֻלַּד')} in Ruth 4:17 (“a son was born”) looks like a Pual; in class it was suggested as an old Qal passive. The app accepts both.</p>`;
+    if (T('hophal')) T('hophal').notes = `<p><b>How to recognise it.</b> The Hophal puts an o- or u-vowel under the <b>prefix</b>, and nothing is doubled. Most often the prefix has a qamets that is read as a short o (qamets ḥatuf): ${hp('הָשְׁלַךְ')} is read <i>hosh-LAKH</i>, “he was thrown”. Some forms use qibbuts instead: ${hp('הֻשְׁלַךְ')}. The a-vowel (pataḥ) comes under the <b>second</b> root letter, the ${hp('ל')} here. The same shape runs through the yiqtol ${hp('יָשְׁלַךְ')} and the participle ${hp('מָשְׁלָךְ')}.</p><p><b>Weak roots.</b> With hollow roots, with I-י roots and with some I-נ roots the prefix becomes ${hp('הוּ')}: ${hp('הוּבָא')} “was brought” (בוא), ${hp('הוּמַת')} “was put to death” (מות), ${hp('הוּשַׁב')} “was brought back” or “was made to dwell”, ${hp('הוּרַד')} “was brought down” (ירד), ${hp('הוּגַּד')} “it was told” (נגד: the dot is the lost נ), and ${hp('הֻכָּה')} “was struck” (נכה).</p><p><b>Meaning.</b> It is the passive of the Hiphil. The Hiphil ${hp('הִפְקִיד')} means “he appointed”; the Hophal ${hp('הָפְקַד')} means “he was appointed”. <i>En español: la voz pasiva del Hiphil, «fue nombrado».</i></p>`;
+    if (T('hithpael')) T('hithpael').notes = `<p><b>How to recognise it.</b> A Hithpael starts with ${hp('הִתְ')} (or ${hp('יִתְ')}, ${hp('תִּתְ')}, ${hp('מִתְ')} in the other forms) and doubles the <b>middle</b> root letter: ${hp('הִתְהַלֵּךְ')}, ${hp('יִתְהַלֵּךְ')}, ${hp('וַיִּתְהַלֵּךְ')}, and the participle ${hp('מִתְהַלֵּךְ')}.</p><p><b>Meaning.</b> Usually reflexive (“sanctify oneself”) or reciprocal, or an action done back and forth (“walk about”). <i>En español: reflexivo, «santificarse», «pasearse».</i></p><p><b>Spelling changes.</b> When the root begins with ${hp('ס')}, ${hp('שׂ')} or ${hp('שׁ')}, the ${hp('ת')} swaps places with that letter: ${hp('הִשְׁתַּמֵּר')} “be on one’s guard”. With ${hp('צ')} it swaps and also becomes ${hp('ט')}. Before ${hp('ד')}, ${hp('ט')} or ${hp('ת')} the ${hp('ת')} assimilates and leaves a dagesh: ${hp('הִטַּהֵר')} “purify oneself”. The professor’s Hithpael and Hishtaphel slides are in Final rescue → the stems lesson.</p>`;
+  } catch (e) { console.error(e); }
+
+  // 6. Answer keys that must accept two readings (same letters and vowels, two analyses).
+  //    Hollow Qal: perfect 3ms = participle ms (בָּא, קָם, מֵת, שָׁב); perfect 3fs = participle fs (בָּאָה).
+  //    Piel: imperative 2ms = infinitive (מַהֵר, דַּבֵּר). Niphal with qamets under the middle letter (נִשְׁמָר): participle, or a perfect 3ms in pause.
+  const noCant = s => String(s || '').normalize('NFC').replace(/[֑-ֽ֯׀׃]/g, '').trim();
+  const altsFor = item => {
+    const f = noCant(item.form).normalize('NFD'), st = String(item.stem || '').split('|')[0], c = item.conj, p = String(item.pgn || ''), r = String(item.root || '').replace(/[^א-ת]/g, '');
+    if (!f || /[\s\u05BE]/.test(f) || r.length !== 3) return null;
+    // consonants with the marks that follow each one
+    const C = []; for (const ch of f) { if (/[א-ת]/.test(ch)) C.push({ c: ch, m: '' }); else if (C.length) C[C.length - 1].m += ch; }
+    const fin = x => ({ 'ך': 'כ', 'ם': 'מ', 'ן': 'נ', 'ף': 'פ', 'ץ': 'צ' }[x] || x);
+    if (st === 'qal' && 'וי'.includes(r[1])) {
+      if (C.length === 2 && fin(C[0].c) === r[0]) {
+        if (c === 'qatal' && p === '3ms') return [{ conj: 'ptc', pgn: 'ms', _why: 'participle (the same letters and vowels)' }];
+        if (c === 'ptc' && p === 'ms') return [{ conj: 'qatal', pgn: '3ms', _why: 'perfect 3ms (the same letters and vowels)' }];
+      }
+      if (C.length === 3 && fin(C[0].c) === r[0] && C[2].c === 'ה' && /\u05B8/.test(C[1].m)) {
+        if (c === 'qatal' && p === '3fs') return [{ conj: 'ptc', pgn: 'fs', _why: 'participle fs (the same letters and vowels)' }];
+        if (c === 'ptc' && p === 'fs') return [{ conj: 'qatal', pgn: '3fs', _why: 'perfect 3fs (the same letters and vowels)' }];
+      }
+    }
+    if (st === 'piel' && C.length === 3 && fin(C[0].c) === r[0]) {
+      if (c === 'impv' && p === '2ms') return [{ conj: 'inf', pgn: '', _why: 'infinitive (in the Piel the infinitive and the imperative 2ms look the same)' }];
+      if (c === 'inf') return [{ conj: 'impv', pgn: '2ms', _why: 'imperative 2ms (in the Piel the infinitive and the imperative 2ms look the same)' }];
+    }
+    if (st === 'niphal' && C.length === 4 && C[0].c === 'נ' && /\u05B4/.test(C[0].m) && /\u05B8/.test(C[2].m)) {
+      if (c === 'ptc' && p === 'ms') return [{ conj: 'qatal', pgn: '3ms', _why: 'perfect 3ms in pause (at an atnach or sof pasuq the perfect also gets qamets)' }];
+      if (c === 'qatal' && p === '3ms') return [{ conj: 'ptc', pgn: 'ms', _why: 'participle ms (outside a pause, the qamets marks the participle)' }];
+    }
+    return null;
+  };
+  const _gp = gradeParse;
+  gradeParse = function (item, sel) {
+    if (!item || item.alts || !item.form) return _gp.apply(this, arguments);
+    const A = altsFor(item); if (!A) return _gp.apply(this, arguments);
+    const g0 = _gp(item, sel); let best = g0;
+    for (const a of A) { const { _why, ...ov } = a; const g = _gp({ ...item, ...ov }, sel); if (g.score > best.score) best = { ...g, altWhy: _why }; }
+    return best;
+  };
+  const _ap = answerParse;
+  answerParse = function () {
+    const r = _ap.apply(this, arguments);
+    try { const it = SES && SES.items[SES.i]; if (it && it._sel && it._sel.conj) { const g = gradeParse(it, it._sel); const fb = $('#fb'); if (g.altWhy && fb && !fb.querySelector('.alt-ok')) fb.insertAdjacentHTML('beforeend', `<div class="small alt-ok" style="margin-top:6px">Accepted: this form can also be read as a ${esc(g.altWhy)}. Both answers are right; in a text, the context decides.</div>`); } } catch (e) { console.error(e); }
+    return r;
+  };
+
+  // 7. The Ruth 4 syntax sheet, inside the app (Final rescue → lessons).
+  try {
+    const hp = s => heS(s) + PRi(s);
+    RL.ruth4 = { title: 'Ruth 4: syntax review (the 12-point English part)', html: () => `
+<p>The syntax questions are in English, on the same Ruth passage you translate. These are the points from class (Nov 17 and 19) and the usual questions. Where scholars disagree, both readings are given: say which one you choose and why.</p>
+<p><b>1. The atnach is the main break of the verse.</b> Name the two halves. In class, the atnach was flagged as something that may appear on the final, with these three verses:</p>
+<ul><li>Ruth 4:6: the break falls on ${hp('אֶת־נַחֲלָתִי')}: “…lest I ruin my inheritance” ends the first half.</li>
+<li>Ruth 4:8: the break falls on ${hp('קְנֵה־לָךְ')} “buy it for yourself”; then “and he drew off his sandal” is the second half.</li>
+<li>Ruth 4:11: the break falls on ${hp('עֵדִים')}, a one-word answer: “[We are] witnesses.” English has to supply “we are”.</li></ul>
+<p><b>2. Pausal forms: the same spelling, a different person.</b> In 4:8 ${hp('קְנֵה־לָךְ')} is said <i>to Boaz</i>, so ${hp('לָךְ')} is <b>2ms</b>; it only looks feminine because it stands at the atnach (a pausal form). In 4:14–15 ${hp('לָךְ')} is said to Naomi, so there it is an ordinary 2fs. Decide from who is spoken to, not from the vowel.</p>
+<p><b>3. Wishes (jussive force) against narrative.</b></p>
+<ul><li>4:11 ${hp('יִתֵּן יְהוָה')} “may the LORD give”: a Qal yiqtol 3ms used as a blessing. The dot in ${heS('תּ')} is the lost ${heS('נ')} of נתן.</li>
+<li>4:12 ${hp('וִיהִי')} “and may it be” (${heS('וְ')} + the short jussive) against ${hp('וַיְהִי')} “and it was” (wayyiqtol) and the long yiqtol ${hp('יִהְיֶה')} “it will be”.</li>
+<li>4:14 ${hp('וְיִקָּרֵא שְׁמוֹ')} “may his name be proclaimed” (Niphal, a wish).</li>
+<li>4:11 ${hp('וַעֲשֵׂה־חַיִל')} and ${hp('וּקְרָא־שֵׁם')} are imperatives joined by “and”, not wayyiqtols: look for the missing prefix.</li></ul>
+<p><b>4. Subject or object ending?</b> In 4:15 ${hp('יְלָדַתּוּ')} means “she bore him”: a Qal perfect 3fs (she = Ruth) with the object ending ${heS('ּוּ')} “him”. It is not “he bore”.</p>
+<p><b>5. Who is “he” in 4:14–15?</b> In ${hp('וְהָיָה לָךְ לְמֵשִׁיב נֶפֶשׁ')} the subject is the ${hp('גֹּאֵל')}, the newborn redeemer. Whose name is ${hp('שְׁמוֹ')} in 4:14 is debated: the redeemer (the nearest noun) or the LORD (the blessing begins ${hp('בָּרוּךְ יְהוָה')}). Choose one and give that reason.</p>
+<p><b>6. What does each ${heS('אֲשֶׁר')} point back to?</b></p>
+${tbl(['Verse', 'אֲשֶׁר clause', 'Points back to'], [['4:11', hp('אֲשֶׁר בָּנוּ'), 'Rachel and Leah (“who built”)'], ['4:12', hp('אֲשֶׁר־יָלְדָה תָמָר'), 'Perez'], ['4:15', hp('אֲשֶׁר־אֲהֵבַתֶךְ'), 'your daughter-in-law, Ruth'], ['4:15', hp('אֲשֶׁר־הִיא טוֹבָה לָךְ'), 'also Ruth (“who is better to you than seven sons”)']])}
+<p><b>7. Written and read forms (4:5).</b> The written form (Ketiv) is ${hp('קָנִיתִי')} “I acquire”; the read form (Qere) is ${hp('קָנִיתָה')} “you acquire”. The professor prefers the Qere. Know both and say which one you translate. In the same verse, ${hp('וּמֵאֵת רוּת')} can be read “and from Ruth”, or as Ruth herself being acquired too: name the option you choose.</p>
+<p><b>8. The passive birth (4:17).</b> ${hp('יֻלַּד־בֵּן לְנָעֳמִי')} “a son was born to Naomi”. The form looks like a Pual; in class an old Qal passive was suggested (the app accepts both). ${hp('לְנָעֳמִי')} means “to / for Naomi”, the family that benefits.</p>
+<p><b>9. Infinitives of purpose.</b> 4:5 and 4:10 ${hp('לְהָקִים')} “to raise up” (Hiphil of קום); 4:7 ${hp('לְקַיֵּם')} “to confirm” (Piel of the same root); 4:15 ${hp('וּלְכַלְכֵּל')} “and to sustain” (Pilpel of כול: the two root letters are repeated). An infinitive has no person: leave person, gender and number empty.</p>` };
+    RX_LESSONS.push({ id: 'ruth4', sets: [], check: null, drills: [['Ruth: translate blind + answer in Hebrew', () => startRuthWork({})]] });
+  } catch (e) { console.error(e); }
+
+  // 12. Hebrew labels in the parse grid: Spanish instead of Portuguese (your request: no Portuguese).
+  // (applied in touch() below)
+
+  // 13. Pattern card הוֹלִיד / יוֹצִיא: the וֹ is the first root letter (I-י verbs), not part of the stem.
+  try {
+    PX_ROLE.R1y = ['root', 'וֹ = the first root letter. In I-י verbs like ילד and יצא the root letter was originally ו; after the Hiphil prefix it shows as וֹ. Count it as a root letter, not as a sign of the stem.'];
+    if (PX['הוֹלִיד']) PX['הוֹלִיד'][4] = 'ה:hiph|וֹ:R1y|לִ:R|י:hiphI|ד:R';
+    if (PX['יוֹצִיא']) PX['יוֹצִיא'][4] = 'י:yi|וֹ:R1y|צִ:R|י:hiphI|א:R';
+  } catch (e) { console.error(e); }
+
+  // 10, 11 and the old buttons: small changes to what is on screen, applied whenever a screen is drawn.
+  try { document.head.insertAdjacentHTML('beforeend', '<style>body.no-ai .tab[data-tab="tutor"],body.no-ai #t-ai,body.no-ai #p-ai,body.no-ai #t-ask,body.no-ai #r-quiz,body.no-ai #t-exam,body.no-ai .ai-only{display:none!important}</style>'); } catch { }
+  const _fl = flash;
+  flash = function (msg) { if (!S.sample) msg = String(msg || '').replace(/\s*Try “New AI questions”\.?/, ''); return _fl.call(this, msg); };
+  let busy = false;
+  const touch = () => {
+    busy = false;
+    try {
+      // No Portuguese (your request): Spanish labels instead. Only the value in memory changes; it is saved with your next answer, never by itself.
+      if (S.prog && S.prog.settings && S.prog.settings.help === 'pt') S.prog.settings.help = 'es';
+      const noAI = !S.sample; document.body.classList.toggle('no-ai', noAI);
+      if (noAI) {
+        const s = document.getElementById('p-tstory'); if (s) { const l = s.closest('label'); if (l) l.classList.add('ai-only'); const b = document.getElementById('p-taI'); if (b && b.parentElement) b.parentElement.classList.add('ai-only'); }
+        document.querySelectorAll('p.small.muted').forEach(p => { if (/^Practice exams and plans need Claude/.test(p.textContent)) p.classList.add('ai-only'); });
+        if (S.tab === 'tutor') go('today');
+      }
+      const tr = document.getElementById('b-tr'); if (tr && /Translate the question/.test(tr.textContent)) tr.textContent = 'Translate the Hebrew (hint)';
+      const mm = document.getElementById('mm-card');
+      if (mm && !mm.dataset.fx) {
+        mm.dataset.fx = '1'; const h = mm.querySelector('h3'); if (h) h.textContent = 'Practice final in the older format (Nov 3)';
+        const p = mm.querySelector('h3 + p'); if (p) p.insertAdjacentHTML('afterbegin', '<b>Not the professor’s format.</b> This was built before he announced the final on Nov 17. For the real format use Final rescue → Final simulations. ');
+        const g = document.getElementById('fx-go'); if (g) g.textContent = 'Start the older practice final';
+      }
+      const cm = document.getElementById('cy-mock');
+      if (cm && !cm.dataset.fx) { const k = nextSim(); const n = cm.cloneNode(false); n.dataset.fx = '1'; n.textContent = `Final simulation ${simNo(k)} (${FS_MIN} min, the professor’s format)`; n.onclick = () => startFS(nextSim()); cm.replaceWith(n); }
+    } catch (e) { console.error(e); }
+  };
+  try { new MutationObserver(() => { if (!busy) { busy = true; requestAnimationFrame(touch); } }).observe(document.body, { childList: true, subtree: true }); } catch (e) { console.error(e); }
+  setTimeout(touch, 0);
+
+  // 4. Read tab: the line numbers printed on your story pages (the professor's quizzes and the final cite them).
+  const _rr = renderRead;
+  renderRead = async function () {
+    const r = await _rr.apply(this, arguments);
+    try {
+      if (S.tab !== 'read') return r;
+      const meta = (S.lib || []).find(d => d.id === RD.id); const ch = meta && meta.kind === 'story' && +meta.chapter;
+      if (!ch || !PLN_BRK[ch]) return r;
+      const box = document.getElementById('r-lines'); if (!box || box.dataset.pln) return r; box.dataset.pln = '1';
+      box.querySelectorAll('.ln[data-i] .no').forEach(s => { const n = +s.textContent; if (n) s.textContent = pln(ch, n); });
+      const c = box.parentElement && box.parentElement.querySelector('.small.muted'); if (c) c.textContent += ' · numbered as printed on your pages';
+    } catch (e) { console.error(e); }
+    return r;
+  };
+})();
+// ---------- Every practice question shows Hebrew + pronunciation first, then the English of the question (Nov 20 request) ----------
+// "What does X mean?" / "X means…" becomes מָה פֵּרוּשׁ X?; "strict translation of X" becomes תַּרְגּוּם מִלָּה בְּמִלָּה; the other grammar
+// questions (mostly "why…?") get a Hebrew heading with the course term they ask about, above the English question.
+const QH_TOPIC = [
+  [/strict translation/i, 'תַּרְגּוּם מִלָּה בְּמִלָּה', 'word-for-word translation'],
+  [/which word is (?:the )?construct|construct \(/i, 'מָה הַנִּסְמָךְ?', 'Which word is the construct?'],
+  [/dagesh|the dot in/i, 'שְׁאֵלָה עַל הַדָּגֵשׁ', 'a question about the dagesh'],
+  [/\broot\b/i, 'שְׁאֵלָה עַל הַשֹּׁרֶשׁ', 'a question about the root'],
+  [/binyan|\bstem\b|\bpiel\b|\bhiphil\b|\bniphal\b|\bhithpael\b|\bpual\b|\bhophal\b/i, 'שְׁאֵלָה עַל הַבִּנְיָן', 'a question about the stem'],
+  [/ending|suffix/i, 'שְׁאֵלָה עַל הַסִּיּוֹמֶת', 'a question about the ending'],
+  [/prefix/i, 'שְׁאֵלָה עַל הַתְּחִלִּית', 'a question about the prefix'],
+  [/person|gender|plural|singular|\bwho does\b/i, 'שְׁאֵלָה עַל הַגּוּף, הַמִּגְדָּר וְהַמִּסְפָּר', 'a question about person, gender and number'],
+  [/wayyiqtol|weqatal|qatal|yiqtol|imperative|infinitive|participle|jussive|cohortative|\bform\b/i, 'שְׁאֵלָה עַל הַנְּטִיָּה', 'a question about the form'],
+  [/vowel|qamets|patah|pataḥ|sheva|tsere|holem/i, 'שְׁאֵלָה עַל הַתְּנוּעָה', 'a question about the vowel'],
+  [/translat|in english/i, 'שְׁאֵלָה עַל הַתַּרְגּוּם', 'a question about the translation'],
+  [/sentence|clause|subject|object|verse|accent|atnach|maqqef|sof pasuq/i, 'שְׁאֵלָה עַל הַמִּשְׁפָּט', 'a question about the sentence'],
+];
+function qhFor(q) {
+  const t = String(q || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim(); if (!/[A-Za-z]{3,}/.test(t)) return null;
+  const heRun = s => { const m = String(s).replace(/\([^)]*\)/g, ' ').match(/[א-ת][֑-ׇא-ת־׳״\s]*[א-ת֑-ׇ]/g); return m && m.length === 1 ? m[0].trim() : null; };
+  let m = t.match(/^what does (.+?) mean(?: here)?\b/i) || t.match(/^(.+?) means\b/i) || t.match(/^what is the meaning of (.+?)\??$/i);
+  if (m && !/[A-Za-z]/.test(m[1].replace(/\([^)]*\)/g, '').replace(/\b(the word|the phrase|here)\b/gi, '')) ) { const x = heRun(m[1]); if (x) return { he: `מָה פֵּרוּשׁ ${x}?`, full: true }; }
+  for (const [re, he] of QH_TOPIC) if (re.test(t)) { if (he.endsWith('?')) return { he, full: false }; if (/^תַּרְגּוּם/.test(he)) { const x = heRun(t); return { he: x ? `${he}: ${x}` : he, full: false }; } return { he, full: false }; }
+  return { he: /^why\b/i.test(t) ? 'לָמָּה? שְׁאֵלַת דִּקְדּוּק' : 'שְׁאֵלַת דִּקְדּוּק', full: false };
+}
+function qhHead(he) { return `<div class="qtri qh" style="margin:0 0 6px"><div class="he" dir="rtl" lang="he" style="font-size:1.3rem;line-height:1.6">${esc(he)}</div><div style="font-size:.95rem">${PR(he).replace('class="pr"', 'class="pr pr-q"')}</div></div>`; }
+(function () {
+  const _di = drawItem;
+  drawItem = function () {
+    const r = _di.apply(this, arguments);
+    try {
+      const it = SES && SES.items[SES.i], v = $('#v-session'); if (!it || !v || it.kind !== 'mc' || isCompQ(it)) return r;
+      const qt = v.querySelector('.qbox .qtext'); if (!qt || qt.dataset.qh || qt.querySelector('.qtri')) return r;
+      const h = qhFor(qt.innerHTML); if (!h) return r; qt.dataset.qh = '1';
+      qt.insertAdjacentHTML('afterbegin', qhHead(h.he));
+      const b = $('#b-tr'); if (b) b.textContent = 'Translate the Hebrew (hint)';
+    } catch (e) { console.error(e); }
+    return r;
+  };
+  const _df = drawFlash;
+  drawFlash = function (it) {
+    const r = _df.apply(this, arguments);
+    try {
+      const v = $('#v-session'); if (!v || v.querySelector('.qh')) return r;
+      const b = [...v.querySelectorAll('p > b')].find(x => /[A-Za-z]{3,}/.test(x.textContent) && /\?|…|mean|why|which|what/i.test(x.textContent));
+      if (b) { const h = qhFor(b.innerHTML); if (h) b.parentElement.insertAdjacentHTML('beforebegin', `<div style="text-align:center">${qhHead(h.he)}</div>`); }
+    } catch (e) { console.error(e); }
+    return r;
+  };
+})();
+</script>
+<script>
+// ---------- Nov 21: the last terse explanations rewritten as plain prose (your request: explain like a professor, not with + and =) ----------
+const PB_PROSE = {
+  'הַשֹּׁמֵר': 'The הַ at the front is the article, and the holem after the first root letter (שֹׁ) is the Qal participle vowel. An article on a participle means “the one who…”: “the one who keeps”.',
+  'תִּרְדֹּף': 'The prefix תִּ with no ending can be either “she” or “you” (masculine singular); only the sentence tells you which, so both answers are accepted.',
+  'וַיַּעֲשׂוּ': 'Two weak letters meet in this root. ע is a guttural, so it takes a ḥaṭef-pataḥ instead of a silent shewa, and the final ה of עשׂה falls away before the ending וּ. The wayyiqtol וַיַּ with the ending וּ gives “and they did / made”.',
+  'נִתֵּן': 'The prefix נִ means “we”. The dot in תּ is the first נ of the root, which has assimilated into the ת: “we will give”. Do not read נִ as the Niphal sign here: the Niphal perfect would be נִתַּן, with pataḥ.',
+  'אָבוֹא': 'The prefix א means “I”. The root בוא is hollow: its middle ו shows up as the holem-vav (וֹ) between ב and א. “I will come / enter.”',
+  'וַתִּרְאִי': 'וַ with a doubled prefix marks the wayyiqtol. The prefix ת together with the ending ִי means “you” (feminine singular), and the final ה of ראה has dropped before that ending: “and you (f.) saw”.',
+  'לַיֹּשֵׁב': 'Three pieces. לְ “to” has absorbed the article, so it is read לַ: the pataḥ and the dot in יּ belong to the article. Then comes the participle יֹשֵׁב, with the holem after the first root letter: “to the one who sits / dwells”.',
+  'נַעֲשֶׂה': 'The prefix נ means “we”. Its vowel is pataḥ instead of ḥireq because the next letter, ע, is a guttural and prefers an a-vowel. The final ֶה is the normal ending of a III-ה imperfect: “we will do”.',
+  'רְאִיתִיו': 'Read it from the end. ־תִי on a perfect is the subject, “I”; the ו after it is an object ending, “him”. Together: “I saw him”. The ה of ראה turns into י before the endings.',
+  'בְּמוֹתוֹ': 'בְּ before an infinitive means “when”. מוֹת is the infinitive of the hollow root מות, and an ending on an infinitive is usually its subject, here “he”: “when he died”.',
+  'וְנָתַתָּ': 'וְ in front of a perfect makes a weqatal, “and you will give”. The ending תָּ means “you” (m. sg.). The last root letter נ has assimilated into the ת of the ending, which is why you see one doubled תּ instead of נְתָּ.',
+  'שְׁמָרַנִי': 'The base is the perfect 3ms שָׁמַר, “he kept”. The ending נִי is the object “me”, joined by an a-vowel (the pataḥ under ר). So: “he kept me”.',
+  'הֶעֱלָה': 'The ה at the front is the Hiphil sign. Because the first root letter ע is a guttural, the prefix vowel becomes segol (הֶ) and the ע takes ḥaṭef-segol. The ending ָה is the usual end of a III-ה perfect 3ms: “he brought up”.',
+  'דִּבֶּר': 'Ḥireq under the first root letter and the middle letter ב doubled: the Piel perfect 3ms. The last vowel is segol here instead of tsere, as in a few common Piel verbs: “he spoke”.',
+  'הַקְהֵל': 'The ה with pataḥ looks like the article, but it is not: the article would double the next letter, and here ק has a shewa and no dot. The shape הַ, then a silent shewa, then tsere, is the Hiphil imperative (the course calls it the Ha-phel shape): “assemble the people!”.',
+  'לַמְּדִי': 'Pataḥ under the first root letter and the middle letter מ doubled: the Piel imperative (the course calls it the Pa-el shape). The ending ִי means you are speaking to a woman: “teach!”.',
+  'יְלַמֵּד': 'The prefix י means “he”. In the Piel the prefix has a shewa (יְ), the first root letter has pataḥ, and the middle letter is doubled (מּ): “he will teach”.',
+  'וְהֵסִיר': 'סור is a hollow root, so in the Hiphil the ה takes tsere (הֵ) and the ִי sits between the two remaining root letters, as in the perfect הֵסִיר. With וְ in front, the perfect becomes a weqatal: “and he will remove”.',
+  'יָרֵאנוּ': 'ירא is a stative verb, so its perfect has an e-vowel (tsere) under the second root letter instead of pataḥ. The ending נוּ is “we”: “we feared”.',
+  'גִּלָּה': 'Ḥireq under the first root letter and the ל doubled: the Piel perfect. The root is III-ה, so the perfect 3ms ends in ָה: “he disclosed / uncovered”.',
+  'נִשְׁמַעְתִּי': 'From the class slides. נִ at the front with a silent shewa after the first root letter is the Ni-phal shape, used for the perfect. The ending תִּי is “I”: “I was heard”.',
+  'נִלְקָחִים': 'From the class slides. The Ni-phal shape (נִ + silent shewa), here a participle: qamets under the middle root letter and the plural ending ִים, “(those) being taken”.',
+  'לְהִמָּצֵא': 'From the class slides. לְ “to” and then the Hippael shape: הִ, the first root letter doubled (the נ of the Niphal has assimilated into the מ), and tsere: “to be found”.',
+  'תִּשָּׁמֵר': 'From the class slides. The doubled first root letter (שּׁ) right after the prefix is the Niphal sign in the imperfect. The prefix ת with no ending means “she” or “you” (m. sg.): “she / you will be kept”.',
+  'הַנִּשְׁמָעָה': 'From the class slides. הַ is the article (it doubles the נ). Then comes the Niphal participle נִשְׁמָע with the feminine ending ָה: “the one (f.) that is heard”.',
+  'וְנִכְתְּבוּ': 'From the class slides. וְ in front of the Niphal perfect נִכְתְּבוּ makes a weqatal, and the ending וּ on a perfect is “they”: “and they will be written”.',
+  'בְּהִשָּׁמַע': 'From the class slides. בְּ before an infinitive means “when”. הִשָּׁמַע is the Niphal infinitive (הִ + the first root letter doubled): “when (it) is heard”. The final ע pulls the last vowel to pataḥ.',
+  'אֶכָּתֵב': 'From the class slides. The prefix א means “I”, and the doubled first root letter (כּ) is the Niphal sign in the imperfect: “I will be written”.',
+  'מַזְרִיעַ': 'From the class slides. מַ with pataḥ at the front and ִי between the second and third root letters: the Hiphil participle, “producing seed”. The small pataḥ under the final ע is read before it (a furtive pataḥ).',
+  'נִרְאוּ': 'From the class slides. נִ with a silent shewa is the Ni-phal shape of the perfect. ראה is a III-ה root, so its ה drops before the ending וּ “they”: “they appeared / were seen”.',
+  'תִּכָּרְתִי': 'From the class slides. The prefix ת together with the ending ִי means “you” (f. sg.), and the doubled first root letter כּ is the Niphal sign: “you (f.) will be cut off”.',
+  'וַיֵּרָא': 'From the class slides. The Niphal of ראה means “appear”. The first root letter ר cannot be doubled, so the prefix vowel lengthens from ḥireq to tsere (יֵ) to make up for it. Compare the Qal וַיַּרְא, “and he saw”.',
+  'הַנִּקְרָא': 'From the class slides. הַ is the article, and the dot in נּ is its doubling. נִקְרָא is the Niphal participle (qamets under the middle root letter): “the one who is called”.',
+  'הַנִּמְצָאוֹת': 'From the class slides. The article הַ, then the Niphal participle נִמְצָא with the feminine plural ending וֹת: “the ones (f.) that are found”.',
+  'וַיִּתְפַּלֵּל': 'From Ch. 24. וַיִּ is the wayyiqtol prefix (“and he”), then the תְ of the Hithpael, then the root with its middle letter doubled (לּ): “and he prayed”.',
+  'לְהִתְפַּלֵּל': 'From Ch. 24. לְ “to”, then the Hithpael shape: הִתְ and the root with its middle letter doubled. “To pray.”',
+  'וַיִּתְחַזֵּק': 'From Ch. 24. A Hithpael wayyiqtol: וַיִּ, then תְ, then the root with its middle letter doubled. The stems build on each other: Qal חָזַק “be strong”, Piel “strengthen”, Hithpael “strengthen oneself, take courage”.',
+  'וְהִתְקַדִּשְׁתֶּם': 'From Ch. 24. וְ in front of a Hithpael perfect makes a weqatal, and the ending תֶּם means “you” (m. pl.): “and you will consecrate yourselves”.',
+  'וָאֶתְחַנַּן': 'From Ch. 24. With the prefix א (“I”) the wayyiqtol וַ becomes וָ, because א cannot be doubled. Then the Hithpael תְ and the doubled middle letter: “and I pleaded for favor”.',
+  'הַמִּתְנַדְּבִים': 'From Ch. 24. הַ is the article (it doubles the מ), מִתְ is the Hithpael participle prefix, and ִים is the masculine plural: “those who give willingly”.',
+};
+const MC_PROSE = [
+  ['MCQ', 0, 'What does', 'Three pieces are joined in one word: וְ “and”, the article הַ “the” (it doubles the ס, which is why ס has a dot), and סוּס “horse”. So the word means “and the horse”.'],
+  ['MCQ', 7, 'Which form means', 'In the perfect, the person is written as an ending after the root. The ending תֶּם means “you” (masculine plural), so קְטַלְתֶּם is “you (m. pl.) killed”.'],
+  ['MCQ', 20, 'שְׁמָרוֹ', 'The base is the perfect שָׁמַר, “he kept”. The ending וֹ on a verb is the object, “him”. So the word means “he kept him” (in Spanish: «lo guardó»).'],
+  ['MCQ', 22, 'In שְׁמַרְתִּיו', 'A verb can carry two endings. The one right after the root is the subject: תִּי “I”. The one after that is the object: ו “him”. So שְׁמַרְתִּיו means “I kept him”.'],
+  ['MCQ', 25, 'בְּבֹאוֹ', 'בְּ in front of an infinitive means “when”. בֹּא is the infinitive of בוא “come”, and the ending וֹ on an infinitive is usually its subject, “he”. So: “when he came”.'],
+  ['MCQ', 46, 'מְדַבֵּר', 'Two signs work together: the prefix מְ (with shewa) marks a participle, and the doubled middle letter (בּ) marks the Piel. So מְדַבֵּר is a Piel participle, “speaking”.'],
+  ['MCQ', 63, 'שָׁמוֹר', 'The first word, שָׁמוֹר, is an infinitive absolute of the same root as the verb after it. Placed before its verb, it adds emphasis: “you must diligently keep”.'],
+  ['MCQ', 68, 'In וַיַּקְרֵב', 'The Hiphil ה only shows when nothing stands in front of it (הִקְרִיב). Once a prefix like יַ comes in, the ה drops out and the prefix takes its a-vowel: יַקְרִיב. In the wayyiqtol the last vowel also shortens: וַיַּקְרֵב. Learn the three as one family.'],
+  ['MCQ', 80, 'Which one encodes', 'Only a finite verb (perfect, imperfect, wayyiqtol, imperative) says who does the action. A participle shows only gender and number, like an adjective; an infinitive shows none of the three.'],
+  ['MCQ', 91, 'אֵת כָּל', 'הַכָּתוּב is a passive participle with the article. Qamets under the first root letter and וּ before the last one mark the Qal passive participle, “written”; with הַ it means “that which is written”.'],
+  ['MCQ', 103, 'Which visible sign', 'The Hithpael has its own prefix, הִתְ (in other forms יִתְ, מִתְ), and it doubles the middle root letter, as the Piel does. Compare the others: נִ or a doubled first letter means Niphal; הִ with ִי before the last letter means Hiphil; מְ with a doubled middle letter is a Piel participle.'],
+  ['MCQ', 107, 'וַיִּשְׁתַּחוּ or', 'In וַיִּשְׁתַּחֲווּ the root’s ו is still there and the plural ending וּ follows it: “and they bowed down” (3mp). In וַיִּשְׁתַּחוּ the final וּ is only the root’s ו, with no ending after it, so it means “and he bowed down” (3ms).'],
+  ['DAGESH_MC', 0, 'In מִפֶּתַח', 'The preposition מִן “from” loses its נ before a noun: the נ assimilates into the next letter, which is then doubled. So מִן with פֶּתַח becomes מִפֶּתַח, and the dot in פּ is a doubling dot (dagesh forte), not a Piel sign.'],
+  ['DAGESH_MC', 4, 'In הַמֶּלֶךְ', 'The article is הַ plus a doubling of the next letter. In הַמֶּלֶךְ the dot in מּ is that doubling (dagesh forte): it belongs to the article, not to the root.'],
+  ['DAGESH_MC', 6, 'In בְּשָׂרוֹ', 'The dot on this letter only tells you how to read it. A dot on the right (שׁ) is “sh”; a dot on the left (שׂ) is “s”. So בְּשָׂרוֹ is read be-sa-RO.'],
+  ['DAGESH_MC', 7, 'בּ with a dot', 'בּ with a dot is “b”; ב without a dot is “v”. So בָּנָיו is read ba-NAV, while in בְּגָדָיו (be-ga-DAV) the ג and the ד have no dot and are soft.'],
+  ['BINYAN_MC', 7, 'In בְּהַקְרִיבָם', 'Take the word apart from both ends. בְּ in front means “when”; ־ָם at the end is “they” (on an infinitive the ending is the subject). What is left, הַקְרִיב, is the verb: a Hiphil infinitive, “bringing near”. Together: “when they brought (it) near”.'],
+  ['PART_MC', 2, 'וְאַל־יָבֹא', 'אַל is the “do not” of commands and wishes, used with a short (jussive) form of the verb. So וְאַל־יָבֹא is a negative command: “and let him not come”.'],
+  ['PART_MC', 6, 'עַד מָתַי', 'Read the two words one at a time: עַד means “until” and מָתַי means “when?”. Together, עַד מָתַי asks “until when?”, that is, “how long?”.'],
+  ['PART_MC', 7, 'In אֶת־אַהֲרֹן', 'אֶת־ in front of a definite object is the object marker and is not translated. But אִתּוֹ, with a doubled ת, is the preposition “with” plus the ending וֹ: “with him”. So the word for “with” is אִתּוֹ.'],
+  ['SUFFIX_ROLE', 0, 'In בְּבֹאֲכֶם', 'בְּ in front of an infinitive means “when”, and an ending on an infinitive usually tells you who does the action. So ־כֶם here is the subject, “you (m. pl.)”: בְּבֹאֲכֶם means “when you come”.'],
+  ['SUFFIX_ROLE', 2, 'In בְּשָׂרוֹ the ending', 'The ending וֹ is translated according to the word it is attached to. On a noun it means “his” (בְּשָׂרוֹ “his flesh”). On the object marker אֹת it means “him” or “it” (אֹתוֹ). On אִתּ־ “with” it gives “with him” (אִתּוֹ).'],
+  ['PATTERNS', 1, 'וּשְׁנֵי', 'The word שְׁנֵי starts with a shewa, and Hebrew does not allow two shewas at the start of a word. So וְ becomes וּ before it: וּשְׁנֵי. (The other rule for וּ is BuMP: before ב, מ or פ.)'],
+  ['PATTERNS', 2, 'How do you recognize the article', 'The article is הַ plus a doubling dot in the next letter: in הַשֹּׁפְטִים the שׁ carries that dot. Before a guttural (א, ע, ה, ח) or ר the doubling cannot be written, so the article’s vowel changes instead: הָאִישׁ, הָעִיר.'],
+  ['PATTERNS', 4, 'What two signs', 'A wayyiqtol shows two signs together: וַ with pataḥ, and a doubled prefix letter right after it (יּ, תּ, נּ). With the prefix א (“I”) the doubling cannot be written, so וַ lengthens to וָ: וָאֶ… When the prefix י has a shewa the dot usually drops (וַיְהִי, וַיְדַבֵּר); the וַ and the story still show it.'],
+  ['PATTERNS', 6, 'וְהָלַכְתִּי', 'A וְ in front of a perfect (a weqatal) carries on a line of future events or instructions: “and I will go”. The past story line uses the wayyiqtol instead (וַ + prefix).'],
+  ['PATTERNS', 7, 'How do you tell a weqatal', 'Look at where the person is written. If it is an ending after the root, it is a weqatal (וְ with a perfect). If it is a prefix before the root, it is a wayyiqtol (וַ with a doubled prefix).'],
+  ['PATTERNS', 9, 'Piel has two shapes', 'The Piel has two shapes. With ḥireq under the first letter, קִטֵּל, it is the perfect (and the weqatal). With pataḥ, קַטֵּל, it is everything else: the imperfect יְדַבֵּר, the wayyiqtol וַיְדַבֵּר, the infinitive לְדַבֵּר, the participle מְדַבֵּר.'],
+  ['PATTERNS', 26, 'וַיֵּלֶךְ', 'In the Qal prefix forms of I-י roots (and of הלך) the first root letter disappears and the prefix takes tsere: יָשַׁב becomes יֵשֵׁב and וַיֵּשֶׁב; הָלַךְ becomes יֵלֵךְ and וַיֵּלֶךְ. A prefix with tsere and only two root letters left is the sign.'],
+  ['PATTERNS', 27, 'הוֹשִׁיעַ', 'Most I-י roots were originally I-ו. In the Hiphil and the Niphal that old ו comes back as וֹ right after the prefix: יצא gives הוֹצִיא, ילד gives נוֹלַד. In the Niphal imperfect it is even doubled: יִוָּלֵד.'],
+  ['PATTERNS', 29, 'וַתָּקָם', 'In hollow verbs the middle root letter (ו or י) often disappears from the written form. So וַתָּקָם comes from קום and וַתָּשָׁב from שׁוב. The prefix ת is “she” here, and וַ marks the past story line: “and she arose”, “and she returned”.'],
+  ['PATTERNS', 40, 'יִפְקְדֵנִי', 'The prefix tells you who acts: י is “he”. A pronoun ending on a verb is its object: נִי is “me”. So in יִפְקְדֵנִי “he will miss me”, he is the subject and I am the object.'],
+  ['PATTERNS', 42, 'הַמִּדְבָּרָה', 'The ending ־ָה has three different jobs. On a noun or a place name it means direction, “to” (הַמִּדְבָּרָה “to the wilderness”). On a perfect it means “she” (3fs). On a first-person imperfect it means “let me / let us” (the cohortative, אֶשְׁמְרָה).'],
+  ['PATTERNS', 43, 'אֶשְׁמְרָה', 'The ending ־ָה on a first-person imperfect (prefix א or נ) is the cohortative. It turns “I will keep” into a wish or a resolve: אֶשְׁמְרָה “let me keep”.'],
+  ['PATTERNS', 47, 'יָשֹׁב אֵשֵׁב', 'יָשֹׁב is an infinitive absolute: it has no person. Placed before a finite verb of the same root (אֵשֵׁב “I will stay”), it strengthens it: “I will surely stay”.'],
+  ['PATTERNS', 49, 'שְׁנֵי in', 'שְׁנֵי is the construct form of שְׁנַיִם “two”: “the two of his sons”. Do not confuse it with שָׁנִים “years” or with הַשֵּׁנִית “the second” (feminine).'],
+  ['PATTERNS', 51, 'Qal יָצָא', 'The Hiphil is usually the causative of the Qal: if the Qal יָצָא is “go out”, the Hiphil הוֹצִיא is “make go out”, that is, “bring out”.'],
+  ['ACC_MC', 2, 'What does ׃', 'The sof pasuq (׃) marks the end of the verse, like a full stop.'],
+  ['ACC_MC', 6, 'In עָלַיִךְ', 'The preposition עַל takes its endings with a י, as if it were plural; that י means nothing by itself. The ending ־ִךְ is “you” (one woman): “on you”. Compare עָלֶיךָ, “on you” said to a man.'],
+  ['ACC_MC', 7, 'אֵיךְ יִפֹּל', 'Literally it says “how a matter will fall”; as an idiom it means “how things will turn out”. יִפֹּל is the Qal imperfect 3ms of נפל: the first נ has merged into the פ, which is why פּ is doubled.'],
+];
+(function () {
+  try {
+    PARSE_BANK.forEach(x => { if (PB_PROSE[x[0]] && x[7]) x[7] = PB_PROSE[x[0]]; });
+    const plain = s => String(s || '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+    const banks = { MCQ, DAGESH_MC, BINYAN_MC, PART_MC, SUFFIX_ROLE, PATTERNS, ACC_MC };
+    MC_PROSE.forEach(([b, i, start, x]) => { const it = (banks[b] || [])[i]; if (it && plain(it.q).startsWith(start)) it.x = heWrap(esc(x)); });
+    // Practice "who does it" cards (built on the fly)
+    const PGN_PROSE = { 1: 'The prefix תָּ together with the ending וּ means “you” (masculine plural): פֶּן־תָּמֻתוּ “lest you all die”.', 2: 'וַיָּ is the wayyiqtol prefix for “he”, and the ending וּ makes it plural: “and they died”.', 6: 'The prefix תֵ together with the ending וּ means “you all”. The י of the root יצא has dropped (a I-י root), so only צ and א are left: “you shall not go out”.' };
+    const _w = wpMC;
+    wpMC = function (kind, i) { const it = _w.apply(this, arguments); if (kind === 'pgn' && it && PGN_PROSE[i]) it.x = heWrap(esc(PGN_PROSE[i])); return it; };
+  } catch (e) { console.error(e); }
+})();
+</script>
+<script>
 // Colour mode: dark (default), light, or the same as the computer. Remembered on this device.
 (function () {
   const order = ['dark', 'light', 'auto'], lab = { dark: '☾ Dark', light: '☀ Light', auto: '◐ Auto' };
@@ -9998,5 +10322,5 @@ const PX_PROSE = {
   const b = document.getElementById('btn-theme'); if (b) b.onclick = () => { t = order[(order.indexOf(t) + 1) % order.length]; try { localStorage.setItem('het-theme', t); } catch {} apply(); };
 })();
 </script>
-<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='5f15f0b4fb';</script>
+<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='c23a8a1ac1';</script>
 </body></html>
