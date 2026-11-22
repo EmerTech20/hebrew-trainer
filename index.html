@@ -4951,7 +4951,7 @@ async function startExam(type, paper) {
   EX = { ...ex, paper: !!paper, phase: paper ? 'print' : 'intro', ans: {}, ms: {}, cur: 0, elapsed: 0, interrupts: 0, writeMs: 0, entryMs: 0 };
   exSave(); renderExam();
 }
-function resumeExam() { if (EX && EX.phase !== 'done') { renderExam(); return true; } const d = lsGet('exam'); if (!d || d.phase === 'done') return false; EX = d; EX.interrupts = (EX.interrupts || 0) + 1; if (EX.segStart && (EX.phase === 'taking' || EX.phase === 'writing')) (EX.gaps = EX.gaps || []).push([EX.seen || EX.segStart, Date.now()]); else EX.segStart = null; exSave(); renderExam(); return true; }
+function resumeExam() { if (EX && EX.phase !== 'done') { renderExam(); return true; } const d = lsGet('exam'); if (!d || d.phase === 'done') return false; EX = d; EX.interrupts = (EX.interrupts || 0) + 1; if (EX.segStart && (EX.phase === 'taking' || EX.phase === 'writing')) { const last = Math.max(EX.segStart, EX.seen || EX.segStart), now = Date.now(); if (now - last > 120000) { EX.elapsed = (EX.elapsed || 0) + (last - EX.segStart); EX.segStart = null; (EX.pauses = EX.pauses || []).push([last, now, 'away']); } else (EX.gaps = EX.gaps || []).push([last, now]); } else EX.segStart = null; exSave(); renderExam(); return true; }
 function exElapsed() { return (EX.elapsed || 0) + (EX.segStart ? Date.now() - EX.segStart : 0); }
 function exClockStart() { if (!EX.segStart) { EX.segStart = Date.now(); EX.startTs = EX.startTs || EX.segStart; } clearInterval(EX_TICK); EX_TICK = setInterval(exTick, 1000); }
 function exClockStop() { if (EX.segStart) { EX.elapsed = exElapsed(); EX.segStart = null; } clearInterval(EX_TICK); }
@@ -4999,6 +4999,7 @@ const exAnswered = (it, a) => !!a && (it.kind === 'mc' ? a.o != null : it.kind =
 function passageHTML() { return EX.passage ? `<details class="panel" open><summary>Passage: ${esc(EX.passage.ref)}${EX.type === 'final' ? '' : ' (unseen)'}</summary><div class="passage lines" style="--rsize:1.35rem;margin-top:8px">${EX.passage.verses.map((x, i) => `<div class="ln" style="cursor:default"><span class="no">${i + 1}</span><span>${esc(x.he)}</span></div>`).join('')}</div></details>` : ''; }
 function renderExam() {
   const v = $('#v-session'); showSection('v-session'); v.classList.add('exam');
+  if (EX.paused && typeof exRenderPaused === 'function') return exRenderPaused();
   const bp = BLUEPRINTS[EX.type];
   if (EX.phase === 'intro') {
     const cats = EX.items.reduce((m, x) => (m[x.cat] = (m[x.cat] || 0) + 1, m), {});
@@ -5022,7 +5023,7 @@ function renderExam() {
   v.innerHTML = `<div class="sess-head"><b>${esc(bp.name)}</b><div class="progress"><i style="width:${EX.items.filter((x, i) => exAnswered(x, EX.ans[i])).length / EX.items.length * 100}%"></i></div><b id="ex-clock" style="font-variant-numeric:tabular-nums">--:--</b></div>
     ${EX.passage && (/^(sim|fs\d|sp$)/.test(EX.type) ? ['comp', 'parse', 'translation', 'syntax'] : EX.type === 'mock' ? ['comp', 'parse', 'translation'] : ['comp']).includes(it.sec) ? passageHTML() : ''}
     <div class="panel qbox" style="max-width:760px;width:100%;margin:0 auto">${exItemHTML(it, a, EX.cur + 1)}
-      <div class="row" style="justify-content:space-between"><div class="row"><button class="btn" id="ex-prev" ${EX.cur ? '' : 'disabled'}>← Previous</button><button class="btn primary" id="ex-next">${EX.cur + 1 < EX.items.length ? 'Next →' : 'Review & submit'}</button></div><div class="row"><button class="btn sm" id="ex-flag">${(EX.flag || {})[EX.cur] ? '⚑ Marked for review' : '⚐ Mark for review'}</button><button class="btn ghost sm" id="ex-sub">Review &amp; submit</button></div></div>
+      <div class="row" style="justify-content:space-between"><div class="row"><button class="btn" id="ex-prev" ${EX.cur ? '' : 'disabled'}>← Previous</button><button class="btn primary" id="ex-next">${EX.cur + 1 < EX.items.length ? 'Next →' : 'Review & submit'}</button></div><div class="row"><button class="btn sm" id="ex-pause" title="Pause: the clock stops; your answers are saved">⏸ Pause</button><button class="btn sm" id="ex-flag">${(EX.flag || {})[EX.cur] ? '⚑ Marked for review' : '⚐ Mark for review'}</button><button class="btn ghost sm" id="ex-sub">Review &amp; submit</button></div></div>
       ${typeof exNavHTML === 'function' ? exNavHTML() : ''}</div>`;
   startTimer(it); exTick();
   wireExItem(v, it, a, exSave);
@@ -5032,6 +5033,7 @@ function renderExam() {
   $('#ex-sub').onclick = confirmSubmit;
   $$('[data-xi]', v).forEach(b => b.onclick = () => goTo(+b.dataset.xi));
   $$('[data-xs]', v).forEach(b => b.onclick = () => goTo(+b.dataset.xs));
+  $('#ex-pause').onclick = () => exPause();
   $('#ex-flag').onclick = () => { EX.flag = EX.flag || {}; EX.flag[EX.cur] = !EX.flag[EX.cur]; goTo(EX.cur); };
 }
 function confirmSubmit() {
@@ -5161,7 +5163,7 @@ async function finalizeExam(res) {
     total: all.total, sections: Object.fromEntries(Object.entries(all.sections).map(([k, o]) => [k, { n: o.n, acc: Math.round(o.acc * 1000) / 1000, answered: o.answered }])), completion: Math.round(all.completion * 1000) / 1000,
     indep: ind.total, nIndep: indItems.length, indepSections: Object.fromEntries(Object.entries(ind.sections).map(([k, o]) => [k, { n: o.n, acc: Math.round(o.acc * 1000) / 1000 }])),
     diff: indItems.length ? Math.round(indItems.reduce((s, x) => s + (x.diff || 1.5), 0) / indItems.length * 100) / 100 : null,
-    selfScored: items.filter(x => x.sc === 'self').length, aiScored: items.filter(x => x.sc === 'ai').length, estimated: items.filter(x => x.sc === 'est').length, toCheck: items.filter(x => x.chk).length, gaps: EX.gaps || [], scoring: { policy: typeof SCORING_V !== 'undefined' ? SCORING_V : 'v1', deduction: 'not applied (professor rule unconfirmed)', parse: 'six boxes; common gender = c' }, items };
+    selfScored: items.filter(x => x.sc === 'self').length, aiScored: items.filter(x => x.sc === 'ai').length, estimated: items.filter(x => x.sc === 'est').length, toCheck: items.filter(x => x.chk).length, gaps: EX.gaps || [], pauses: EX.pauses || [], ...(EX.retake ? { retake: 1 } : {}), ...(EX.contOf ? { contOf: EX.contOf, prevMs: EX.prevMs || 0 } : {}), scoring: { policy: typeof SCORING_V !== 'undefined' ? SCORING_V : 'v1', deduction: 'not applied (professor rule unconfirmed)', parse: 'six boxes; common gender = c' }, items };
   // Closing rules (cycle-v2): with no earlier test, a test is the baseline unless the week's checklist is already complete.
   // Later tests close the week only when the evidence checklist is complete and at least 75% of the test was answered; otherwise they are extra measurements.
   const cs = cycleState(rec.end - 1);
@@ -5344,7 +5346,7 @@ function cycleBannerHTML() {
   const nw = S.prog.flags && S.prog.flags.newWeek && S.weeks.find(w => w.id === S.prog.flags.newWeek);
   const ready = nw ? `<div class="banner"><p><b>Your ${esc(weekLabel(nw))} report is ready.</b> Independent score ${nw.metrics.independent ? nw.metrics.independent.score + '%' : '—'}, compared with earlier weeks, plus next week's plan and the reasons for it.</p><button class="btn primary" id="cy-report">Open the report</button></div>` : '';
   const draft = lsGet('exam');
-  if (draft && draft.phase && draft.phase !== 'done') return ready + `<div class="banner"><p><b>You have an unfinished ${esc(((BLUEPRINTS[draft.type] || {}).name || 'test').toLowerCase())}.</b> The clock kept running while you were away (as in a real exam); the interruption is recorded.</p><button class="btn primary" id="cy-resume">Resume</button></div>`;
+  if (draft && draft.phase && draft.phase !== 'done') return ready + `<div class="banner"><p><b>You have an unfinished ${esc(((BLUEPRINTS[draft.type] || {}).name || 'test').toLowerCase())}.</b> Your answers are saved. <b>The time you were away is not counted</b> (it is recorded as a pause).</p><button class="btn primary" id="cy-resume">Resume where I stopped</button></div>`;
   const c = cycleState(); const cov = c.cov;
   const done = cov.rows.filter(r => r.status === 'done').length, need = cov.rows.filter(r => r.status !== 'unavailable').length;
   const dots = [1, 2, 3, 4, 5, 6, 7].map(d => `<span class="cy-dot ${d === c.day ? 'on' : d < c.day ? 'past' : ''}" title="${esc(DAY_ROLE(d))}">${d === 6 ? '✎' : d === 7 ? '☾' : d}</span>`).join('');
@@ -7450,7 +7452,7 @@ function vxPreHTML(word, ex, meaning) {
   const fa = ex ? vxAnalyze(ex.form) : null;
   return `<div class="stack small" style="gap:6px;text-align:left;border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-top:8px">
     <div><b>Grammar:</b> ${g ? esc(g) : '<span class="muted">not found</span>'}${a && a.root ? ` · root ${H(esc(a.root))}` : ''}${a && a.lemma && fvKey(a.lemma) !== fvKey(word) ? ` · dictionary form ${H(esc(a.lemma))}` : ''}</div>
-    ${ex ? `<div><b>In a sentence</b> <span class="muted">(${esc(ex.ref)})</span><div class="he" dir="rtl" style="font-size:1.25rem;line-height:1.8">${vxHL(ex.he, ex.form)}</div>${fa && fvKey(ex.form) !== fvKey(word) ? `<div>Here: ${H(esc(ex.form))} = ${esc(vxGrammarOnly(fa.grammar))}</div>` : ''}</div>` : '<div class="muted">This word does not occur in Ruth or the other course passages.</div>'}
+    ${ex ? `<div><b>In a sentence</b> <span class="muted">(${esc(ex.ref)})</span><div class="he" dir="rtl" style="font-size:1.25rem;line-height:1.8">${vxHL(ex.he, ex.form)}</div>${fa && fvKey(ex.form) !== fvKey(word) ? `<div>Here: ${H(esc(ex.form))} = ${esc(vxGrammarOnly(fa.grammar))}</div>` : ''}</div>` : (typeof courseSrcHTML === 'function' ? courseSrcHTML(word) : '')}
   </div>`;
 }
 function vxPostHTML(word, meaning, ex) {
@@ -8845,7 +8847,7 @@ async function pxContext(front, en) {
     let h = _vp.apply(this, arguments);
     try {
       const I = vxInfo(word, meaning), a = I.a;
-      const extra = `${a && a.root ? `<div><b>Root letters:</b> ${H(esc([...String(a.root).replace(/[־\s-]/g, '')].join(' · ')))}${a.lemma && fvKey(a.lemma) !== fvKey(word) ? ` · dictionary form ${H(esc(a.lemma))}` : ''}</div>` : ''}${!a && I.g ? `<div><b>Parsing:</b> ${esc(I.g)}</div>` : ''}${ex ? '' : '<div class="muted">No sentence with this word in Ruth, the class stories (Ch. 14–22) or the course passages: it is a vocabulary-list word.</div>'}`;
+      const extra = `${a && a.root ? `<div><b>Root letters:</b> ${H(esc([...String(a.root).replace(/[־\s-]/g, '')].join(' · ')))}${a.lemma && fvKey(a.lemma) !== fvKey(word) ? ` · dictionary form ${H(esc(a.lemma))}` : ''}</div>` : ''}${!a && I.g ? `<div><b>Parsing:</b> ${esc(I.g)}</div>` : ''}${ex ? '' : (typeof courseSrcHTML === 'function' ? courseSrcHTML(word) : '')}`;
       h = h.replace(/<\/div>\s*$/, extra + '</div>');
     } catch (e) { console.error(e); }
     return h;
@@ -11131,15 +11133,15 @@ const VC_CTX = [
   ['Ruth 1:22', 'וְרוּת הַמּוֹאֲבִיָּה כַלָּתָהּ עִמָּהּ', 'כַלָּתָהּ', ['her daughter-in-law', 'she finished', 'she went', 'all of her'], 'כַּלָּה (doubled ל) = daughter-in-law + ָהּ “her”.'],
 ];
 function vcRecall(w) { return { kind: 'recall', key: 'vcx|' + w[0], cid: 'vcx:' + AN.hash(w[0]), he: w[0], gloss: w[1], extra: w[2], t: 'vocab', noVx: 1 }; }
-function vcContext(c) { return { kind: 'mc', key: 'vcc|' + c[0], t: 'vocab', q: `${esc(c[0])}: ${H(c[1])}${PRi(c[1])}<br>What does ${H(c[2])}${PRi(c[2])} mean here?`, o: c[3], a: 0, x: heWrap(esc(c[4])) }; }
+function vcContext(c) { const hq = `מָה פֵּרוּשׁ ${c[2]} כָּאן?`; return { kind: 'mc', key: 'vcc|' + c[0], t: 'vocab', q: `${esc(c[0])}: ${H(c[1])}${PRi(c[1])}<br>${H(hq)}${PRi(hq)}<div class="small muted">What does ${esc(c[2])} mean here?</div>`, o: c[3], a: 0, x: heWrap(esc(c[4])) }; }
 function startVocabContrast(o = {}) {
   const rec = VC_WORDS.map(vcRecall), ctx = VC_CTX.map(vcContext);
   const items = o.fresh ? [...shuffle(ctx), ...shuffle(rec)] : [...rec, ...ctx];
   startSession({ title: 'Vocabulary contrasts: same sound, different word', items, back: 'today', noVary: true, mode: 'practice', planBlock: o.planBlock, rescue: !!o.planBlock });
 }
 const P8_MC = [
-  { kind: 'mc', key: 'p8|7', t: 'terminology', q: `Prompt 7. What is the difference between ${H('בִּנְיָן')}${PRi('בִּנְיָן')} and ${H('נְטִיָּה')}${PRi('נְטִיָּה')}?`, o: ['בִּנְיָן = the stem (Qal, Niphal, Piel…); נְטִיָּה = the conjugation or form (qatal, yiqtol, imperative…)', 'בִּנְיָן = the root; נְטִיָּה = the stem', 'בִּנְיָן = person; נְטִיָּה = number', 'They are two names for the same thing'], a: 0, x: 'Two different boxes of the parse: בִּנְיָן “building” = stem; נְטִיָּה “inflection” = form.' },
-  { kind: 'mc', key: 'p8|8', t: 'derived_stems', q: 'Prompt 8. Why is a dot (dagesh) in the second root letter not by itself proof of Piel?', o: ['Pual and Hithpael double the second root letter too, so check the vowels and the prefix (Piel yiqtol = sheva, A, E: יְקַטֵּל; Pual = sheva, U, A: יְקֻטַּל; Hithpael has תְ: יִתְקַטֵּל)', 'Because that dot is always the article', 'Because Piel never doubles a letter', 'Because only the Niphal doubles a letter'], a: 0, x: 'Doubling of root 2 belongs to Piel, Pual and Hithpael. The vowels under root 1 and root 2, and the prefix, decide.' },
+  { kind: 'mc', key: 'p8|7', t: 'terminology', q: `${H('מָה הַהֶבְדֵּל בֵּין בִּנְיָן לִנְטִיָּה?')}${PRi('מָה הַהֶבְדֵּל בֵּין בִּנְיָן לִנְטִיָּה?')}<div class="small muted">Prompt 7. What is the difference between בִּנְיָן (stem) and נְטִיָּה (conjugation)?</div>`, o: ['בִּנְיָן = the stem (Qal, Niphal, Piel…); נְטִיָּה = the conjugation or form (qatal, yiqtol, imperative…)', 'בִּנְיָן = the root; נְטִיָּה = the stem', 'בִּנְיָן = person; נְטִיָּה = number', 'They are two names for the same thing'], a: 0, x: 'Two different boxes of the parse: בִּנְיָן “building” = stem; נְטִיָּה “inflection” = form.' },
+  { kind: 'mc', key: 'p8|8', t: 'derived_stems', q: `${H('הַאִם דָּגֵשׁ חָזָק בָּאוֹת הַשְּׁנִיָּה שֶׁל הַשֹּׁרֶשׁ מוֹכִיחַ פִּעֵל?')}${PRi('הַאִם דָּגֵשׁ חָזָק בָּאוֹת הַשְּׁנִיָּה שֶׁל הַשֹּׁרֶשׁ מוֹכִיחַ פִּעֵל?')}<div class="small muted">Prompt 8. Does a dagesh forte in the second root letter by itself prove Piel? Why not?</div>`, o: ['Pual and Hithpael double the second root letter too, so check the vowels and the prefix (Piel yiqtol = sheva, A, E: יְקַטֵּל; Pual = sheva, U, A: יְקֻטַּל; Hithpael has תְ: יִתְקַטֵּל)', 'Because that dot is always the article', 'Because Piel never doubles a letter', 'Because only the Niphal doubles a letter'], a: 0, x: 'Doubling of root 2 belongs to Piel, Pual and Hithpael. The vowels under root 1 and root 2, and the prefix, decide.' },
 ];
 function startEightPrompts() {
   const P = (form, root, stem, conj, pgn, gloss, note, alts) => ({ kind: 'parse', key: 'p8|' + form, form, root, stem, conj, pgn, gloss, note, ...(alts ? { alts } : {}), t: PB_STEM_TOPIC[stem] || stem, cat: 'review' });
@@ -11200,9 +11202,9 @@ function exOverviewHTML() {
 }
 function exPolicyHTML() {
   const fs = /^fs\d$/.test(EX.type);
-  return `<div class="note stack" style="gap:6px"><b>How this works (like the paper exam)</b>
+  return `${EX.contOf ? `<div class="note"><b>Finishing your earlier attempt.</b> Your submitted answers are filled in and the clock starts with the minutes you had left. You may change any answer. This is a new record, marked as practice (you have seen the corrections); your first result is kept as it was.</div>` : EX.retake ? '<div class="note"><b>Second attempt.</b> You have taken this paper before, so this counts as practice, not as an independent score. Your first result is kept.</div>' : ''}<div class="note stack" style="gap:6px"><b>How this works (like the paper exam)</b>
     <div>• Go back and forth freely: Previous / Next, the numbered buttons, or jump to a section. Skip anything and come back. Mark items with ⚐ to return to them. You can change any answer until you submit.</div>
-    <div>• The clock runs without stopping, also if you close the app or the phone sleeps (as in the real exam). A warning appears at 10 and 5 minutes. At 0 the test is submitted as it is.</div>
+    <div>• The clock runs while the test is open. If you must stop, press ⏸ Pause: the clock stops, your answers stay saved, and you resume exactly where you were. If the app is closed for more than 2 minutes, that time is not counted either. Pauses are recorded with the result. A warning appears at 10 and 5 minutes; at 0 the test is submitted as it is.</div>
     <div>• Nothing tells you right or wrong while the test is open: no hints, no answers, no colours for correctness.</div>
     <div>• After you submit: every item is graded and explained (also the correct ones and the blank ones). Parsing is graded by rule; your Hebrew answers, syntax answers and translations get an automatic estimate first, marked “to be checked”, and you can send them to Claude for the final grade. You never have to grade yourself.</div>
     ${fs ? `<div>• Points: parsing 32 · Ruth translation 30 · story questions in Hebrew 26 · Ruth syntax 12 = 100. Each item earns its share (parsing: six boxes; translation: meaning units). <b>The professor’s reported rule “one point off for a wrong or blank answer” is not applied</b>: how it works (from the item’s points or an extra penalty; per question or per box) is not confirmed. Ask him.</div>` : ''}
@@ -11368,6 +11370,8 @@ function gradingRequest(rec) {
   buildFS = async function (k) {
     const ex = await _bf.apply(this, arguments);
     try {
+      // Taken before: the items are no longer unseen; the new attempt is practice (its own record; the first one is kept).
+      if (fsResults(k).length) { ex.retake = 1; for (const it of ex.items || []) it.cat = 'review'; }
       for (const it of ex.items || []) {
         // Mock 5 A9: alone, the form can be 2ms or 3fs; the story context (“you”) is the target, both are accepted.
         if (k === 'fs9' && it.kind === 'parse' && it.root === 'מצא' && it.stem === 'niphal' && it.conj === 'yiqtol') it.pgn = '2ms|3fs';
@@ -11387,6 +11391,72 @@ function gradingRequest(rec) {
   simSkillsHTML = function () { const h = _sh.apply(this, arguments); return h ? h.replace('</h3>', '</h3><p class="small muted" style="margin:0">Answered items only: a blank item scores 0 points but says nothing about which skill is weak.</p>') : h; };
 })();
 
+// ===== Pause and resume a simulation (Nov 22 evening) =====
+function exPause() {
+  if (!EX || !(EX.phase === 'taking' || EX.phase === 'writing')) return;
+  try { exLeaveItem(); } catch { }
+  exClockStop(); EX.paused = Date.now(); (EX.pauses = EX.pauses || []).push([EX.paused, null, 'button']); exSave(); exRenderPaused();
+}
+function exRenderPaused() {
+  const v = $('#v-session'); showSection('v-session'); v.classList.add('exam'); clearInterval(EX_TICK);
+  const left = Math.max(0, Math.round((EX.limitMs - exElapsed()) / 60000)), done = EX.items.filter((x, i) => exAnswered(x, EX.ans[i])).length;
+  v.innerHTML = `<div class="panel stack" style="max-width:640px;margin:40px auto;text-align:center"><h2 style="margin:0">⏸ Paused</h2>
+    <p>${esc((BLUEPRINTS[EX.type] || {}).name || 'Simulation')} · ${done} of ${EX.items.length} items answered · <b>${left} minutes left</b>.</p>
+    <p class="small muted">The clock is stopped and your answers are saved on this device. You can close the app; when you open it again, choose “Resume where I stopped”. The pause is recorded with the result.</p>
+    <div class="row" style="justify-content:center"><button class="btn primary" id="ex-unpause">Continue the test</button><button class="btn ghost" id="ex-pleave">Leave (stay paused)</button></div></div>`;
+  $('#ex-unpause').onclick = () => { const p = (EX.pauses || []).slice(-1)[0]; if (p && p[1] == null) p[1] = Date.now(); EX.paused = null; exSave(); renderExam(); };
+  $('#ex-pleave').onclick = () => go('today');
+}
+(function () {
+  const _rv = renderExamReview;
+  renderExamReview = function (rec) {
+    const r = _rv.apply(this, arguments);
+    try { const P = (rec && rec.pauses) || []; if (P.length) { const min = Math.round(P.reduce((s, p) => s + ((p[1] || p[0]) - p[0]), 0) / 60000); const head = $('#v-session .panel'); if (head) head.insertAdjacentHTML('beforeend', `<div class="small muted">Paused ${P.length}× (${min} min away, not counted in the time).</div>`); } } catch (e) { console.error(e); }
+    return r;
+  };
+})();
+
+// ===== Finish a submitted simulation later, or take it again (Nov 22 evening) =====
+async function startFSFinish(k) {
+  const r = fsResults(k).slice(-1)[0]; if (!r) return startFS(k);
+  await fsStart(async () => { const ex = await buildFS(k); ex.contOf = r.id; return ex; }, 'the simulation');
+  if (!EX || EX.contOf !== r.id) return;
+  const byIid = {}; EX.items.forEach((it, i) => { if (it.iid) byIid[it.iid] = i; });
+  for (const x of r.items || []) { if (!x.answered) continue; const i = x.iid && byIid[x.iid] != null ? byIid[x.iid] : x.n - 1; if (!EX.items[i]) continue; const a = { ...(x.answer || {}) }; delete a._chg; EX.ans[i] = a; }
+  EX.elapsed = Math.max(0, Math.min(r.examMs || 0, EX.limitMs - 60000)); EX.prevMs = r.examMs || 0; exSave(); renderExam();
+}
+function fsLeftMin(r) { return r ? Math.max(0, Math.round(((r.limitMs || FS_MIN * 60000) - (r.examMs || 0)) / 60000)) : 0; }
+(function () {
+  const _fc = fsCardHTML;
+  fsCardHTML = function () {
+    let h = _fc.apply(this, arguments);
+    try { for (const k of FS_KEYS) { const r = fsResults(k).slice(-1)[0]; if (!r) continue; const left = fsLeftMin(r), open = (r.items || []).filter(x => !x.answered).length;
+      if (left >= 2 && open) h = h.replace(`data-fs="${k}">Take again</button>`, `data-fs="${k}">Take again</button><button class="btn primary" data-fsc="${k}" title="Your submitted answers filled in, with the minutes you had left">Finish it (${left} min left)</button>`); } } catch (e) { console.error(e); }
+    return h;
+  };
+  document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-fsc]'); if (b) { e.preventDefault(); startFSFinish(b.dataset.fsc); } });
+  const _rv = renderExamReview;
+  renderExamReview = function (rec) {
+    const r = _rv.apply(this, arguments);
+    try { if (rec && (rec.retake || rec.contOf)) { const head = $('#v-session .panel'); if (head) head.insertAdjacentHTML('afterbegin', `<div class="note small"><b>${rec.contOf ? 'Finished later' : 'Second attempt'}:</b> practice, not an independent score (the paper had been seen). The first attempt is kept as it was.</div>`); } } catch (e) { console.error(e); }
+    return r;
+  };
+})();
+
+// ===== Only class material (Emerson, Nov 22): say where each word comes from; drop what no class source has =====
+(function () {
+  const i = TERMS.findIndex(t => t[0] === 'תַּרְגּוּם'); if (i >= 0) TERMS.splice(i, 1); // not in any class handout
+})();
+function courseSrcHTML(word) {
+  const k = fvKey(word);
+  const QW = ['מִי', 'מָה', 'לָמָּה', 'מַדּוּעַ', 'אֵיפֹה', 'אָנָה', 'מֵאַיִן', 'מָתַי', 'כַּמָּה', 'אֵיךְ', 'לְמִי', 'עַד מָתַי'].map(fvKey);
+  if (fvKey('שְׁאֵלָה') === k) return '<div class="muted">From your professor’s handout <b>Classroom phrases</b> (הֲיֵשׁ לָכֶם שְׁאֵלָה?).</div>';
+  if (QW.includes(k)) return '<div class="muted">From your professor’s handout <b>Beginning Hebrew Interrogatives</b> (the question words of the exam).</div>';
+  if (TERMS.some(t => fvKey(t[0]) === k)) return '<div class="muted">From your professor’s handout <b>Grammatical terminology in Hebrew</b> (the terms used in exam and quiz questions).</div>';
+  if (VOCAB.some(v => fvKey(v.h) === k)) return '<div class="muted">From your professor’s <b>main vocabulary list</b> (“responsible for course/final exam”); no sentence with it in Ruth or the class stories.</div>';
+  return '<div class="muted">No sentence with this word in Ruth or the class stories.</div>';
+}
+
 </script>
 <script>
 // Colour mode: dark (default), light, or the same as the computer. Remembered on this device.
@@ -11398,5 +11468,5 @@ function gradingRequest(rec) {
   const b = document.getElementById('btn-theme'); if (b) b.onclick = () => { t = order[(order.indexOf(t) + 1) % order.length]; try { localStorage.setItem('het-theme', t); } catch {} apply(); };
 })();
 </script>
-<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='cc1f0d7662';</script>
+<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='d0b84f1b4a';</script>
 </body></html>
