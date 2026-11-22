@@ -9999,7 +9999,7 @@ const PX_PROSE = {
     readinessHTML = function () {
       let h = _rh.apply(this, arguments);
       h = h.replace(/Weighted like the final \([^)]*\)\./, 'Weighted like the professor’s final: parsing 32, Ruth translation 30, questions in Hebrew 26, syntax 12. The grammar questions here stand in for the syntax part.');
-      const sims = ['fs1', 'fs2', 'fs3'].flatMap((k, i) => fsResults(k).map(a => `Simulation ${i + 1} (${fmtDay(dayKey(new Date(a.end)))}): <b>${a.total}</b> / 100`));
+      const sims = FS_KEYS.flatMap((k, i) => fsResults(k).map(a => `Simulation ${i + 1} (${fmtDay(dayKey(new Date(a.end)))}): <b>${a.total}</b> / 100`));
       h = h.replace(/<p class="small muted">No timed final yet\.[^<]*<\/p>/, '');
       return h.replace(/<\/div>$/, `<p class="small"><b>Final simulations (the professor’s format):</b> ${sims.length ? sims.join(' · ') : 'none taken yet. They are in Final rescue → Final simulations.'}</p></div>`);
     };
@@ -10007,7 +10007,7 @@ const PX_PROSE = {
 
   // 2. The old "real format" final (built Nov 3, before the professor announced the format) is labelled as what it is,
   //    and the buttons that promised a "full final" open the next Final simulation instead.
-  const nextSim = () => { const ks = ['fs1', 'fs2', 'fs3']; const k = ks.find(k => !fsResults(k).length); if (k) return k; return ks.map(k => [k, fsResults(k).slice(-1)[0].end]).sort((a, b) => a[1] - b[1])[0][0]; };
+  const nextSim = () => { if (typeof fsNextSim === 'function') return fsNextSim(); const ks = ['fs1', 'fs2', 'fs3']; return ks.find(k => !fsResults(k).length) || 'fs1'; };
   const simNo = k => +k.slice(2);
   try {
     BLUEPRINTS.final.name = 'Practice final (older format, Nov 3)';
@@ -10318,6 +10318,79 @@ const MC_PROSE = [
 })();
 </script>
 <script>
+// ---------- Nov 21 (evening): more Final simulations, and Ruth translation blocks ----------
+// Simulation 4 is new (Ch. 16 + Ruth 1:7–12). Simulations 5–9 are the five GPT mock finals from the Drive (Nov 17), with their verbs,
+// their Hebrew questions and their syntax questions; the model answers were written from the class story texts.
+// The content lives only in the private update file (docs simdefs/fs4–fs9).
+const FS_MORE = ['fs4', 'fs5', 'fs6', 'fs7', 'fs8', 'fs9'];
+const FS_GPT = { fs5: 1, fs6: 2, fs7: 3, fs8: 4, fs9: 5 };
+FS_MORE.forEach(k => { if (!FS_KEYS.includes(k)) FS_KEYS.push(k); BLUEPRINTS[k] = { id: k, name: `Final simulation ${k.slice(2)} (professor’s format)`, minutes: () => FS_MIN, sections: FS_SECTIONS }; });
+Object.assign(PQ_SIM, { 16: 'fs4', 14: 'fs5', 15: 'fs6', 17: 'fs7', 18: 'fs8', 22: 'fs9' });
+const FS_NEED2 = 'Simulations 4–9 are not in the app yet: import hebrew-update-2026-11-21.json (Library → Add material).';
+const fsNextKeys = () => FS_KEYS.filter(k => !fsResults(k).length);
+const fsNextSim = () => { const u = fsNextKeys(); if (u.length) return u[0]; return FS_KEYS.map(k => [k, fsResults(k).slice(-1)[0].end]).sort((a, b) => a[1] - b[1])[0][0]; };
+(function () {
+  const _bf = buildFS;
+  buildFS = async function (k) { try { return await _bf.apply(this, arguments); } catch (e) { if (FS_MORE.includes(k)) throw new Error(FS_NEED2); throw e; } };
+})();
+
+// Ruth translation: six verses in a row, blind (strict, then smooth English), from parts of Ruth that no simulation uses.
+const RUTH6 = [[2, 14, 19], [3, 12, 17], [4, 17, 22], [1, 19, 22], [2, 20, 23], [4, 7, 10]];
+const r6Key = b => `Ruth ${b[0]}:${b[1]}–${b[2]}`;
+const r6Done = b => { try { return +(localStorage.getItem('het-r6|' + r6Key(b)) || 0); } catch { return 0; } };
+const r6Next = () => RUTH6.map((b, i) => [b, r6Done(b), i]).sort((x, y) => x[1] - y[1] || x[2] - y[2])[0][0];
+function startRuth6(b, o = {}) {
+  b = b || r6Next(); const [c, v1, v2] = b, verses = [];
+  for (let v = v1; v <= v2; v++) { const x = ruthVerse(c, v); if (x) verses.push({ ...x, he: typeof ruthProf === 'function' ? ruthProf(c, v, x.he) : x.he }); }
+  if (!verses.length) return flash('This part of Ruth is not in the app.');
+  try { localStorage.setItem('het-r6|' + r6Key(b), String(r6Done(b) + 1)); } catch { }
+  const items = exTranslate(verses).map(x => ({ ...x, cat: 'instructional' }));
+  startSession({ title: `Ruth translation, blind · ${r6Key(b)} (${verses.length} verses, like the final)`, items, passage: { ref: r6Key(b), lines: verses.map(x => `${x.v} ${x.he}`) }, back: S.tab === 'today' ? 'today' : 'rescue', noVary: true, mode: 'practice', planBlock: o.planBlock });
+}
+
+// The Final rescue card: all nine simulations.
+function fsCardHTML() {
+  const sub = k => { const n = +k.slice(2); return n <= 3 ? 'made by Claude' : n === 4 ? 'made by Claude (new, Nov 21)' : `GPT mock final ${FS_GPT[k]} (your Drive)`; };
+  const row = (k, i) => { const r = fsResults(k), last = r[r.length - 1]; return `<div class="step ${r.length ? 'done' : ''}"><span class="n">${r.length ? '✓' : i + 1}</span><div><b>Final simulation ${i + 1}</b> <span class="small muted">(${sub(k)}; story revealed when you start)</span><div class="small muted">${r.length ? `Taken ${r.length}× · first ${simPct(r[0])}%${r.length > 1 ? ` · last ${simPct(last)}%` : ''}` : 'not taken yet'}</div></div><button class="btn ${r.length ? '' : 'primary'}" data-fs="${k}">${r.length ? 'Take again' : 'Start'}</button></div>`; };
+  const sp = ch => { const r = spResults(ch), last = r[r.length - 1]; return `<button class="btn sm ${r.length ? '' : 'primary'}" data-sp="${ch}">Ch. ${ch}${r.length ? ` · ${simPct(last)}%` : ''}</button>`; };
+  const r6 = b => `<button class="btn sm ${r6Done(b) ? '' : 'primary'}" data-r6="${b.join(',')}">${r6Key(b)}${r6Done(b) ? ` · done ${r6Done(b)}×` : ''}</button>`;
+  return `<div class="panel stack" id="fs-card" style="border-color:var(--accent)"><div class="row" style="justify-content:space-between"><h2 style="margin:0">Final simulations · the professor’s format</h2><span class="small muted">${FS_MIN} min each</span></div>
+    <p class="small">What he announced on Nov 17: <b>one whole class story</b> (15 verbs to parse = 32 pts · 20 questions in Hebrew = 26 pts) + <b>5–6 verses of Ruth</b> (translation = 30 pts · syntax questions in English = 12 pts). No hints, open answers, rare Ruth words given. Nine papers, each with a different story or a different part of Ruth. Simulations 5–9 are the GPT mock finals (they have 6 syntax questions instead of 4; the points are the same).</p>
+    <div class="plan">${FS_KEYS.map(row).join('')}</div>
+    <div class="stack" style="gap:6px"><b>Ruth translation · 6 verses in a row, blind (30–40 min)</b><span class="small muted">The 30-point part of the final, on its own: strict first, then smooth English. These parts of Ruth are in no simulation.</span><div class="row" style="gap:6px">${RUTH6.map(r6).join('')}</div></div>
+    <div class="stack" style="gap:6px"><b>Story practice (60 min)</b><span class="small muted">A whole story: 15 of its verbs + its questions in Hebrew. Each of these stories is also in a simulation, so do the simulation first.</span><div class="row" style="gap:6px">${SP_CHS.map(sp).join('')}</div></div>
+    <details><summary class="small">Older practice finals (midterm format, before the Nov 17 announcement)</summary><div class="row" style="gap:6px;margin-top:6px">${Object.keys(SIM_DEF).map((k, i) => `<button class="btn sm" data-sim="${k}">Practice final ${i + 1}${simResults(k).length ? ` · ${simPct(simResults(k).slice(-1)[0])}%` : ''}</button>`).join('')}</div></details></div>`;
+}
+(function () {
+  const _rr = renderRescue;
+  renderRescue = function () { _rr.apply(this, arguments); $$('[data-r6]').forEach(b => b.onclick = () => startRuth6(b.dataset.r6.split(',').map(Number))); };
+  // The plan. Sat 21: translation for the rest of the day (your choice). Sun 22: three simulations, two more if you have the strength.
+  const _rb = rescueBlocks;
+  rescueBlocks = function () {
+    const B = _rb.apply(this, arguments), d = dayKey(); if (!B) return B;
+    const drop = ids => ids.forEach(id => { let j; while ((j = B.findIndex(b => b.id === id)) >= 0) B.splice(j, 1); });
+    const today = k => fsResults(k).some(a => dayKey(new Date(a.end)) === d);
+    const simBlk = (k, id, opt) => ({ id, min: FS_MIN, title: `Final simulation ${k.slice(2)} (${FS_MIN} min, the professor’s format)${opt ? ' — if you still have the strength' : ''}`, sub: 'Whole story: 15 parses + 20 questions in Hebrew. Ruth: 6 verses to translate + syntax questions. Paper lexicon allowed, phone away. Then look at the misses, especially the translation.', act: () => startFS(k), check: () => today(k) });
+    const r6Blk = (id, n) => ({ id, min: 35, title: `Ruth translation, blind: 6 verses in a row (${n})`, sub: 'Strict English first (Hebrew order), then smooth English. Then check each verb: who does it, and when.', act: () => startRuth6(null, { planBlock: id }), check: () => { try { return +(localStorage.getItem('het-r6day|' + d + '|' + id) || 0) > 0; } catch { return false; } } });
+    if (d === '2026-11-21') {
+      const had = FS_KEYS.filter(today); drop(['mock', 'mock2']);
+      const at = Math.min(1, B.length);
+      B.splice(at, 0, ...had.map((k, j) => simBlk(k, 'mock' + (j ? j + 1 : ''))), r6Blk('r6a', 'first block'), r6Blk('r6b', 'second block'));
+    }
+    if (d === '2026-11-22') {
+      drop(['mock', 'mock2', 'sp']);
+      const ks = [...FS_KEYS.filter(today), ...fsNextKeys().filter(k => !today(k))].slice(0, 5);
+      B.splice(Math.min(1, B.length), 0, ...ks.map((k, j) => simBlk(k, j ? 'mock' + (j + 1) : 'mock', j >= 3)));
+    }
+    if (typeof PQ_CHS !== 'undefined' && PQ_CHS.every(ch => pqWaits(ch))) drop(['pq']);
+    return B;
+  };
+  // A translation block counts as done once you start it from the plan.
+  const _sr = startRuth6;
+  startRuth6 = function (b, o = {}) { if (o.planBlock) { try { localStorage.setItem('het-r6day|' + dayKey() + '|' + o.planBlock, '1'); } catch { } } return _sr.apply(this, arguments); };
+})();
+</script>
+<script>
 // Colour mode: dark (default), light, or the same as the computer. Remembered on this device.
 (function () {
   const order = ['dark', 'light', 'auto'], lab = { dark: '☾ Dark', light: '☀ Light', auto: '◐ Auto' };
@@ -10327,5 +10400,5 @@ const MC_PROSE = [
   const b = document.getElementById('btn-theme'); if (b) b.onclick = () => { t = order[(order.indexOf(t) + 1) % order.length]; try { localStorage.setItem('het-theme', t); } catch {} apply(); };
 })();
 </script>
-<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='e5bbc67fc9';</script>
+<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='9190a138ff';</script>
 </body></html>
