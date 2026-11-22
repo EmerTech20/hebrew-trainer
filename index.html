@@ -10539,6 +10539,416 @@ function startSevenStem() {
 }
 </script>
 <script>
+// ---------- Nov 21 (night): the verb explainer — teaching HOW to reach the parse, not only the answer ----------
+// One engine for every verb the app explains (parse feedback in practice, pattern cards, the review after a test).
+// Built only from what is visible in the pointed word plus the item's own answer key; it never claims a sign that is not there.
+// Three levels: quick recognition (open), full explanation and advanced comparison (tap to open). Shown only after you answer.
+const XV_FIN = { 'ך': 'כ', 'ם': 'מ', 'ן': 'נ', 'ף': 'פ', 'ץ': 'צ' };
+const XV_GUT = 'אהחע', XV_GUTR = 'אהחער', XV_BGD = 'בגדכפת';
+// Vowel signs: Hebrew name (pointed), English name, sound, class.
+const XV_SIGN = {
+  'ְ': ['שְׁוָא', 'Sheva', '', 'sheva'], 'ֱ': ['חֲטַף סֶגּוֹל', 'Ḥaṭef segol', 'a very short “e”', 'E'], 'ֲ': ['חֲטַף פַּתָּח', 'Ḥaṭef pataḥ', 'a very short “a”', 'A'],
+  'ֳ': ['חֲטַף קָמָץ', 'Ḥaṭef qamets', 'a very short “o”', 'O'], 'ִ': ['חִירֶק', 'Ḥireq', '“i” as in “ski”', 'I'], 'ֵ': ['צֵירֵי', 'Tsere', '“e” as in “they”', 'E'],
+  'ֶ': ['סֶגּוֹל', 'Segol', '“e” as in “bed”', 'E'], 'ַ': ['פַּתָּח', 'Pataḥ', '“a” as in “father”', 'A'], 'ָ': ['קָמָץ', 'Qamets', '“a” as in “father”', 'A'],
+  'ֹ': ['חוֹלָם', 'Ḥolem', '“o” as in “go”', 'O'], 'ֺ': ['חוֹלָם', 'Ḥolem', '“o” as in “go”', 'O'], 'ֻ': ['קִבּוּץ', 'Qibbuts', '“u” as in “rule”', 'U'], 'ׇ': ['קָמָץ קָטָן', 'Qamets ḥaṭuf', 'a short “o”', 'O']
+};
+const XV_TERM = { root: ['שֹׁרֶשׁ', 'root'], stem: ['בִּנְיָן', 'stem'], conj: ['נְטִיָּה', 'conjugation'], p: ['גּוּף', 'person'], g: ['מִגְדָּר', 'gender'], n: ['מִסְפָּר', 'number'], pre: ['תְּחִלִּית', 'prefix'], suf: ['סִיּוֹמֶת', 'suffix'], vow: ['תְּנוּעָה', 'vowel'], dag: ['דָּגֵשׁ חָזָק', 'doubling dagesh'], dagq: ['דָּגֵשׁ קַל', 'hardening dagesh'] };
+const XV_STEMHE = { qal: 'קַל', niphal: 'נִפְעַל', piel: 'פִּעֵל', pual: 'פֻּעַל', hithpael: 'הִתְפַּעֵל', hiphil: 'הִפְעִיל', hophal: 'הָפְעַל' };
+const XV_STEMEN = { qal: 'Qal', niphal: 'Niphal', piel: 'Piel', pual: 'Pual', hithpael: 'Hithpael', hiphil: 'Hiphil', hophal: 'Hophal' };
+const XV_CONJHE = { qatal: ['קָטַל', 'qatal (perfect)'], weqatal: ['וְקָטַל', 'weqatal'], yiqtol: ['יִקְטֹל', 'yiqtol (imperfect)'], wayyiqtol: ['וַיִּקְטֹל', 'wayyiqtol'], weyiqtol: ['וְיִקְטֹל', 'weyiqtol'], impv: ['צִוּוּי', 'imperative'], inf: ['שֵׁם פֹּעַל', 'infinitive'], ptc: ['בֵּינוֹנִי', 'participle'] };
+const XV_P = { 1: ['רִאשׁוֹן', 'first'], 2: ['שֵׁנִי', 'second'], 3: ['שְׁלִישִׁי', 'third'] }, XV_G = { m: ['זָכָר', 'masculine'], f: ['נְקֵבָה', 'feminine'], c: ['זָכָר אוֹ נְקֵבָה', 'common (men or women)'] }, XV_N = { s: ['יָחִיד', 'singular'], p: ['רַבִּים', 'plural'] };
+const XV_WHO = { '1cs': 'I', '1cp': 'we', '2ms': 'you (one man)', '2fs': 'you (one woman)', '2mp': 'you (men)', '2fp': 'you (women)', '3ms': 'he', '3fs': 'she', '3mp': 'they (men)', '3fp': 'they (women)', '3cp': 'they', '2cp': 'you all', ms: 'masculine singular', fs: 'feminine singular', mp: 'masculine plural', fp: 'feminine plural' };
+// Regular strong-verb models (root ק־ט־ל) and the vowel classes they show: [prefix vowel, 1st root vowel, 2nd root vowel], d1/d2 = doubled 1st/2nd root letter.
+const XV_GRP = c => ({ wayyiqtol: 'yiqtol', weyiqtol: 'yiqtol', weqatal: 'qatal' }[c] || c);
+const XV_MOD = {
+  qal: { qatal: ['קָטַל', ['', 'A', 'A']], yiqtol: ['יִקְטֹל', ['I', 'sheva', 'O']], impv: ['קְטֹל', ['', 'sheva', 'O']], inf: ['קְטֹל', ['', 'sheva', 'O']], ptc: ['קֹטֵל', ['', 'O', 'E']] },
+  niphal: { qatal: ['נִקְטַל', ['I', 'sheva', 'A'], { pl: 'נ' }], yiqtol: ['יִקָּטֵל', ['I', 'A', 'E'], { d1: 1 }], impv: ['הִקָּטֵל', ['I', 'A', 'E'], { d1: 1, pl: 'ה' }], inf: ['הִקָּטֵל', ['I', 'A', 'E'], { d1: 1, pl: 'ה' }], ptc: ['נִקְטָל', ['I', 'sheva', 'A'], { pl: 'נ' }] },
+  piel: { qatal: ['קִטֵּל', ['', 'I', 'E'], { d2: 1 }], yiqtol: ['יְקַטֵּל', ['sheva', 'A', 'E'], { d2: 1 }], impv: ['קַטֵּל', ['', 'A', 'E'], { d2: 1 }], inf: ['קַטֵּל', ['', 'A', 'E'], { d2: 1 }], ptc: ['מְקַטֵּל', ['sheva', 'A', 'E'], { d2: 1, pl: 'מ' }] },
+  pual: { qatal: ['קֻטַּל', ['', 'U', 'A'], { d2: 1 }], yiqtol: ['יְקֻטַּל', ['sheva', 'U', 'A'], { d2: 1 }], ptc: ['מְקֻטָּל', ['sheva', 'U', 'A'], { d2: 1, pl: 'מ' }] },
+  hithpael: { qatal: ['הִתְקַטֵּל', ['I', 'A', 'E'], { d2: 1, pl: 'הת' }], yiqtol: ['יִתְקַטֵּל', ['I', 'A', 'E'], { d2: 1, pl: 'ת' }], impv: ['הִתְקַטֵּל', ['I', 'A', 'E'], { d2: 1, pl: 'הת' }], inf: ['הִתְקַטֵּל', ['I', 'A', 'E'], { d2: 1, pl: 'הת' }], ptc: ['מִתְקַטֵּל', ['I', 'A', 'E'], { d2: 1, pl: 'מת' }] },
+  hiphil: { qatal: ['הִקְטִיל', ['I', 'sheva', 'I'], { pl: 'ה', hi: 1 }], yiqtol: ['יַקְטִיל', ['A', 'sheva', 'I'], { hi: 1 }], impv: ['הַקְטֵל', ['A', 'sheva', 'E'], { pl: 'ה' }], inf: ['הַקְטִיל', ['A', 'sheva', 'I'], { pl: 'ה', hi: 1 }], ptc: ['מַקְטִיל', ['A', 'sheva', 'I'], { pl: 'מ', hi: 1 }] },
+  hophal: { qatal: ['הָקְטַל', ['O', 'sheva', 'A'], { pl: 'ה' }], yiqtol: ['יָקְטַל', ['O', 'sheva', 'A'] ], ptc: ['מָקְטָל', ['O', 'sheva', 'A'], { pl: 'מ' }] },
+};
+const XV_VNAME = { A: 'A', E: 'E', I: 'I', O: 'O', U: 'U', sheva: 'Sheva', '': '—' };
+// One rule per stem and form family, in plain words (regular strong roots; the weak-root note is added when it applies).
+const XV_RULE = {
+  qal: { qatal: 'Qal perfect: no letters added in front, an a-vowel under the first root letter and usually an a-vowel under the second (קָטַל). The person is in the ending.', yiqtol: 'Qal imperfect: a person prefix with ḥireq (יִ, תִּ, אֶ, נִ), the first root letter closed by a silent sheva, and an o-vowel (sometimes a) on the second root letter: יִקְטֹל. No doubling.', impv: 'Qal imperative: the imperfect without its prefix: a sheva under the first root letter and an o-vowel after the second (קְטֹל).', inf: 'Qal infinitive: like the imperative (קְטֹל), usually with לְ in front (לִקְטֹל); it has no person.', ptc: 'Qal participle: an o-vowel (ḥolem) after the first root letter and tsere after the second (קֹטֵל); no prefix letter.' },
+  niphal: { qatal: 'Niphal perfect: נִ in front of the root, a silent sheva under the first root letter, pataḥ under the second (נִקְטַל).', yiqtol: 'Niphal imperfect: the נ disappears into the first root letter, which is doubled; the prefix has ḥireq and the second root letter has tsere (יִקָּטֵל).', impv: 'Niphal imperative / infinitive: הִ in front and the first root letter doubled (הִקָּטֵל).', inf: 'Niphal infinitive: הִ in front and the first root letter doubled (הִקָּטֵל), often with לְ (לְהִקָּטֵל).', ptc: 'Niphal participle: נִ in front and qamets under the second root letter (נִקְטָל); the perfect has pataḥ there (נִקְטַל).' },
+  piel: { qatal: 'Piel perfect: ḥireq under the first root letter, the second root letter doubled, tsere (or segol / pataḥ) under it: קִטֵּל. No prefix.', yiqtol: 'Piel imperfect: a sheva under the person prefix, pataḥ under the first root letter, the second root letter doubled with tsere: יְקַטֵּל (Sheva – A – E).', impv: 'Piel imperative: pataḥ under the first root letter and the second doubled with tsere: קַטֵּל (no prefix).', inf: 'Piel infinitive: the same shape as the imperative, קַטֵּל, often with לְ (לְקַטֵּל).', ptc: 'Piel participle: מְ in front, then pataḥ and a doubled second root letter with tsere: מְקַטֵּל.' },
+  pual: { qatal: 'Pual perfect: a u-vowel (qibbuts) under the first root letter and the second root letter doubled with pataḥ: קֻטַּל.', yiqtol: 'Pual imperfect: sheva under the prefix, u-vowel under the first root letter, the second doubled with pataḥ: יְקֻטַּל (Sheva – U – A).', ptc: 'Pual participle: מְ + u-vowel + doubled second root letter + qamets: מְקֻטָּל.' },
+  hithpael: { qatal: 'Hithpael: the extra letters הִתְ in front and the second root letter doubled: הִתְקַטֵּל.', yiqtol: 'Hithpael imperfect: the person prefix + תְ, then the root with the second letter doubled: יִתְקַטֵּל.', impv: 'Hithpael imperative: הִתְ in front and the second root letter doubled: הִתְקַטֵּל.', inf: 'Hithpael infinitive: הִתְ in front and the second root letter doubled (הִתְקַטֵּל), often with לְ.', ptc: 'Hithpael participle: מִתְ in front and the second root letter doubled: מִתְקַטֵּל.' },
+  hiphil: { qatal: 'Hiphil perfect: ה with ḥireq in front (הִ), a silent sheva under the first root letter, and ִי (ḥireq-yod) before the last root letter: הִקְטִיל.', yiqtol: 'Hiphil imperfect: the ה disappears and the person prefix takes pataḥ (יַ, תַּ, נַ, אַ); sheva under the first root letter; ִי before the last root letter: יַקְטִיל. In the wayyiqtol the ִי usually shortens to tsere (וַיַּקְטֵל).', impv: 'Hiphil imperative: הַ in front and tsere before the last root letter: הַקְטֵל.', inf: 'Hiphil infinitive: הַ in front and ִי before the last root letter: הַקְטִיל, often with לְ (לְהַקְטִיל).', ptc: 'Hiphil participle: מַ in front and ִי before the last root letter: מַקְטִיל.' },
+  hophal: { qatal: 'Hophal perfect: ה with an o/u-vowel in front (הָ read “ho”, or הֻ) and pataḥ under the second root letter: הָקְטַל. Nothing is doubled.', yiqtol: 'Hophal imperfect: the person prefix with an o/u-vowel (יָ read “yo”, or יֻ) and pataḥ under the second root letter: יָקְטַל.', ptc: 'Hophal participle: מָ (read “mo”) or מֻ in front and qamets under the second root letter: מָקְטָל.' },
+};
+const XV_COMP = { qal: ['niphal', 'piel', 'hiphil'], niphal: ['qal', 'piel', 'hithpael'], piel: ['pual', 'hithpael', 'qal'], pual: ['piel', 'hophal'], hithpael: ['piel', 'niphal'], hiphil: ['qal', 'hophal'], hophal: ['hiphil', 'pual'] };
+
+// ---------- reading the word ----------
+function xvClusters(form) {
+  const s = String(form || '').normalize('NFD').replace(/[֑-ֽ֯׀׃׆]/g, ''), out = [];
+  for (const ch of s) { if (/[א-ת]/.test(ch)) out.push({ L: XV_FIN[ch] || ch, raw: ch, k: '', v: '', dag: false, sd: '' }); else if (out.length) { const c = out[out.length - 1]; c.k += ch; if (ch === 'ּ') c.dag = true; else if (ch === 'ׁ' || ch === 'ׂ') c.sd = ch; else if (XV_SIGN[ch] && !c.v) c.v = ch; } }
+  out.forEach((c, i) => { c.t = c.raw + c.k; c.i = i; });
+  return out;
+}
+const xvVN = c => { const s = XV_SIGN[c.v]; return c.hatuf ? 'O (Qamets ḥaṭuf)' : s[3] === 'sheva' ? 'Sheva' : `${s[3]} (${s[1]})`; };
+const xvCls = c => !c || !c.v ? '' : c.hatuf ? 'O' : XV_SIGN[c.v][3];
+function xvAnalyse(it) {
+  const stem = String(it.stem || '').split('|')[0], conj = it.conj, grp = XV_GRP(conj), pgn = String(it.pgn || '').split('|')[0];
+  const C = xvClusters(it.form), R = htRoot(it.root);
+  let at = htAlign(htClusters(it.form), R, it);
+  { const HC = htClusters(it.form), fr = new Set(htFront(HC, it)), alt = Array(R.length).fill(-1); let j = 0;
+    for (let r = 0; r < R.length; r++) { let k = j; while (k < HC.length && (fr.has(k) || HC[k].L !== R[r])) k++; if (k < HC.length) { alt[r] = k; j = k + 1; } }
+    const n = x => x.filter(i => i >= 0).length; if (n(alt) > n(at)) { alt.front = at.front; at = alt; } }
+  const roleOf = Array(C.length).fill(null); const note = Array(C.length).fill(null);
+  at.forEach((i, r) => { if (i >= 0 && C[i]) roleOf[i] = 'R' + (r + 1); });
+  const first = Math.min(...at.filter(i => i >= 0)), last = Math.max(...at.filter(i => i >= 0));
+  // A ו with ḥolem right before the 2nd root letter, when the 1st root letter (י/ו) is missing: that ו is the original first root letter (הוֹלִיד, יוֹצִיא).
+  if (at[0] < 0 && 'יו'.includes(R[0]) && at[1] > 0 && C[at[1] - 1] && C[at[1] - 1].L === 'ו' && /ֹ/.test(C[at[1] - 1].k)) { roleOf[at[1] - 1] = 'R1w'; }
+  // Letters in front of the root.
+  for (let i = 0; i < C.length && i < (first === Infinity ? C.length : first); i++) {
+    if (roleOf[i]) continue; const c = C[i], nx = C[i + 1];
+    if (i === 0 && c.L === 'ו') { roleOf[i] = conj === 'wayyiqtol' ? 'wayy' : 'waw'; continue; }
+    if (['yiqtol', 'wayyiqtol', 'weyiqtol'].includes(conj) && 'אתינ'.includes(c.L) && !roleOf.slice(0, i).some(r => r === 'pfx')) { roleOf[i] = 'pfx'; continue; }
+    if (c.L === 'ה' && ['ptc', 'inf'].includes(conj) && /[ֶַָ]/.test(c.k) && nx && (nx.dag || XV_GUTR.includes(nx.L)) && !(['hiphil', 'hophal', 'niphal', 'hithpael'].includes(stem) && conj === 'inf' && !roleOf.slice(0, i).includes('prep'))) { roleOf[i] = 'art'; continue; }
+    if (conj === 'inf' && 'לבכ'.includes(c.L) && !roleOf.slice(0, i).some(r => r === 'prep')) { roleOf[i] = 'prep'; continue; }
+    if (c.L === 'מ' && conj === 'ptc' && stem !== 'qal' && stem !== 'niphal') { roleOf[i] = 'stm'; continue; }
+    if (c.L === 'נ' && stem === 'niphal') { roleOf[i] = 'stm'; continue; }
+    if (c.L === 'ה' && ['hiphil', 'hophal', 'niphal', 'hithpael'].includes(stem)) { roleOf[i] = 'stm'; continue; }
+    if (c.L === 'ת' && stem === 'hithpael') { roleOf[i] = 'stm'; continue; }
+    roleOf[i] = 'front';
+  }
+  // Inside the root: vowel letters, the Hithpael ת after a sibilant.
+  for (let i = first + 1; i < last; i++) { if (roleOf[i]) continue; const c = C[i]; if (stem === 'hithpael' && c.L === 'ת') roleOf[i] = 'stm'; else if ('וי'.includes(c.L)) roleOf[i] = 'mater'; else roleOf[i] = 'in'; }
+  // After the root: the ending(s).
+  for (let i = last + 1; i < C.length; i++) roleOf[i] = 'end';
+  const tail = C.slice(last + 1).map(c => c.L).join('');
+  C.forEach((c, i) => { if (stem === 'hophal' && c.v === 'ָ' && ['pfx', 'stm'].includes(roleOf[i])) c.hatuf = true; });
+  const W = { C, R, at, roleOf, stem, conj, grp, pgn, first, last, tail, it };
+  W.d1 = at[0] >= 0 && C[at[0]].dag && at[0] > 0; W.d2 = at[1] >= 0 && C[at[1]].dag; W.r1 = at[0] >= 0 ? C[at[0]] : null; W.r2 = at[1] >= 0 ? C[at[1]] : null; W.r3 = at[2] >= 0 ? C[at[2]] : null;
+  const pf = C.findIndex((c, i) => roleOf[i] === 'pfx'); W.pf = pf >= 0 ? C[pf] : null;
+  const sm = C.filter((c, i) => roleOf[i] === 'stm'); W.stm = sm;
+  W.hi = W.r2 && C[at[1] + 1] && C[at[1] + 1].L === 'י' && roleOf[at[1] + 1] === 'mater' && /ִ/.test(W.r2.k);
+  W.weak = xvWeak(W);
+  W.dagWhy = xvDagesh(W);
+  W.obj = xvSuffix(W);
+  return W;
+}
+// What kind of root this is.
+function xvWeak(W) {
+  const R = W.R, out = []; if (R.length !== 3) return out;
+  if (R[0] === 'נ') out.push('I-נ'); if ('יו'.includes(R[0])) out.push('I-י'); if (XV_GUT.includes(R[0])) out.push('I-guttural');
+  if ('וי'.includes(R[1]) && R[2] !== 'ה') out.push('hollow'); if (XV_GUTR.includes(R[1])) out.push('II-guttural');
+  if (R[2] === 'ה') out.push('III-ה'); if (R[2] === 'א') out.push('III-א'); if ('חע'.includes(R[2])) out.push('III-guttural'); if (R[1] === R[2]) out.push('geminate');
+  if (R.join('') === 'לקח') out.push('לקח'); if (R.join('') === 'הלכ') out.push('הלך');
+  return out;
+}
+// Why each dagesh is there.
+function xvDagesh(W) {
+  const { C, roleOf, at, R, stem, conj } = W, out = {};
+  C.forEach((c, i) => {
+    if (!c.dag) return; if (c.L === 'ו' && !c.v && i > 0 && roleOf[i] !== 'R1' && roleOf[i] !== 'R2' && roleOf[i] !== 'R3') { out[i] = 'shureq'; return; }
+    const prev = C[i - 1], prevSilent = !prev || (prev.v === 'ְ' && !['waw', 'wayy'].includes(roleOf[i - 1]) && i - 1 !== 0) || !prev.v && !prev.dag;
+    if (roleOf[i] === 'pfx' && roleOf[i - 1] === 'wayy') { out[i] = 'wayy'; return; }
+    if (prev && roleOf[i - 1] === 'art') { out[i] = 'art'; return; }
+    if (roleOf[i] === 'R2' && ['piel', 'pual', 'hithpael'].includes(stem)) { out[i] = 'stem2'; return; }
+    if (roleOf[i] === 'R1' && stem === 'niphal' && i > 0 && !['qatal', 'weqatal', 'ptc'].includes(conj)) { out[i] = 'niph'; return; }
+    if (roleOf[i] === 'R2' && at[0] < 0 && (R[0] === 'נ' || R.join('') === 'לקח')) { out[i] = 'asmR1'; return; }
+    if (at[2] < 0 && R[2] === 'נ' && i > W.last) { out[i] = 'asmR3'; return; }
+    if (XV_BGD.includes(c.L) && (i === 0 || prevSilent)) { out[i] = 'lene'; return; }
+    if (roleOf[i] === 'R2' && R[1] === R[2]) { out[i] = 'gem'; return; }
+    out[i] = 'dbl';
+  });
+  return out;
+}
+// A pronoun suffix after the subject ending (object on a finite verb; usually the subject on an infinitive).
+const XV_OBJ = [['הוּ', 'him'], ['ֵהוּ', 'him'], ['נִי', 'me'], ['נוּ', 'us'], ['ךָ', 'you (m.)'], ['ךְ', 'you (f.)'], ['הָ', 'her'], ['הּ', 'her'], ['ם', 'them'], ['ן', 'them (f.)'], ['כֶם', 'you (pl.)'], ['ו', 'him']];
+function xvSuffix(W) {
+  const { C, last, conj, pgn, at } = W; if (last < 0 || last >= C.length - 1) return null;
+  const tailT = C.slice(last + 1).map(c => c.t).join(''), tailL = C.slice(last + 1).map(c => c.L).join('');
+  const exp = ['qatal', 'weqatal'].includes(conj) ? ({ '1cs': 'תי', '2ms': 'ת', '2fs': 'ת', '1cp': 'נו', '3cp': 'ו', '2mp': 'תמ', '2fp': 'תנ', '3fs': 'ה' }[pgn] || '') : ['yiqtol', 'wayyiqtol', 'weyiqtol', 'impv'].includes(conj) ? ({ '2fs': 'י', '2mp': 'ו', '3mp': 'ו', '2fp': 'נה', '3fp': 'נה' }[pgn] || '') : conj === 'ptc' ? ({ mp: 'ימ', fp: 'ות', fs: '' }[pgn] || '') : '';
+  // A III-ה root has no 3rd letter in many forms; its vowel ending is not a suffix.
+  if (W.R[2] === 'ה' && at[2] < 0 && !exp && /^(ה|י|ו|ית)$/.test(tailL)) return null;
+  if (W.R[2] === 'ה' && at[2] < 0 && exp === 'ו' && tailL === 'ו') return null;
+  let rest = tailL; if (exp && rest.startsWith(exp)) rest = rest.slice(exp.length); else if (exp === 'ה' && rest === '') rest = '';
+  if (['qatal', 'weqatal'].includes(conj) && pgn === '2ms' && tailL === 'תה') return null; // the long ending תָּה = תָּ
+  if (exp && !tailL.startsWith(exp)) { const o = xvObj(tailL, tailT, conj); if (o) { o.merged = exp; return o; } return null; }
+  if (!rest) return null;
+  return xvObj(rest, tailT, conj);
+}
+function xvObj(rest, tailT, conj) {
+  const m = { 'הו': 'him', 'ו': 'him / his', 'ני': 'me', 'נו': 'us', 'כ': 'you', 'ה': 'her', 'המ': 'them', 'מ': 'them', 'כמ': 'you (pl.)', 'נ': 'them (f.)' }[rest];
+  if (!m) return null;
+  return { letters: rest.split('').map(L => ({ 'כ': 'ך', 'מ': 'ם', 'נ': 'ן' }[L] && rest.endsWith(L) ? { 'כ': 'ך', 'מ': 'ם', 'נ': 'ן' }[L] : L)).join(''), en: m, subj: conj === 'inf' };
+}
+
+// ---------- describing each piece ----------
+function xvVowelInfo(W, i) {
+  const { C, roleOf, stem, grp } = W, c = C[i]; if (!c || !c.v) return null;
+  const s = XV_SIGN[c.v]; let sound = s[2], name = [s[0], s[1]];
+  if (c.hatuf) return { sign: c.t, name: ['קָמָץ קָטָן', 'Qamets ḥaṭuf'], sound: 'a short “o” here (a qamets before a silent sheva in the Hophal is read “o”)', cls: 'O', vl: '' };
+  const nx = C[i + 1];
+  // Qamets read "o": in Hophal the qamets of the prefix (before a silent sheva) is qamets ḥaṭuf.
+  if (c.v === 'ָ' && (roleOf[i] === 'pfx' || roleOf[i] === 'stm') && stem === 'hophal') { sound = 'a short “o” here (qamets ḥaṭuf: a qamets before a silent sheva is read “o”)'; name = ['קָמָץ קָטָן', 'Qamets ḥaṭuf']; }
+  if (c.v === 'ְ') { const pv = C[i - 1]; const longPrev = pv && pv.v && /[ֵֹֺ]/.test(pv.v) || pv && pv.v === 'ָ' && !(stem === 'hophal' && ['pfx', 'stm'].includes(roleOf[i - 1])) || pv && roleOf[i - 1] === 'mater'; const vocal = i === 0 || c.dag || (pv && pv.v === 'ְ' && i > 1) || longPrev; sound = vocal ? 'a very short “e” here (vocal sheva, like the “a” in “about”)' : 'silent here: it closes the syllable (no sound)'; }
+  const vl = nx && roleOf[i + 1] === 'mater' ? (nx.L === 'י' ? 'ִי / ֵי with yod: a long vowel' : '') : '';
+  return { sign: c.t, name, sound, cls: s[3], vl };
+}
+function xvVowelRole(W, i) {
+  const { C, roleOf, stem, grp, conj } = W, c = C[i], r = roleOf[i], M = (XV_MOD[stem] || {})[grp], exp = M ? M[1] : null;
+  const cls = xvCls(c), nm = XV_VNAME[cls] || cls;
+  const match = (slot) => exp && exp[slot] && (exp[slot] === cls || (exp[slot] === 'O' && /U/.test(cls)) || (exp[slot] === 'U' && /O/.test(cls)));
+  if (r === 'waw') return c.dag ? 'This וּ is the conjunction “and” written as a vowel (before ב, מ, פ or a sheva).' : 'The vowel of the conjunction וְ “and”.';
+  if (r === 'wayy') return 'Pataḥ (or qamets before א) on the ו, with the next letter doubled: the mark of the wayyiqtol (“and he did”).';
+  if (r === 'art') return 'The vowel of the article הַ “the”; it doubles the next letter.';
+  if (r === 'prep') return 'The vowel of the preposition in front of the infinitive.';
+  if (r === 'stm' && c.L === 'ת' && stem === 'hithpael') return 'The sheva under the ת of the Hithpael (הִתְ / יִתְ / מִתְ): part of the stem’s prefix.';
+  if (r === 'stm' && c.L === 'מ' && conj === 'ptc' && exp && match(0)) return `The vowel of the participle prefix מ: ${nm}, as in the regular ${XV_STEMEN[stem]} participle (${M[0]}).`;
+  if (r === 'pfx' || r === 'stm') {
+    if (!exp) return 'The vowel of the prefix.';
+    return match(0) ? `The prefix vowel ${nm} is the regular one for the ${XV_STEMEN[stem]} ${XV_CONJHE[conj][1]}.` : `The regular ${XV_STEMEN[stem]} pattern has ${XV_VNAME[exp[0]]} here; this word has ${nm}${xvWhyOff(W, 0)}.`;
+  }
+  if (r === 'R1' || r === 'R2') {
+    const slot = r === 'R1' ? 1 : 2; if (!exp) return `The vowel under the ${slot === 1 ? 'first' : 'second'} root letter.`;
+    if (match(slot)) return `${slot === 1 ? 'First' : 'Second'}-root-letter vowel ${nm}: the regular one for the ${XV_STEMEN[stem]} ${XV_CONJHE[conj][1]}${slot === 2 && cls !== 'sheva' ? ' (the “theme vowel”)' : ''}.`;
+    return `The regular pattern has ${XV_VNAME[exp[slot]]} under the ${slot === 1 ? 'first' : 'second'} root letter; this word has ${nm}${xvWhyOff(W, slot)}.`;
+  }
+  if (r === 'R1w') return 'The ḥolem on this ו: the first root letter (originally ו) has merged with the prefix vowel into “o”.';
+  if (r === 'R3') return 'The vowel under the last root letter (it belongs to the ending that follows).';
+  if (r === 'end') return 'Part of the ending.';
+  if (r === 'mater') return 'A vowel letter: it only lengthens the vowel before it.';
+  return '';
+}
+// Why a vowel differs from the regular pattern — only reasons that can be seen.
+function xvWhyOff(W, slot) {
+  const { R, C, at, conj, pgn, weak, stem } = W;
+  const endsVowel = ['וּ', 'ִי', 'ָה'].some(e => (W.it.form || '').normalize('NFC').replace(/[֑-ֽ֯]/g, '').endsWith(e)) && W.last < C.length - 1;
+  if (weak.includes('III-ה') && conj === 'wayyiqtol' && at[2] < 0) return ': this is the short wayyiqtol of a III-ה root (the final ה and its vowel have dropped), which changes the vowels before it';
+  if (slot === 2 && C[at[1]] && C[at[1]].v === 'ְ' && endsVowel) return ': before a vowel ending (וּ, ִי, ָה) the theme vowel shrinks to a sheva (vowel reduction)';
+  if (slot === 2 && ['qatal', 'weqatal'].includes(conj) && /^[12]/.test(pgn) && ['piel', 'hithpael', 'niphal', 'hiphil'].includes(stem)) return ': before a consonant ending (תִּי, תָּ, נוּ …) the theme vowel becomes pataḥ';
+  if (slot === 2 && XV_GUT.includes(R[2]) || slot === 2 && XV_GUT.includes(R[1])) return ': a guttural (א ה ח ע) nearby prefers an a-vowel';
+  if (slot === 1 && XV_GUT.includes(R[0])) return ': a guttural first root letter cannot take a silent sheva, so it takes a ḥaṭef vowel or pulls the prefix to an a/e-vowel';
+  if (slot === 0 && XV_GUT.includes(R[0])) return ': the guttural first root letter changes the prefix vowel';
+  if (slot === 0 && weak.includes('I-י')) return ': in I-י roots the prefix vowel lengthens (יֵ / וֹ) because the first root letter is weak';
+  if (slot === 0 && weak.includes('hollow')) return ': hollow roots have a long prefix vowel (qamets) because the middle root letter is missing';
+  if (slot === 0 && (weak.includes('I-נ') || weak.includes('לקח'))) return ': the first root letter is absorbed (the dot in the next letter), which can change the vowels around it';
+  if (slot === 2 && conj === 'wayyiqtol' && stem === 'hiphil') return ': in the wayyiqtol the Hiphil ִי shortens to tsere';
+  if (slot === 2 && R[1] === 'ר' || XV_GUTR.includes(R[1]) && ['piel', 'pual', 'hithpael'].includes(stem)) return ': the second root letter cannot be doubled, so the vowel before it is lengthened instead (compensatory lengthening)';
+  if (weak.includes('III-ה')) return ': the root ends in ה, which changes the end of the word';
+  if (weak.includes('hollow')) return ': the middle root letter is missing (hollow root)';
+  if (weak.includes('I-י')) return ': the first root letter is weak (I-י)';
+  return ' (a variation of the regular pattern; the other signs decide)';
+}
+const XV_ROLE_LAB = { R1: ['root', 'Root letter 1'], R2: ['root', 'Root letter 2'], R3: ['root', 'Root letter 3'], R1w: ['root', 'Root letter 1 (as ו)'], pfx: ['pgn', 'Person prefix'], stm: ['stem', 'Stem letter'], waw: ['conj', 'Conjunction “and”'], wayy: ['conj', 'Wayyiqtol וַ'], art: ['conj', 'Article “the”'], prep: ['conj', 'Preposition'], mater: ['stem', 'Vowel letter'], end: ['pgn', 'Ending'], in: ['root', ''], front: ['conj', ''] };
+const XV_DAGW = { stem2: 'doubled 2nd root letter (a stem marker)', niph: 'doubled 1st root letter: the Niphal נ absorbed', asmR1: 'the absorbed 1st root letter (not stem doubling)', asmR3: 'the absorbed last root letter נ', wayy: 'the wayyiqtol doubling of the prefix', art: 'the article’s doubling', lene: 'only a hardening dot (b, k, p … not doubling)', gem: 'the repeated root letter', dbl: 'doubling', shureq: '' };
+function xvPieceLabel(W, i) {
+  const r = W.roleOf[i] || 'front'; let [cat, lab] = XV_ROLE_LAB[r] || ['root', ''];
+  if (r === 'end' && W.obj && i >= W.C.length - W.obj.letters.length) { cat = 'suf'; lab = W.obj.subj ? 'Pronoun suffix (its subject)' : 'Object suffix'; }
+  const bits = [lab];
+  const d = W.dagWhy[i]; if (d && XV_DAGW[d]) bits.push(XV_DAGW[d]);
+  const c = W.C[i]; if (c.v) { const v = xvVowelInfo(W, i); bits.push(v.cls === 'sheva' ? 'sheva' : `${v.name[1]} (${XV_VNAME[v.cls] || v.cls})`); }
+  return { cat, txt: bits.filter(Boolean).join(' + ') };
+}
+
+// ---------- the three levels ----------
+function xvLex(W) {
+  const it = W.it, out = { base: '', stemMean: '', ctx: '' };
+  try {
+    const x = (typeof PARSE_EXTRA !== 'undefined' && PARSE_EXTRA[it.form]) || {};
+    if (x.base) out.base = x.base; if (x.sm) out.stemMean = x.sm;
+    const ci = courseIndex(), key = lexConsS(it.root), rs = (ci.byRoot && ci.byRoot.get(key)) || [];
+    const q = rs.find(e => !e.stem || /qal/i.test(e.stem)), s = rs.find(e => (e.stem || 'qal').toLowerCase() === W.stem);
+    if (!out.base && q) out.base = `${q.h} “${q.g}”`;
+    if (!out.stemMean && s && W.stem !== 'qal') out.stemMean = `${s.h} “${s.g}”`;
+  } catch (e) { }
+  if (lexCons(it.root) === 'קטל') { out.base = out.base || 'קָטַל “kill” (the class model verb)'; if (W.stem === 'piel' && !out.stemMean) out.stemMean = 'קִטֵּל “massacre” (the class gloss for the Piel model)'; }
+  out.ctx = it.gl || it.gloss || '';
+  if (!out.ctx) { try { const a = analyzeWord(it.form); if (a && a.meaning && !/^probably|root meaning|subject:| \+ /.test(a.meaning)) out.ctx = a.meaning; } catch (e) { } }
+  return out;
+}
+function xvPgnText(W) {
+  const { conj, pgn, it } = W; const alts = String(it.pgn || '').split('|').filter(Boolean);
+  if (conj === 'inf') return 'An infinitive has no person, gender or number of its own (שֵׁם פֹּעַל): leave all three empty.' + (W.obj ? ` The ending ${W.obj.letters} is a pronoun: on an infinitive it usually tells who does the action (“${W.obj.en}”).` : '');
+  if (conj === 'ptc') { const e = { ms: 'no ending = masculine singular', fs: 'the ending ָה or ֶת = feminine singular', mp: 'the ending ִים = masculine plural', fp: 'the ending וֹת = feminine plural' }[pgn.replace(/^[123]/, '')] || ''; return `A participle (בֵּינוֹנִי) is a verbal adjective: it has gender and number like an adjective, but no person. Here ${e}.`; }
+  const x = alts.map(a => { const P = parsePGN(a); return `${XV_P[P.p] ? XV_P[P.p][1] : ''} person, ${XV_G[P.g] ? XV_G[P.g][1] : ''}, ${XV_N[P.n] ? XV_N[P.n][1] : ''} — “${XV_WHO[a] || a}”`; });
+  let ev = '';
+  try { ev = [htPgnLine(it, 'p'), htPgnLine(it, 'n')].filter(Boolean).join(' '); } catch (e) { }
+  const amb = alts.length > 1 || (['yiqtol', 'wayyiqtol', 'weyiqtol'].includes(conj) && ['2ms', '3fs'].includes(pgn)) ? ' The same form can be “you (one man)” or “she” (תִּקְטֹל): without context both are possible; the sentence decides.' : '';
+  return `${x.join(' <i>or</i> ')}. ${ev}${amb}${W.obj ? ` The ending ${W.obj.letters} after it is not the subject: it is an object pronoun, “${W.obj.en}”.${W.obj.merged ? ` Before this pronoun the plural ending וּ is not written separately: it survives as the u-vowel (qibbuts) on the last root letter.` : ''}` : ''}`;
+}
+function xvWhyStem(W) {
+  const { stem, grp, C, at } = W, M = (XV_MOD[stem] || {})[grp]; const ev = [];
+  const f = xvFeatures(W);
+  if (f.stemLetters) ev.push(`the extra letter${f.stemLetters.length > 1 ? 's' : ''} ${f.stemLetters} in front of the root`);
+  if (f.d1) ev.push(`the first root letter ${W.r1.raw} is doubled (the dot is the Niphal נ, absorbed)`);
+  if (f.d2) ev.push(`the second root letter ${W.r2.raw} is doubled`);
+  if (!f.d2 && ['piel', 'pual', 'hithpael'].includes(stem) && W.r2) ev.push(`the second root letter ${W.r2.raw} has no doubling dot${XV_GUTR.includes(W.R[1]) ? ' — a guttural or ר cannot be doubled, so the dot is missing but the stem is the same' : ''}`);
+  if (f.pv) ev.push(`the prefix vowel is ${f.pv}`);
+  if (f.v1) ev.push(`${f.v1} under the first root letter`);
+  if (f.v2) ev.push(`${f.v2} with the second root letter${f.hi ? ' followed by י (ִי)' : ''}`);
+  if (!ev.length) return '';
+  const pat = M ? `the regular ${XV_STEMEN[stem]} ${XV_CONJHE[W.conj][1]} pattern (${M[0]})` : `the ${XV_STEMEN[stem]}`;
+  return `What the word shows: ${ev.join('; ')}. Taken together, these match ${pat}. Each sign alone could point to more than one stem; it is the combination that decides.`;
+}
+function xvFeatures(W) {
+  const cls = c => c ? (XV_VNAME[xvCls(c)] || '') : '';
+  const stemLetters = W.stm.map(c => c.raw).join('');
+  const pfxC = W.pf || W.stm[0] || null;
+  return { stemLetters, d1: W.d1 && W.dagWhy[W.at[0]] === 'niph', d2: W.d2 && W.dagWhy[W.at[1]] === 'stem2', pv: pfxC && pfxC.v ? xvVN(pfxC) : '', v1: W.r1 && W.r1.v ? xvVN(W.r1) : '', v2: W.r2 && W.r2.v ? xvVN(W.r2) : '', hi: W.hi, pvCls: xvCls(pfxC), v1Cls: xvCls(W.r1), v2Cls: xvCls(W.r2) };
+}
+// Why not the nearest competitors: compare what each would need with what is (or is not) visible.
+function xvNotStem(W) {
+  const { stem, grp } = W, f = xvFeatures(W), rows = [];
+  for (const s of XV_COMP[stem] || []) {
+    const M = (XV_MOD[s] || {})[grp]; if (!M) continue; const ex = M[2] || {}, v = M[1]; let why = '';
+    if (ex.pl && !f.stemLetters.includes(ex.pl.slice(-1)) && !(ex.pl === 'ה' && W.conj === 'inf' && W.roleOf.includes('prep'))) why = `${XV_STEMEN[s]} would have ${ex.pl} in front (${M[0]}); this word does not.`;
+    else if (!ex.pl && f.stemLetters && !(stem === 'niphal' && s === 'qal' && W.grp !== 'qatal')) why = `${XV_STEMEN[s]} adds no letter in front of the root (${M[0]}); this word has ${f.stemLetters}.`;
+    else if (ex.d2 && !f.d2 && !XV_GUTR.includes(W.R[1])) why = `${XV_STEMEN[s]} doubles the second root letter (${M[0]}); here it is not doubled.`;
+    else if (!ex.d2 && f.d2) why = `${XV_STEMEN[s]} does not double the second root letter (${M[0]}); here ${W.r2.raw} is doubled.`;
+    else if (ex.d1 && !f.d1) why = `${XV_STEMEN[s]} doubles the first root letter after the prefix (${M[0]}); here it is not.`;
+    else if (!ex.d1 && f.d1) why = `${XV_STEMEN[s]} does not double the first root letter (${M[0]}); here it is doubled.`;
+    else if (v[1] && f.v1Cls && v[1] !== f.v1Cls && !(v[1] === 'sheva' && XV_GUT.includes(W.R[0]))) why = `${XV_STEMEN[s]} would have ${XV_VNAME[v[1]]} under the first root letter (${M[0]}); here it is ${XV_VNAME[f.v1Cls]}.`;
+    else if (v[0] && f.pvCls && v[0] !== f.pvCls) why = `${XV_STEMEN[s]} would have ${XV_VNAME[v[0]]} under the prefix (${M[0]}); here it is ${XV_VNAME[f.pvCls]}.`;
+    else if (v[2] && f.v2Cls && v[2] !== f.v2Cls) why = `${XV_STEMEN[s]} would have ${XV_VNAME[v[2]]} with the second root letter (${M[0]}); here it is ${XV_VNAME[f.v2Cls]}.`;
+    else if (ex.hi && !f.hi) why = `${XV_STEMEN[s]} usually has ִי before the last root letter (${M[0]}); here there is none.`;
+    else why = `${XV_STEMEN[s]} (${M[0]}) differs mainly in meaning here; the visible signs fit ${XV_STEMEN[stem]} better.`;
+    rows.push([s, M[0], why]);
+  }
+  return rows;
+}
+function xvWhyConj(W) {
+  const { conj, C, roleOf } = W, pf = W.pf, wv = C[0] && roleOf[0];
+  const t = {
+    qatal: `There is no person prefix (א ת י נ) before the root${W.stm.length ? ` (the ${W.stm.map(c => c.raw).join('')} in front belongs to the stem)` : ''}; who does the action is shown by the ending after the root${W.tail ? ` (${C.slice(W.last + 1).map(c => c.t).join('')})` : ' — no ending = “he”'}. That is the perfect (qatal): usually a finished action.`,
+    weqatal: `It starts with וְ/וּ “and”, and then has the perfect shape: no person prefix, the ending after the root. וְ + perfect is the weqatal, which usually continues a future or an instruction (“and you shall …”), not a past story.`,
+    yiqtol: `The person prefix ${pf ? pf.raw : ''} comes before the root and there is no וַ before it: that is the imperfect (yiqtol). It is not automatically “will”: it can also be a wish, a habit, “may” or “would”; the context decides.`,
+    wayyiqtol: `וַ (pataḥ under the ו) is followed by a person prefix${C[1] && C[1].dag ? ' that is doubled' : C[1] && C[1].v === 'ְ' ? ' (a prefix with sheva cannot show the doubling dot)' : C[1] && C[1].L === 'א' ? ' (א cannot be doubled, so the ו takes qamets: וָ)' : ''}: that is the wayyiqtol, the past story line (“and he …”).`,
+    weyiqtol: `וְ (not וַ) before a person prefix: the weyiqtol, usually “so that …” or “and let …”.`,
+    impv: `There is no person prefix, yet the word has the vowels of the imperfect pattern: that is a command (imperative), always addressed to “you”.`,
+    inf: `There is no person prefix and no subject ending${roleOf.includes('prep') ? `; a preposition (${C[roleOf.indexOf('prep')].raw}) stands in front` : ''}: that is an infinitive (שֵׁם פֹּעַל), a verbal noun (“to …”, or with בְּ “when …”).`,
+    ptc: W.stem === 'qal' ? `No prefix and the Qal participle vowels (ḥolem after the first root letter, tsere after the second): a participle (בֵּינוֹנִי), “…ing / one who …”.` : `${W.stm.length ? `The ${W.stm.map(c => c.raw).join('')} in front` : 'The shape'} marks a participle (בֵּינוֹנִי) of this stem: “…ing / one who …”. It has gender and number, not person.`
+  }[conj] || '';
+  return t;
+}
+function xvSameStem(W) {
+  const M = XV_MOD[W.stem] || {}; const rows = [];
+  for (const [g, lab] of [['qatal', 'qatal (perfect)'], ['yiqtol', 'yiqtol (imperfect)'], ['impv', 'imperative'], ['inf', 'infinitive'], ['ptc', 'participle']]) if (M[g]) rows.push([g === W.grp, lab, M[g][0]]);
+  if (M.yiqtol) rows.splice(2, 0, [W.conj === 'wayyiqtol', 'wayyiqtol', 'וַ' + ({ qal: 'יִּקְטֹל', niphal: 'יִּקָּטֵל', piel: 'יְקַטֵּל', pual: 'יְקֻטַּל', hithpael: 'יִּתְקַטֵּל', hiphil: 'יַּקְטֵל', hophal: 'יָּקְטַל' }[W.stem] || '')]);
+  return rows;
+}
+function xvWeakNotes(W) {
+  const { weak, R, at, C, conj, stem } = W, out = [];
+  try { const at2 = W.at.slice(); at2.front = W.at.front || new Set(); const t = htRootLine(W.it, htClusters(W.it.form), R, at2); if (/weak and hidden|absorbed|vanishes|drops/.test(t)) out.push(t); } catch (e) { }
+  if (weak.includes('II-guttural') && ['piel', 'pual', 'hithpael'].includes(stem)) out.push(`The second root letter ${R[1]} is a guttural or ר, which cannot take a doubling dot. The Piel/Pual/Hithpael doubling is therefore missing; often the vowel before it is lengthened instead (compensatory lengthening, e.g. בֵּרַךְ for “bir-rakh”). The stem is identified by the remaining signs.`);
+  if (weak.includes('III-ה') && conj === 'wayyiqtol' && at[2] < 0) out.push('III-ה roots lose their final ה and its vowel in the wayyiqtol (the “short form”): וַיְהִי, וַיַּרְא, וַיַּעַשׂ. That is why the word looks shorter than the model.');
+  if (stem === 'hiphil' && ['wayyiqtol'].includes(conj) && !W.hi) out.push('In the Hiphil wayyiqtol (and jussive) the ִי of the imperfect shortens to tsere (יַקְטִיל → וַיַּקְטֵל). The yod is missing because of that shortening, not because of a different stem.');
+  if (W.dagWhy && Object.values(W.dagWhy).includes('lene')) out.push('A dot in ב ג ד כ פ ת at the start of a word or after a silent sheva only makes the sound hard (dagesh qal, דָּגֵשׁ קַל): it is not doubling and is not evidence for a stem.');
+  if (Object.values(W.dagWhy).includes('asmR1')) out.push(`The dot in the letter after the prefix is the first root letter ${R[0] === 'נ' ? 'נ' : 'ל of לקח'}, absorbed (assimilated). It is not the Piel doubling of the second root letter.`);
+  if (weak.includes('hollow')) out.push('Hollow roots (middle ו/י) are written with only two consonants in most forms; the dictionary lists them with the middle letter (קוּם, שׁוּב). Their prefixes usually have qamets (יָקוּם) instead of ḥireq.');
+  if (weak.includes('I-י') && !out.some(x => /I-י/.test(x))) out.push('I-י roots: the first root letter disappears after a tsere prefix (יֵשֵׁב, וַיֵּלֶךְ) or appears as וֹ in the Hiphil and Niphal (הוֹשִׁיב, נוֹלַד), because it was originally ו.');
+  return out;
+}
+function xvRule(W) { const r = (XV_RULE[W.stem] || {})[W.grp] || ''; const q = W.weak.filter(w => !['I-guttural'].includes(w)).length || W.weak.includes('I-guttural') ? ' This is the regular strong-root pattern; this root is weak or has a guttural, so some signs are changed (see “Advanced”).' : ''; return r + q; }
+function xvExamples(W) {
+  try { if (typeof PARSE_BANK === 'undefined') return []; const seen = new Set([lexCons(W.it.root)]); const out = []; for (const x of PARSE_BANK) { if (String(x[2]).split('|')[0] !== W.stem || x[3] !== W.conj) continue; const k = lexCons(x[1]); if (seen.has(k)) continue; seen.add(k); out.push(x); if (out.length >= 3) break; } return out; } catch (e) { return []; }
+}
+function xvSourceLine(it) {
+  const model = /^ss7\|/.test(it.key || '') || (lexCons(it.root) === 'קטל' && !it.ctx);
+  if (model) return '<span class="chip">constructed model (not from the stories)</span>';
+  if (it.ref) return `<span class="chip good">course text</span> <span class="small muted">${esc(it.ref)}</span>`;
+  return '<span class="chip">course practice form</span>';
+}
+function xvHTML(it, o = {}) {
+  if (!it || !it.form || !it.root || !it.conj || !it.stem) return '';
+  const W = xvAnalyse(it); if (W.R.length !== 3) return '';
+  const T = (k) => `${H(XV_TERM[k][0])} ${PRi(XV_TERM[k][0])} <span class="muted">${XV_TERM[k][1]}</span>`;
+  const lex = xvLex(W), stemHe = XV_STEMHE[W.stem], cj = XV_CONJHE[W.conj] || [W.conj, W.conj];
+  const es = (typeof PX !== 'undefined' && PX[it.form] && PX[it.form][3]) || it.es || '';
+  // A — the word
+  const head = `<div style="text-align:center"><div class="he" lang="he" dir="rtl" style="font-size:2.4rem;line-height:1.3">${esc(it.form)}</div><div>${PR(it.form)}</div>${lex.ctx ? `<div><b>${esc(lex.ctx)}</b></div>` : ''}${es ? `<div class="small muted">Español: ${esc(es)}</div>` : ''}<div class="small" style="margin-top:4px">${xvSourceLine(it)}</div></div>`;
+  // Key evidence (quick)
+  const f = xvFeatures(W), keys = [];
+  if (f.stemLetters) keys.push(`${f.stemLetters} in front`); if (f.d2) keys.push(`second root letter doubled`); if (f.d1) keys.push('first root letter doubled');
+  if (f.pv && (W.pf || W.stm.length)) keys.push(`prefix vowel ${f.pv}`); if (f.v1) keys.push(`${f.v1} under root letter 1`); if (f.v2) keys.push(`${f.v2} on root letter 2${f.hi ? ' + י' : ''}`);
+  if (W.pf) keys.push(`person prefix ${W.pf.raw}`);
+  const quick = `<div class="xv-quick stack" style="gap:6px">${head}
+    <div class="small"><b>Answer:</b> root ${H(it.root)} · ${H(stemHe)} ${XV_STEMEN[W.stem]} · ${H(cj[0])} ${esc(cj[1])}${W.conj === 'inf' ? ' · no person' : ` · ${esc(String(it.pgn || '').split('|').map(a => XV_WHO[a] || a).join(' or '))}`}${W.obj ? ` · ${W.obj.subj ? 'pronoun suffix' : 'object'} “${esc(W.obj.en)}”` : ''}</div>
+    ${keys.length ? `<div class="small"><b>Look at:</b> ${heWrap(esc(keys.join(' · ')))}</div>` : ''}
+    <div class="note small" style="margin:0"><b>Rule to remember:</b> ${heWrap(esc(xvRule(W)))}</div></div>`;
+  // C — parsing table
+  const pgRow = (k) => { if (W.conj === 'inf') return '— none (an infinitive has no person, gender or number)'; if (W.conj === 'ptc' && k === 'p') return '— none (a participle has no person)'; const alts = String(it.pgn || '').split('|').filter(Boolean).map(parsePGN); const M = { p: XV_P, g: XV_G, n: XV_N }[k]; return [...new Set(alts.map(a => a[k]).filter(Boolean))].map(v => M[v] ? `${H(M[v][0])} ${PRi(M[v][0])} ${M[v][1]}` : v).join(' <i>or</i> ') || '—'; };
+  const table = tableHTML(['Category', 'Answer'], [
+    [T('root'), `${H(it.root)} ${lex.base ? `— basic meaning ${heWrap(esc(lex.base))}` : ''}`],
+    [T('stem'), `${H(stemHe)} ${PRi(stemHe)} ${XV_STEMEN[W.stem]}`],
+    [T('conj'), `${H(cj[0])} ${PRi(cj[0])} ${esc(cj[1])}`],
+    [T('p'), pgRow('p')], [T('g'), pgRow('g')], [T('n'), pgRow('n')]]);
+  // B — root letters one by one
+  const ord = ['first', 'second', 'third'];
+  const rootRows = W.R.map((L, r) => { const i = W.at[r]; let st; if (i >= 0) st = `written: ${H(W.C[i].t)}${W.dagWhy[i] === 'stem2' ? ' (doubled: the stem’s doubling)' : W.dagWhy[i] === 'niph' ? ' (doubled: the Niphal נ absorbed into it)' : W.dagWhy[i] === 'lene' ? ' (the dot here only hardens the sound)' : ''}`; else if (W.roleOf.includes('R1w') && r === 0) st = `written as וֹ (${H(W.C[W.roleOf.indexOf('R1w')].t)}): the original first letter ו`; else if (Object.values(W.dagWhy).includes(r === 0 ? 'asmR1' : 'asmR3')) st = 'absorbed: it shows only as a dot (dagesh) in the next letter'; else st = 'not written in this form (weak letter)'; return `<li>${ord[r]} root letter ${H(L)} — ${st}</li>`; }).join('');
+  const meanRows = [lex.base ? `Basic meaning of the root: ${heWrap(esc(lex.base))}.` : '', W.stem !== 'qal' ? (lex.stemMean ? `In the ${XV_STEMEN[W.stem]}: ${heWrap(esc(lex.stemMean))}.` : `In the ${XV_STEMEN[W.stem]} the meaning can differ from the basic one; the course list or the lexicon gives it.`) : '', lex.ctx ? `Here: “${esc(lex.ctx)}”.` : ''].filter(Boolean).join(' ');
+  // D — piece by piece
+  const pieces = W.C.map((c, i) => { const p = xvPieceLabel(W, i); return `<div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:44px;max-width:120px"><div class="he" lang="he" style="font-size:2rem;line-height:1.25;color:${PX_COL[p.cat] || PX_COL.root}">${esc(c.t)}</div><div class="small" style="text-align:center;line-height:1.25">${esc(p.txt)}</div></div>`; }).join('');
+  const legend = `<div class="row" style="justify-content:center;gap:10px;flex-wrap:wrap;font-size:.75rem">${[['root', 'root letter'], ['stem', 'stem sign'], ['pgn', 'person / ending'], ['conj', 'and / the / preposition'], ['suf', 'pronoun suffix']].map(([k, n]) => `<span style="color:${PX_COL[k]}">■ ${n}</span>`).join('')}</div>`;
+  // E — vowels
+  const V = W.C.map((c, i) => c.v ? [i, xvVowelInfo(W, i)] : null).filter(Boolean).filter(([i]) => !(W.C[i].v === 'ְ' && i === W.C.length - 1));
+  const vt = tableHTML(['Sign', 'Name', 'Sound here', 'What it tells you'], V.map(([i, v]) => [`<span class="he" lang="he" style="font-size:1.4rem">${esc(W.C[i].t)}</span>`, `${H(v.name[0])} ${PRi(v.name[0])} ${esc(v.name[1])}`, esc(v.sound), heWrap(esc(xvVowelRole(W, i)))]));
+  const pat = [W.pf || W.stm.find(c => c.L !== 'ת') || W.stm[0], W.r1, W.r2].filter(Boolean).map(c => XV_VNAME[xvCls(c)] || '—').join(' – ');
+  const M = (XV_MOD[W.stem] || {})[W.grp];
+  const patLine = `<div><b>Pattern (prefix – root 1 – root 2):</b> ${esc(pat)}${M ? ` <span class="small muted">· regular ${XV_STEMEN[W.stem]} ${esc(cj[1])} model ${H(M[0])}: ${esc(M[1].map(x => XV_VNAME[x] || '—').join(' – '))}</span>` : ''}</div><div class="small muted">A vowel <i>class</i> (A, E, I, O, U) groups several signs: pataḥ and qamets are both A; tsere and segol are both E. The sign is what is written; the sound is how it is read in this word.</div>`;
+  // F, G, H, I
+  const notRows = xvNotStem(W);
+  const notT = notRows.length ? tableHTML(['Stem', 'Model', 'Why not'], [[`<b>${XV_STEMEN[W.stem]} ✓</b>`, H(M ? M[0] : ''), '<b>the correct stem</b>'], ...notRows.map(([s, m, w]) => [`${H(XV_STEMHE[s])} ${XV_STEMEN[s]}`, H(m), heWrap(esc(w))])]) : '';
+  const same = xvSameStem(W);
+  const sameT = tableHTML(['Form', `${XV_STEMEN[W.stem]} model`], same.map(([on, l, m]) => [on ? `<b>${esc(l)} ✓</b>` : esc(l), H(m)]));
+  const full = `<details class="xv-full"><summary><b>Full explanation</b> <span class="small muted">— parsing, letters, vowels, and why</span></summary><div class="stack" style="gap:10px;margin-top:8px">
+    <div><b>Parsing</b>${table}</div>
+    <div><b>The root, letter by letter</b><ul style="margin:4px 0 0 18px">${rootRows}</ul>${meanRows ? `<div class="small" style="margin-top:4px">${heWrap(meanRows)}</div>` : ''}</div>
+    <div><b>Every piece of the word</b> <span class="small muted">(right to left)</span><div style="display:flex;flex-direction:row-reverse;justify-content:center;flex-wrap:wrap;gap:8px;direction:ltr;padding:6px 0">${pieces}</div>${legend}</div>
+    <div><b>The vowels</b>${vt}${patLine}</div>
+    <div><b>Why ${XV_STEMEN[W.stem]}?</b><div>${heWrap(esc(xvWhyStem(W)))}</div></div>
+    ${notT ? `<div><b>Why not the stems it could be confused with?</b>${notT}<div class="small muted">Models are the regular forms of the root ק־ט־ל; weak roots can change them.</div></div>` : ''}
+    <div><b>Why ${esc(cj[1])}?</b><div>${heWrap(esc(xvWhyConj(W)))}</div>${sameT}</div>
+    <div><b>Person, gender, number</b><div>${heWrap(xvPgnText(W))}</div></div>
+  </div></details>`;
+  // Advanced
+  const wk = xvWeakNotes(W), exs = xvExamples(W);
+  const adv = `<details class="xv-adv"><summary><b>Advanced</b> <span class="small muted">— weak letters, exceptions, more examples</span></summary><div class="stack" style="gap:8px;margin-top:8px">
+    ${W.weak.length ? `<div><b>Type of root:</b> ${esc(W.weak.join(', '))}</div>` : '<div><b>Type of root:</b> regular (strong): the model pattern applies directly.</div>'}
+    ${wk.length ? `<ul style="margin:0 0 0 18px">${wk.map(x => `<li>${heWrap(x)}</li>`).join('')}</ul>` : ''}
+    ${exs.length ? `<div><b>The same ${XV_STEMEN[W.stem]} ${esc(cj[1])} in other course words:</b> ${exs.map(x => `${H(x[0])}${PRi(x[0])} <span class="small muted">(${esc(x[1])}, “${esc(x[5] || '')}”)</span>`).join(' · ')}</div>` : ''}
+    <div class="small muted">Signs are evidence, not proof one by one: always check the combination, and when two readings fit the letters (for example “you” or “she”), the sentence decides.</div>
+  </div></details>`;
+  return `<div class="xv panel stack" style="gap:8px;margin-top:8px;padding:12px">${quick}${full}${adv}</div>`.replace(/<tr>/g, '<tr class="xvr">');
+}
+(function () {
+  // Practice: after you answer a parse, the explainer replaces the plain answer table (the table is inside “Full explanation”).
+  const _pa = parseAnswerHTML;
+  parseAnswerHTML = function (it) {
+    const orig = _pa.apply(this, arguments);
+    try { const x = xvHTML(it); if (x) return `<div hidden class="xv-orig">${orig}</div>` + x; } catch (e) { console.error(e); }
+    return orig;
+  };
+  // Pattern cards: the explainer under the card's own picture.
+  const _px = pxHTML;
+  pxHTML = function (front) {
+    const h = _px.apply(this, arguments); if (!h) return h;
+    try {
+      const x = PX[front]; const m = String(x[1] || '').match(/^(\w+) · (\w[\w ]*?) · (\w+)$/); if (!m) return h;
+      const stem = m[1].toLowerCase(), cm = { perfect: 'qatal', imperfect: 'yiqtol', wayyiqtol: 'wayyiqtol', weqatal: 'weqatal', weyiqtol: 'weyiqtol', imperative: 'impv', participle: 'ptc', 'infinitive construct': 'inf', 'infinitive absolute': 'inf', infinitive: 'inf' }[m[2]];
+      if (!XV_STEMEN[stem] || !cm || !x[0] || x[0] === '—') return h;
+      const it = { form: front, root: x[0], stem, conj: cm, pgn: m[3] === '—' ? '' : m[3], gl: x[2], es: x[3], key: 'px|' + front };
+      const xv = xvHTML(it); if (!xv) return h;
+      return `<div class="px stack" style="gap:10px;text-align:left">${xv}<div id="px-ctx" class="small muted">Looking for a sentence…</div></div>`;
+    } catch (e) { console.error(e); return h; }
+  };
+  // After a test: the explainer under each parse item, closed until you open it.
+  const _ie = itemExplainHTML;
+  itemExplainHTML = function (x) {
+    const h = _ie.apply(this, arguments); const it = x && x.spec;
+    try { if (it && it.kind === 'parse') { const xv = xvHTML(it); if (xv) return h.replace(/<\/div>\s*$/, `<details><summary class="small"><b>Explain this verb</b> (how to recognise it)</summary>${xv}</details></div>`); } } catch (e) { console.error(e); }
+    return h;
+  };
+})();
+</script>
+<script>
 // Colour mode: dark (default), light, or the same as the computer. Remembered on this device.
 (function () {
   const order = ['dark', 'light', 'auto'], lab = { dark: '☾ Dark', light: '☀ Light', auto: '◐ Auto' };
@@ -10548,5 +10958,5 @@ function startSevenStem() {
   const b = document.getElementById('btn-theme'); if (b) b.onclick = () => { t = order[(order.indexOf(t) + 1) % order.length]; try { localStorage.setItem('het-theme', t); } catch {} apply(); };
 })();
 </script>
-<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='dc088e4df6';</script>
+<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='eed30479d5';</script>
 </body></html>
