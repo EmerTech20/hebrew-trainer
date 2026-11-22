@@ -4033,7 +4033,7 @@ function lexRow(he, alt, how) {
   const mainI = lparts.length - 1; let entry = L[+lparts[mainI]] || ['', '', '', ''];
   const pre = [], suf = []; let main = '', mainCode = mparts[mainI] || '';
   lparts.slice(0, mainI).forEach((p, k) => { const code = mparts[k] || ''; pre.push({ he: sparts[k] || '', m: PREFIX_MEAN[p] || p, art: /^Rd/.test(code) }); });
-  mparts.slice(mainI + 1).forEach((code, k) => { const sp = sparts[mainI + 1 + k] || ''; if (code[0] === 'S') { const t = code[1]; suf.push({ he: sp, m: t === 'p' ? (SUF_MEAN[code.slice(2, 5)] || code.slice(2)) : t === 'd' ? 'toward' : '(extra ending)', who: code.slice(2, 5) }); } });
+  mparts.slice(mainI + 1).forEach((code, k) => { const sp = sparts[mainI + 1 + k] || ''; if (code[0] === 'S') { const t = code[1]; suf.push({ he: (mainCode[0] !== 'V' && sp.replace(/[\u0591-\u05C7]/g, '') === 'ו' && /י[\u0591-\u05C7]*$/.test(sparts[mainI + k] || '')) ? 'יו' : sp, m: t === 'p' ? (SUF_MEAN[code.slice(2, 5)] || code.slice(2)) : t === 'd' ? 'toward' : '(extra ending)', who: code.slice(2, 5) }); } });
   // Grammar of the main word.
   const c = mainCode; let gram = '', who = '';
   if (c[0] === 'V') { const stem = STEM_NAME[c[1]] || c[1], conj = c[2]; const rest = c.slice(3); gram = `${stem} ${CONJ_NAME[conj] || conj}`; if ('pqihjwv'.includes(conj) && rest.length >= 3) { gram += ' ' + rest.slice(0, 3); who = PGN_WHO[rest.slice(0, 3)] || ''; } else if ('rs'.includes(conj) && rest.length >= 2) gram += ` ${G_NAME[rest[0]] || ''} ${N_NAME[rest[1]] || ''}${rest[2] === 'c' ? ' construct' : ''}`; }
@@ -8838,7 +8838,7 @@ async function pxContext(front, en) {
     let h = _vp.apply(this, arguments);
     try {
       const I = vxInfo(word, meaning), a = I.a;
-      const extra = `${a && a.root ? `<div><b>Root letters:</b> ${H(esc([...a.root].join(' · ')))}${a.lemma && fvKey(a.lemma) !== fvKey(word) ? ` · dictionary form ${H(esc(a.lemma))}` : ''}</div>` : ''}${!a && I.g ? `<div><b>Parsing:</b> ${esc(I.g)}</div>` : ''}${ex ? '' : '<div class="muted">No sentence with this word in Ruth, the class stories (Ch. 14–22) or the course passages: it is a vocabulary-list word.</div>'}`;
+      const extra = `${a && a.root ? `<div><b>Root letters:</b> ${H(esc([...String(a.root).replace(/[־\s-]/g, '')].join(' · ')))}${a.lemma && fvKey(a.lemma) !== fvKey(word) ? ` · dictionary form ${H(esc(a.lemma))}` : ''}</div>` : ''}${!a && I.g ? `<div><b>Parsing:</b> ${esc(I.g)}</div>` : ''}${ex ? '' : '<div class="muted">No sentence with this word in Ruth, the class stories (Ch. 14–22) or the course passages: it is a vocabulary-list word.</div>'}`;
       h = h.replace(/<\/div>\s*$/, extra + '</div>');
     } catch (e) { console.error(e); }
     return h;
@@ -10212,6 +10212,11 @@ function qhHead(he) { return `<div class="qtri qh" style="margin:0 0 6px"><div c
     return r;
   };
 })();
+// Flashcard back: the story sentence was shown twice (before and after you answer). After you answer, only the word's analysis in that sentence.
+(function () {
+  const _vp = vxPostHTML;
+  vxPostHTML = function () { return _vp.apply(this, arguments).replace(/<b>In the sentence<\/b> <span class="muted">\([^<]*\)<\/span><div class="he" dir="rtl" style="font-size:1\.2rem;line-height:1\.8">[\s\S]*?<\/div>/, '<b>The word in that sentence:</b> '); };
+})();
 </script>
 <script>
 // ---------- Nov 21: the last terse explanations rewritten as plain prose (your request: explain like a professor, not with + and =) ----------
@@ -10322,5 +10327,5 @@ const MC_PROSE = [
   const b = document.getElementById('btn-theme'); if (b) b.onclick = () => { t = order[(order.indexOf(t) + 1) % order.length]; try { localStorage.setItem('het-theme', t); } catch {} apply(); };
 })();
 </script>
-<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='c23a8a1ac1';</script>
+<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='e5bbc67fc9';</script>
 </body></html>
