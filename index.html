@@ -1048,6 +1048,7 @@ const TL = (() => {
         if (p && p.kind === 'none' && !p.coda) { p.v = 'u'; p.kind = 'full'; p.long = true; p.wasShewa = false; continue; }
         U.push({ on: '', v: 'u', kind: 'full', long: true, src: i }); continue;
       }
+      if (c === 'ו' && m.includes('ֹ') && !dag && i > 0 && L[i - 1].c === 'א' && ![...L[i - 1].m].some(x => V[x]) && !L[i - 1].m.includes('ְ')) { U.push({ on: '', v: 'o', kind: 'full', long: true, src: i }); continue; }
       if (c === 'ו' && m.includes('ֹ') && !dag && U.length && U[U.length - 1].kind === 'none') { U[U.length - 1].v = 'o'; U[U.length - 1].kind = 'full'; U[U.length - 1].long = true; continue; }
       if (c === 'ו' && m.includes('ֹ') && !dag && i > 0 && U.length && !U[U.length - 1].v) { U[U.length - 1].v = 'o'; U[U.length - 1].kind = 'full'; continue; }
       if (c === 'י' && !m && U.length && /[ie]/.test(U[U.length - 1].v || '') && U[U.length - 1].kind === 'full') { U[U.length - 1].long = true; continue; }
@@ -2239,7 +2240,7 @@ function gradeParse(item, sel) {
   res.conj = sel.conj === conj;
   res.stem = item.stem.split('|').includes(sel.stem);
   const ur = normRoot(sel.root), ar = normRoot(item.root);
-  res.root = ur === ar || (ar.length === 3 && 'וי'.includes(ar[1]) && (ur === ar[0] + ar[2] || ur === ar[0] + (ar[1] === 'ו' ? 'י' : 'ו') + ar[2]));
+  res.root = ur === ar || String(item.root || '').split(/[|/]/).map(normRoot).includes(ur);
   // All six boxes count for every verb. For a participle, person must be left empty or “—”; for an infinitive, person, gender and number must be empty or “—”.
   const keys = ['p', 'g', 'n', 'conj', 'stem', 'root'];
   const score = keys.filter(k => res[k]).length / keys.length;
@@ -4985,7 +4986,7 @@ function exItemHTML(it, a, n) {
   if (it.kind === 'root') return head + `<div class="eyebrow" style="text-align:center">${H('מָה הַשֹּׁרֶשׁ?')}</div><div class="form-big" lang="he">${esc(it.form)}</div><label class="f" style="text-align:center">Root letters<input type="text" class="ex-txt" data-k="root" dir="rtl" lang="he" value="${esc(a.root || '')}" autocomplete="off" style="font-family:var(--f-he);font-size:1.3rem;text-align:center;max-width:160px;margin:0 auto"></label><div class="small muted">Root meaning</div><div class="opts">${(it._order || it.o.map((o, i) => i)).map(i => `<button class="opt" data-xo="${i}" aria-pressed="${a.o === i}" style="${a.o === i ? 'border-color:var(--accent);background:var(--accent-soft)' : ''}">${heWrap(esc(it.o[i]))}</button>`).join('')}</div>`;
   if (it.kind === 'parse') return head + `<div class="eyebrow" style="text-align:center">${H('מָה הַפֹּעַל הַזֶּה?')}</div><div class="form-big" lang="he">${esc(it.form)}</div>${it.ctx ? `<div class="ctx he" dir="rtl">${esc(it.ctx)}</div>` : ''}${parseGridHTML(it, a)}`;
   if (it.kind === 'write' && it.sub === 'translate2') return head + `<div class="he" dir="rtl" style="font-size:1.7rem;line-height:1.7">${esc(it.he)}</div><label class="f">1. Strict (Hebrew word order, hyphens, [DOM] for the object marker)<textarea class="ex-txt" data-k="strict" style="min-height:60px">${esc(a.strict || '')}</textarea></label><label class="f">2. Natural English<textarea class="ex-txt" data-k="text" style="min-height:60px">${esc(a.text || '')}</textarea></label>`;
-  if (it.kind === 'write') return head + `<div class="qtext">${it.lines ? `<span class="small muted">line ${esc(it.lines)} · </span>` : ''}${heWrap(esc(it.q))}</div><label class="f">Answer (Hebrew or English)<textarea class="ex-txt" data-k="text" dir="auto">${esc(a.text || '')}</textarea></label>`;
+  if (it.kind === 'write') return head + `<div class="qtext">${it.lines && !(EX && /^fs\d$/.test(EX.type)) ? `<span class="small muted">line ${esc(it.lines)} · </span>` : ''}${heWrap(esc(it.q))}</div><label class="f">Answer (Hebrew or English)<textarea class="ex-txt" data-k="text" dir="auto">${esc(a.text || '')}</textarea></label>`;
   return head + '<p>Unknown item.</p>';
 }
 function wireExItem(v, it, a, onChange) {
@@ -9181,7 +9182,7 @@ const isFS = t => /^(fs\d|sp)$/.test(t || '');
     const onStory = !it || it.sec === 'comp' || it.sec === 'parse', onRuth = P.ruth && (!it || it.sec === 'translation' || it.sec === 'syntax');
     const hl = 'background:var(--accent-soft);border-radius:6px';
     let h = '';
-    if (onStory) { const [a, b] = it && it.ln ? it.ln : [0, -1];
+    if (onStory) { const [a, b] = it && it.ln && EX.type === 'sp' ? it.ln : [0, -1];
       h += `<details class="panel" open><summary>${esc(P.story.head)}</summary><div class="passage lines fs-box" style="--rsize:1.25rem;margin-top:8px;position:relative;${it ? 'max-height:44vh;overflow:auto' : ''}">${P.story.lines.map((l, i) => { const on = i + 1 >= a && i + 1 <= b; return `<div class="ln${on ? ' fs-hl' : ''}" style="cursor:default;${on ? hl : ''}"><span class="no">${i + 1}</span><span>${esc(l)}</span></div>`; }).join('')}</div></details>`; }
     if (onRuth) h += `<details class="panel" open><summary>${esc(P.ruth.head)}</summary><div class="small" style="margin:6px 0"><b>Rare words (given):</b> ${heWrap(esc(P.ruth.vocab))}</div><div class="passage lines" style="--rsize:1.3rem">${P.ruth.verses.map(x => { const on = it && it.sub === 'translate2' && it.he === x.he; return `<div class="ln${on ? ' fs-hl' : ''}" style="cursor:default;${on ? hl : ''}"><span class="no">${x.c}:${x.v}</span><span>${esc(x.he)}</span></div>`; }).join('')}</div></details>`;
     return h;
@@ -9388,7 +9389,7 @@ async function qDecorate(root, it, o = {}) {
   if (!root || !isCompQ(it)) return;
   const he = qHebrew(it); if (!he) return;
   const qt = root.querySelector('.qtext'); if (!qt || qt.dataset.tri) return; qt.dataset.tri = '1';
-  const lines = it.lines && o.hideEn ? `<div class="small muted">line${/[–,-]/.test(String(it.lines)) ? 's' : ''} ${esc(it.lines)}</div>` : '';
+  const lines = it.lines && o.hideEn && !(EX && /^fs\d$/.test(EX.type) && EX.phase === 'taking') ? `<div class="small muted">line${/[–,-]/.test(String(it.lines)) ? 's' : ''} ${esc(it.lines)}</div>` : '';
   const extra = it.kind === 'write' && it.he ? `<div class="he" dir="rtl" style="font-size:1.6rem;margin-top:6px">${esc(it.he)}</div>` : '';
   qt.innerHTML = lines + qTri(he, qEnglish(it), { hideEn: o.hideEn }) + extra;
   qt.querySelectorAll('.qen-btn').forEach(b => b.onclick = () => { b.hidden = true; const e = b.nextElementSibling; if (e) e.hidden = false; if (o.onEn) o.onEn(); });
@@ -11222,25 +11223,28 @@ const AG = (function () {
   function heCover(model, ans) {
     const m = heTok(model), a = heTok(ans); if (!m.length) return { cov: 0, mlen: 0, alen: a.length };
     const content = m.filter(t => !HE_STOP.has(t)); const M = content.length ? content : m;
-    const A = new Set(a), As = new Set(a.map(heStem));
-    const hit = M.filter(t => A.has(t) || As.has(heStem(t))).length;
-    return { cov: hit / M.length, mlen: M.length, alen: a.length };
+    const A = new Set(a), As = new Set(a.map(heStem)), soft = t => heStem(t).replace(/[הת]$/, '');
+    const Ss = new Set(a.map(soft));
+    const hit = M.reduce((n, t) => n + (A.has(t) || As.has(heStem(t)) ? 1 : Ss.has(soft(t)) ? .5 : 0), 0);
+    const aC = a.filter(t => !HE_STOP.has(t)), precise = aC.length > 0 && aC.every(t => M.some(m => heStem(m) === heStem(t))), head = M.length > 0 && aC.some(t => heStem(t) === heStem(M[0]));
+    return { cov: hit / M.length, mlen: M.length, alen: a.length, short: precise && head };
   }
   function enCover(model, ans) { const M = [...new Set(enTok(model))], A = new Set(enTok(ans)); if (!M.length) return { cov: 0, mlen: 0, alen: A.size }; return { cov: M.filter(t => A.has(t)).length / M.length, mlen: M.length, alen: A.size }; }
   const hasHe = s => /[א-ת]/.test(String(s || ''));
   function compModels(it) {
     const m = String(it.model || ''), he = m.split(' — ')[0], en = (m.split(' → ')[1] || '').split(' · ')[0];
     const alt = (/Also accept: ([^·]+)/.exec(m) || [])[1];
-    return { he: [he, ...(alt ? alt.split(/;|\s\/\s|,\s(?=[א-ת])/).map(s => s.trim()).filter(hasHe) : [])].filter(Boolean), en };
+    const par = [...he.matchAll(/\(([^)]*)\)/g)].map(x => x[1].replace(/^(or|also)\s+/i, '').trim()).filter(hasHe), main = he.replace(/\([^)]*\)/g, ' ').trim();
+    return { he: [main, ...par, ...(alt ? alt.split(/;|\s\/\s|,\s(?=[א-ת])/).map(s => s.trim()).filter(hasHe) : [])].filter(Boolean), en };
   }
   function comp(it, text) {
     const M = compModels(it);
     if (hasHe(text)) {
       let best = { cov: 0 }; for (const m of M.he) { const c = heCover(m, text); if (c.cov > best.cov || best.mlen == null) best = c; }
-      const score = best.cov >= .99 ? 1 : best.cov >= .5 ? .5 : 0;
+      const score = best.cov >= .99 ? 1 : best.cov >= .5 || best.short ? .5 : 0;
       const long = best.mlen && best.alen > 3 * best.mlen + 3;
       const conf = best.cov >= .99 && !long ? 'high' : 'low';
-      return { score, conf, how: `Hebrew words of the model found in your answer: ${Math.round(best.cov * 100)}%${long ? '; your answer is much longer than needed' : ''}` };
+      return { score, conf, how: `Hebrew words of the model found in your answer: ${Math.round(best.cov * 100)}%${best.short && best.cov < .99 ? '; your shorter answer may be complete (Claude checks it)' : ''}${long ? '; your answer is much longer than needed' : ''}` };
     }
     const c = enCover(M.en, text); const score = c.cov >= .6 ? .5 : c.cov >= .3 ? .25 : 0;
     return { score, conf: 'low', how: `Answer in English only (the question asks for Hebrew: at most “partly”); English words of the model found: ${Math.round(c.cov * 100)}%` };
@@ -11431,7 +11435,7 @@ function fsLeftMin(r) { return r ? Math.max(0, Math.round(((r.limitMs || FS_MIN 
   fsCardHTML = function () {
     let h = _fc.apply(this, arguments);
     try { for (const k of FS_KEYS) { const r = fsResults(k).slice(-1)[0]; if (!r) continue; const left = fsLeftMin(r), open = (r.items || []).filter(x => !x.answered).length;
-      if (left >= 2 && open) h = h.replace(`data-fs="${k}">Take again</button>`, `data-fs="${k}">Take again</button><button class="btn primary" data-fsc="${k}" title="Your submitted answers filled in, with the minutes you had left">Finish it (${left} min left)</button>`); } } catch (e) { console.error(e); }
+      if (left >= 2 && open) h = h.replace(new RegExp(`<button class="btn\\s*" data-fs="${k}">Take again</button>`), `<div class="stack" style="gap:6px;flex:0 0 auto;min-width:150px"><button class="btn primary" data-fsc="${k}" style="white-space:nowrap" title="Your submitted answers filled in, with the minutes you had left">Finish it (${left} min left)</button><button class="btn" data-fs="${k}" style="white-space:nowrap">Take again</button></div>`); } } catch (e) { console.error(e); }
     return h;
   };
   document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-fsc]'); if (b) { e.preventDefault(); startFSFinish(b.dataset.fsc); } });
@@ -11468,5 +11472,5 @@ function courseSrcHTML(word) {
   const b = document.getElementById('btn-theme'); if (b) b.onclick = () => { t = order[(order.indexOf(t) + 1) % order.length]; try { localStorage.setItem('het-theme', t); } catch {} apply(); };
 })();
 </script>
-<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='d0b84f1b4a';</script>
+<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='6322b2ca3a';</script>
 </body></html>
