@@ -11461,6 +11461,127 @@ function courseSrcHTML(word) {
   return '<div class="muted">No sentence with this word in Ruth or the class stories.</div>';
 }
 
+// ===== Diagnostic 1 · Parsing (Nov 23): 20 verbs, all eight stems, the main forms, weak and regular roots =====
+// Emerson's request: his own version of GPT's parsing diagnostic, with different verbs, only from class material
+// (Ruth 2–4 outside the passages of the nine simulations, and the practice slides of the professor's Pual, Hithpael and Hophal lessons).
+// Per verb: root · stem · form · person/gender/number · English meaning; “not sure” marks per field. No pronunciation, no help, 30 minutes.
+const DG1 = [
+  // part, form, root, stem, conj, pgn, meaning, source, alts, why it is in the test, pattern tags
+  ['A', 'וַתִּתֶּן', 'נתן', 'qal', 'wayyiqtol', '3fs', 'and she gave', 'Ruth 2:18', [{ pgn: '2ms' }], 'I-nun: the נ is gone and ת is doubled; וַ + doubled prefix = wayyiqtol.', ['weak', 'I-nun', 'wayyiqtol']],
+  ['A', 'יִפֹּל', 'נפל', 'qal', 'yiqtol', '3ms', 'it will fall (turn out)', 'Ruth 3:18', null, 'I-nun again, without וַ: plain yiqtol.', ['weak', 'I-nun']],
+  ['A', 'וַתֵּשֶׁב', 'ישב', 'qal', 'wayyiqtol', '3fs', 'and she sat', 'Ruth 2:14', [{ pgn: '2ms' }], 'I-yod: the י disappears, tsere under the prefix.', ['weak', 'I-yod', 'wayyiqtol']],
+  ['A', 'וְאָכַלְתְּ', 'אכל', 'qal', 'weqatal', '2fs', 'and you (f.) shall eat', 'Ruth 2:14', null, 'וְ + qatal after a command (גֹּשִׁי) = weqatal; ending תְּ = you (f.).', ['weqatal', '2fs']],
+  ['A', 'שִׁכְבִי', 'שכב', 'qal', 'impv', '2fs', 'lie down! (you, f.)', 'Ruth 3:13', null, 'No prefix + ending ִי = imperative 2fs.', ['impv', '2fs']],
+  ['A', 'בָּרוּךְ', 'ברך', 'qal', 'ptc', 'ms', 'blessed', 'Ruth 2:19', null, 'Qal passive participle (qamets + shureq): gender and number only, no person.', ['ptc', 'no-person']],
+  ['A', 'לְגָאֳלֵךְ', 'גאל', 'qal', 'inf', '', 'to redeem you (f.)', 'Ruth 3:13', null, 'לְ + infinitive + ךְ “you (f.)” as the OBJECT. No person/gender/number for the verb.', ['inf', 'object-suffix']],
+  ['A', 'שֹׁל', 'שלל', 'qal', 'inf', '', '(surely) pull out', 'Ruth 2:16', null, 'Infinitive absolute before the same verb (שֹׁל תָּשֹׁלּוּ) = “you shall surely pull out”.', ['inf', 'inf-abs', 'weak', 'geminate']],
+  ['A', 'בָאָה', 'בוא', 'qal', 'qatal', '3fs', 'she came', 'Ruth 3:14', [{ conj: 'ptc', pgn: 'fs' }], 'Hollow root. Here qatal 3fs (the woman came); the same letters can be the participle fs, so that is accepted too.', ['weak', 'hollow']],
+  ['A', 'קָנִיתִי', 'קנה', 'qal', 'qatal', '1cs', 'I have bought', 'Ruth 4:9', null, 'III-he: ה becomes ִי before the ending תִי (= I). First person: gender c.', ['weak', 'III-he', 'common']],
+  ['B', 'לִקַּטְתְּ', 'לקט', 'piel', 'qatal', '2fs', 'you (f.) gleaned', 'Ruth 2:19', null, 'Piel qatal: I under root 1, doubled root 2; ending תְּ = you (f.).', ['2fs']],
+  ['B', 'כִּלּוּ', 'כלה', 'piel', 'qatal', '3cp', 'they have finished', 'Ruth 2:21', null, 'Piel of כלה (III-he, ה dropped before וּ); 3rd plural qatal is common: gender c.', ['weak', 'III-he', 'common']],
+  ['B', 'יִכָּרֵת', 'כרת', 'niphal', 'yiqtol', '3ms', 'will be cut off', 'Ruth 4:10', null, 'Niphal yiqtol: the נ is absorbed, root 1 doubled (כּ), A then E (יִקָּטֵל).', []],
+  ['B', 'הַנִּשְׁבָּרָה', 'שבר', 'niphal', 'ptc', 'fs', 'the broken (one)', 'Hophal slides, practice', null, 'הַ = the article. נִ + qamets under root 2 = Niphal participle; ָה = feminine. No person.', ['ptc', 'no-person', 'article']],
+  ['B', 'שֻׁלְּחוּ', 'שלח', 'pual', 'qatal', '3cp', 'they were sent', 'Pual slides, practice (Gen 44:3)', null, 'U under root 1 + doubled root 2 = Pual (passive of Piel); ending וּ = they (common).', ['common']],
+  ['B', 'וַתִּתְכַּס', 'כסה', 'hithpael', 'wayyiqtol', '3fs', 'and she covered herself', 'Hithpael slides, practice', [{ pgn: '2ms' }], 'תְ after the person prefix + doubled root 2 = Hithpael; III-he short form (ה gone).', ['weak', 'III-he', 'wayyiqtol']],
+  ['B', 'תִּשְׁתַּחֲוֶה', 'חוה', 'hishtaphel', 'yiqtol', '3fs|2ms', 'she / you will bow down (worship)', 'Hithpael slides, practice', null, 'שְׁתַּ before the root חוה = the Hishtaphel; prefix ת = she or you (m.).', ['weak']],
+  ['B', 'יַכִּיר', 'נכר', 'hiphil', 'yiqtol', '3ms', 'he will recognize', 'Ruth 3:14', null, 'I-nun Hiphil: pataḥ under the prefix (יַ), נ absorbed into כּ, ִי before the last root letter.', ['weak', 'I-nun', 'hiphil-weak']],
+  ['B', 'הוֹתִרָה', 'יתר', 'hiphil', 'qatal', '3fs', 'she had left over', 'Ruth 2:18', null, 'I-yod Hiphil: הוֹ (the י of the root became וֹ) + ִי; ending ָה = she.', ['weak', 'I-yod', 'hiphil-weak']],
+  ['B', 'וַיֻּכּוּ', 'נכה', 'hophal', 'wayyiqtol', '3mp', 'and they were struck', 'Hophal slides, practice', null, 'U (qibbuts) under the prefix = Hophal (passive of Hiphil); נ absorbed (כּ), ה dropped; וּ = they.', ['weak', 'I-nun', 'III-he', 'wayyiqtol']],
+];
+BLUEPRINTS.dg1 = { id: 'dg1', name: 'Diagnostic 1 · Parsing (20 verbs, all eight stems)', minutes: () => 30, sections: { parse: { n: 20, w: 1, label: 'Parsing (מָה הַפֹּעַל הַזֶּה?)' } } };
+async function buildDG1() {
+  const items = DG1.map((d, i) => { const [part, form, root, stem, conj, pgn, gloss, ref, alts, why, tags] = d; const m = /^Ruth (\d):(\d+)$/.exec(ref); const v = m ? ruthVerse(+m[1], +m[2]) : null;
+    return { kind: 'parse', key: 'dg1|' + form, cid: 'dg1:' + AN.hash(form), form, root, stem, conj, pgn, gloss, gl: gloss, ref, ...(alts ? { alts } : {}), why, tags, part, dg: 1, ctx: v ? v.he : '', sec: 'parse', cat: 'protected', t: PB_STEM_TOPIC[stem] || stem, diff: tags.includes('weak') ? 2.5 : 2 }; });
+  const again = dgResults().length > 0; if (again) items.forEach(it => it.cat = 'review');
+  return { id: 'a' + Date.now().toString(36), type: 'dg1', blueprint: 'dg1', items, limits: [], limitMs: 30 * 60000, created: Date.now(), passage: null, ...(again ? { retake: 1 } : {}) };
+}
+const startDG1 = () => fsStart(buildDG1, 'the diagnostic');
+const dgResults = () => (S.assess || []).filter(a => a.type === 'dg1' && a.end).sort((a, b) => a.end - b.end);
+(function () {
+  const _ei = exItemHTML;
+  exItemHTML = function (it, a, n) {
+    let h = _ei.apply(this, arguments); if (!it || !it.dg) return h;
+    const U = (a && a.unsure) || {};
+    h = h.replace(/Item \d+ · [^<]*/, `Item ${n} · Part ${it.part} · ${it.part === 'A' ? 'Qal: all the forms' : 'the derived stems'}`);
+    return h + `<label class="f">Meaning in English<input type="text" class="ex-txt" data-k="mean" value="${esc((a && a.mean) || '')}" autocomplete="off"></label>
+      <div class="row small" style="gap:6px;flex-wrap:wrap"><span class="muted">Not sure about (mark it, as GPT’s “?”):</span>${[['root', 'root'], ['stem', 'stem'], ['form', 'form'], ['pgn', 'person/gender/number'], ['mean', 'meaning']].map(([k, l]) => `<button class="btn sm ${U[k] ? 'primary' : ''}" data-dgu="${k}" aria-pressed="${!!U[k]}">? ${l}</button>`).join('')}</div>`;
+  };
+  const _wi = wireExItem;
+  wireExItem = function (v, it, a, onChange) {
+    const r = _wi.apply(this, arguments);
+    if (it && it.dg) $$('[data-dgu]', v).forEach(b => b.onclick = () => { a.unsure = a.unsure || {}; const k = b.dataset.dgu; a.unsure[k] = !a.unsure[k]; b.classList.toggle('primary', !!a.unsure[k]); b.setAttribute('aria-pressed', !!a.unsure[k]); onChange(); });
+    return r;
+  };
+  const _re = renderExam;
+  renderExam = function () {
+    const r = _re.apply(this, arguments);
+    if (EX && EX.type === 'dg1' && EX.phase === 'intro') { const h1 = $('#v-session h1'); if (h1) h1.insertAdjacentHTML('afterend', `<div class="note"><b>A diagnostic, not a simulation.</b> 20 verbs, one at a time: Part A (1–10) the Qal in all its forms; Part B (11–20) Niphal, Piel, Pual, Hithpael, Hishtaphel, Hiphil, Hophal. For every verb: root · stem · form · person/gender/number · the English meaning. If you are not sure of a box, still give your best answer and press “? …” for it: the analysis separates what you knew, what you guessed and what you did not know. No notes, no lexicon, no pronunciation. Target: 30 minutes. Verbs come from Ruth 2–4 (outside the passages of the nine simulations) and from the practice slides of the professor’s Pual, Hithpael and Hophal lessons.</div>`); }
+    return r;
+  };
+})();
+function dgAnalysisHTML(rec) {
+  const rows = (rec.items || []).map(x => { const it = x.spec || {}, a = x.answer || {}; const sel = { p: a.p || '', g: a.g || '', n: a.n || '', conj: a.conj || '', stem: a.stem || '', root: a.root || '' };
+    const g = gradeParse(it, sel), r = g.res || {}; const mean = (a.mean || '').trim(); const mc = mean ? AG.enCover(it.gloss || '', mean).cov : 0;
+    const pgnOK = ['p', 'g', 'n'].every(k => r[k] !== false); return { x, it, a, r, ans: !!x.answered, mean: mean ? (mc >= .5 ? 1 : mc > 0 ? .5 : 0) : null, pgnOK, U: a.unsure || {} }; });
+  const ans = rows.filter(o => o.ans), pct = (n, d) => d ? `${n} / ${d} (${Math.round(n / d * 100)}%)` : '—';
+  const F = [['root', o => o.r.root], ['stem (בִּנְיָן)', o => o.r.stem], ['form (נְטִיָּה)', o => o.r.conj], ['person', o => o.r.p], ['gender', o => o.r.g], ['number', o => o.r.n], ['all of person/gender/number', o => o.pgnOK], ['meaning', o => o.mean == null ? null : o.mean >= 1]];
+  const fieldRows = F.map(([l, f]) => { const v = ans.map(f).filter(z => z != null); return [l, pct(v.filter(Boolean).length, v.length)]; });
+  const group = (key, lab) => { const m = {}; for (const o of ans) { const k = key(o); (m[k] = m[k] || []).push(o); } return Object.entries(m).map(([k, L]) => [lab(k), pct(L.reduce((s, o) => s + o.x.score, 0).toFixed(1) * 1, L.length), L.map(o => o.x.n).join(', ')]); };
+  const byStem = group(o => o.it.stem, k => (STEMS[k] || [k, k])[1]), byConj = group(o => o.it.conj, k => (CONJ[k] || [k, k])[1]);
+  const weak = ans.filter(o => (o.it.tags || []).includes('weak')), reg = ans.filter(o => !(o.it.tags || []).includes('weak'));
+  const avg = L => L.length ? Math.round(L.reduce((s, o) => s + o.x.score, 0) / L.length * 100) + '% (n=' + L.length + ')' : '—';
+  const boxes = ['root', 'stem', 'form', 'pgn', 'mean'], okOf = (o, k) => k === 'root' ? o.r.root : k === 'stem' ? o.r.stem : k === 'form' ? o.r.conj : k === 'pgn' ? o.pgnOK : o.mean == null ? null : o.mean >= 1;
+  let uR = 0, uW = 0, sW = 0; for (const o of ans) for (const k of boxes) { const ok = okOf(o, k); if (ok == null) continue; if (o.U[k]) ok ? uR++ : uW++; else if (!ok) sW++; }
+  const pat = [
+    ['Infinitive or participle (Nov 21: לָגוּר; Nov 22: לִזְבֹּחַ)', [6, 7, 8, 14]],
+    ['Weak Hiphil read as Qal (Nov 22: אוֹדִיעַ, וַיַּעֲבֵר)', [18, 19]],
+    ['Weak roots recovered (Nov 22: סור, ידע missed)', [1, 2, 3, 9, 10, 12, 18, 19, 20]],
+    ['Common gender: first person and 3rd plural (Nov 21: אֶקָּבֵר)', [10, 12, 15]],
+    ['Person/gender/number of 2nd feminine forms', [4, 5, 11]],
+    ['Stems never tested in a simulation: Pual, Hithpael, Hishtaphel, Hophal', [15, 16, 17, 20]],
+  ].map(([l, ns]) => { const L = rows.filter(o => ns.includes(o.x.n)); const done = L.filter(o => o.ans); return [l, done.length ? `${done.filter(o => o.x.score >= 1).length} fully right of ${done.length}${done.length < L.length ? ` (${L.length - done.length} blank)` : ''} · items ${ns.join(', ')}` : 'not answered']; });
+  return `<div class="panel stack"><h2 style="margin:0">Diagnostic analysis</h2>
+    <p class="small muted">Answered ${ans.length} of ${rows.length}. Blank items are left out of every percentage (no evidence). One diagnostic shows tendencies, not a fixed level: retest the weak categories later with new verbs.</p>
+    <b>By box</b>${tableHTML(['Box', 'Right'], fieldRows)}
+    <b>By stem</b> <span class="small muted">(average six-box credit)</span>${tableHTML(['Stem', 'Credit', 'Items'], byStem)}
+    <b>By form</b>${tableHTML(['Form', 'Credit', 'Items'], byConj)}
+    <div class="small"><b>Weak roots</b> ${avg(weak)} · <b>regular roots</b> ${avg(reg)}</div>
+    <div class="small"><b>Your “?” marks:</b> ${uR} boxes right although marked unsure (you know more than you think) · ${uW} wrong and marked unsure (honest gaps) · <b>${sW} wrong without a “?”</b> (confident errors: these are the ones to fix first).</div>
+    <b>Compared with Nov 21–22</b>${tableHTML(['Pattern', 'This diagnostic'], pat)}</div>`;
+}
+(function () {
+  const _rv = renderExamReview;
+  renderExamReview = function (rec) {
+    const r = _rv.apply(this, arguments);
+    try {
+      if (rec && rec.type === 'dg1') {
+        const head = $('#v-session .panel'); if (head) head.insertAdjacentHTML('afterend', dgAnalysisHTML(rec));
+        for (const x of rec.items || []) { const el = $(`.rv-item[data-ri="${x.n}"]`), it = x.spec || {}, a = x.answer || {}; if (!el) continue;
+          const mean = (a.mean || '').trim(), U = Object.keys(a.unsure || {}).filter(k => a.unsure[k]);
+          el.insertAdjacentHTML('beforeend', `<div class="small"><b>Meaning:</b> ${mean ? `you wrote “${esc(mean)}”` : 'not given'} · expected “${esc(it.gloss || '')}”${U.length ? ` · you marked “?” on: ${esc(U.join(', '))}` : ''}</div><div class="small"><b>Why this verb is in the test:</b> ${heWrap(esc(it.why || ''))} <span class="muted">Source: ${esc(it.ref || '')}.</span></div>`); }
+      }
+    } catch (e) { console.error(e); }
+    return r;
+  };
+  // The card on the Final rescue tab and the block in Monday's plan.
+  const _fc = fsCardHTML;
+  fsCardHTML = function () {
+    const h = _fc.apply(this, arguments); const R = dgResults(), last = R[R.length - 1];
+    const card = `<div class="step ${R.length ? 'done' : ''}" style="border:1px dashed var(--accent);border-radius:10px;padding:8px"><span class="n">${R.length ? '✓' : 'D'}</span><div><b>Diagnostic 1 · Parsing</b> <span class="small muted">(20 verbs, all eight stems, 30 min; root · stem · form · person/gender/number · meaning)</span><div class="small muted">${R.length ? `Taken ${R.length}× · last ${simPct(last)}% · the analysis is in its correction` : 'Before the next simulation: it shows exactly which part of parsing fails.'}</div></div><div class="stack" style="gap:6px;flex:0 0 auto">${R.length ? `<button class="btn" data-dgr="1" style="white-space:nowrap">See the analysis</button>` : ''}<button class="btn ${R.length ? '' : 'primary'}" data-dg1="1" style="white-space:nowrap">${R.length ? 'Take again' : 'Start'}</button></div></div>`;
+    return h.replace('<div class="plan">', '<div class="plan">' + card);
+  };
+  document.addEventListener('click', e => { const t = e.target.closest && e.target.closest('[data-dg1],[data-dgr]'); if (!t) return; e.preventDefault(); if (t.dataset.dg1) startDG1(); else { const r = dgResults().slice(-1)[0]; if (r) renderExamReview(r); } });
+  const _pl = planBlockList;
+  planBlockList = function (d) {
+    const B = _pl.apply(this, arguments);
+    if (d === '2026-11-23' || d === '2026-11-24') {
+      const today = () => dgResults().some(a => dayKey(new Date(a.end)) === d);
+      B.unshift({ id: 'dg1', min: 30, title: d === '2026-11-23' ? 'First: Diagnostic 1 · Parsing (20 verbs, 30 min)' : 'Diagnostic 1 again, if you did not take it yesterday', sub: 'Root, stem, form, person/gender/number and meaning for 20 class verbs in all eight stems. The analysis tells which part of parsing fails (then fix only that).', act: () => startDG1(), check: today });
+    }
+    return B;
+  };
+})();
+
 </script>
 <script>
 // Colour mode: dark (default), light, or the same as the computer. Remembered on this device.
@@ -11472,5 +11593,5 @@ function courseSrcHTML(word) {
   const b = document.getElementById('btn-theme'); if (b) b.onclick = () => { t = order[(order.indexOf(t) + 1) % order.length]; try { localStorage.setItem('het-theme', t); } catch {} apply(); };
 })();
 </script>
-<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='6322b2ca3a';</script>
+<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='35af2a0f30';</script>
 </body></html>
