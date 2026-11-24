@@ -1799,7 +1799,7 @@ const AN = (() => {
       if (k === 'binyan' && ind.stem && ind.stem.n >= 3 && ind.stem.acc < .7) boost(1.2, `unseen stem recognition in the last test ${pc(ind.stem.acc)} (n=${ind.stem.n})`);
       if (k === 'read' && ind.comp && ind.comp.n >= 2 && ind.comp.acc < .6) boost(1.3, `unseen comprehension in the last test ${pc(ind.comp.acc)} (n=${ind.comp.n})`);
       // Transfer: well on repeated items but clearly worse on new ones → more new material in the core skills.
-      if (opts.transfer && opts.transfer.gap >= .15 && ['parse', 'root', 'trans'].includes(k)) boost(1.2, `repeated items ${pc(opts.transfer.rep)} vs first-time ${pc(opts.transfer.first)} (n=${opts.transfer.nRep}/${opts.transfer.nFirst}): practice favours new material`);
+      if (opts.transfer && opts.transfer.gap >= .15 && ['parse', 'root', 'trans'].includes(k)) boost(1.2, `repeated items ${pc(opts.transfer.rep)} vs first-time ${pc(opts.transfer.first)} (n=${opts.transfer.nRep}/${opts.transfer.nFirst}): practice favours new material (an observed difference, not proof of cause)`);
       // Grammar improving but translation weak → integrated translation.
       if (k === 'trans' && opts.gramAcc != null && opts.gramAcc >= .7 && acc != null && acc < .6) boost(1.25, `grammar ${pc(opts.gramAcc)} but translation ${pc(acc)}: more integrated translation`);
       if (k === 'review' && opts.retention && opts.retention.n >= 10 && opts.retention.acc < .7) boost(1.4, `delayed recall only ${pc(opts.retention.acc)} (n=${opts.retention.n})`);
@@ -5961,7 +5961,7 @@ function weekNarrative(w, c) {
   if (m.independent) out.evidence.push(`Independent score ${m.independent.score}% on ${m.independent.n} unseen items (${m.independent.type === 'mock' ? 'mock final' : 'weekly check'}, ${m.independent.examMin} min).`);
   out.evidence.push(`${m.practice.answers} practice answers and ${m.practice.cards} flashcard reviews, ${m.practice.minutes} min of active answering on ${m.practice.activeDays} practice days (≥10 answers).`);
   const r = m.skills; const fa = Object.values(r).reduce((s, o) => s + (o.firstAcc != null ? o.firstAcc * o.firstN : 0), 0), fn = Object.values(r).reduce((s, o) => s + o.firstN, 0), ra = Object.values(r).reduce((s, o) => s + (o.repAcc != null ? o.repAcc * o.repN : 0), 0), rn = Object.values(r).reduce((s, o) => s + o.repN, 0);
-  out.familiarity = fn >= 10 && rn >= 10 ? `First-time items ${Math.round(fa / fn * 100)}% (n=${fn}) vs repeated items ${Math.round(ra / rn * 100)}% (n=${rn}). The gap is familiarity, not independent skill.` : 'Not enough first-time and repeated answers this week to separate familiarity from skill.';
+  out.familiarity = fn >= 10 && rn >= 10 ? `First-time items ${Math.round(fa / fn * 100)}% (n=${fn}) vs repeated items ${Math.round(ra / rn * 100)}% (n=${rn}). An observed difference only: the two sets differ in difficulty and item type, so it does not prove that familiarity caused it.` : 'Not enough first-time and repeated answers this week to separate familiarity from skill.';
   if (c && c.metrics.independent && m.independent) {
     const a = c.metrics.independent, b = m.independent, d = b.score - a.score, h = m.practice.minutes / 60;
     const why = a.type !== b.type ? 'different test types' : a.n < 8 || b.n < 8 ? 'fewer than 8 unseen items in one of the tests' : Math.abs((a.diff || 0) - (b.diff || 0)) > .3 ? 'the tests differ in difficulty' : '';
@@ -12186,6 +12186,77 @@ function n23CardsHTML() {
   };
 })();
 
+// ===== GPT’s critical audit (Nov 23, night): verified defects fixed; analytics labelled by source =====
+// 1) Hishtaphel printed “undefined” in the word-by-word explanation (stem tables had only the seven main stems).
+try {
+  XV_STEMHE.hishtaphel = 'הִשְׁתַּפְעֵל'; XV_STEMEN.hishtaphel = 'Hishtaphel'; XV_COMP.hishtaphel = ['hithpael', 'piel'];
+  XV_RULE.hishtaphel = { qatal: 'Hishtaphel perfect: הִשְׁתַּ before the root חוה (הִשְׁתַּחֲוָה). Only this one verb, “bow down, worship” (professor’s Hithpael handout, Ch. 24, p. 7).', yiqtol: 'Hishtaphel imperfect: person prefix + שְׁתַּ + חוה (יִשְׁתַּחֲוֶה). The wayyiqtol is short: וַיִּשְׁתַּחוּ “and he bowed down” — its final וּ is the root ו, not a plural (the plural is וַיִּשְׁתַּחֲווּ).', ptc: 'Hishtaphel participle: מִשְׁתַּחֲוֶה (מ + שְׁתַּ + חוה).', inf: 'Hishtaphel infinitive: (לְ)הִשְׁתַּחֲוֹת; וֹת is the III-ה infinitive ending.' };
+} catch (e) { console.error(e); }
+// 2) No per-week “needed” rates when the exam is less than a week away.
+try { const _tg = AN.targets; AN.targets = function (cur, slope, weeksLeft) { const r = _tg.apply(this, arguments); return weeksLeft != null && weeksLeft < 1 ? r.map(t => ({ ...t, req: null, status: t.gap != null && t.gap <= 0 ? t.status : 'exam in under a week: a per-week rate means nothing' })) : r; }; } catch (e) { console.error(e); }
+// 3) The weekly / semester report PDF is drawn as pictures (no text layer). Every report now also saves a parallel UTF-8 Markdown file with the same headings, tables and Hebrew.
+try {
+  const P = Report.prototype, md = r => (r._md = r._md || [`# ${r.title}`, '']);
+  const mdCell = c => String(c ?? '').replace(/\|/g, '/').replace(/\n+/g, ' ');
+  const _h1 = P.h1, _h2 = P.h2, _bu = P.bullets, _tb = P.table, _tx = P.text, _ch = P.chart, _pdf = P.pdf;
+  P.h1 = function (t) { md(this).push('', `# ${t}`, ''); this._in = 1; try { return _h1.apply(this, arguments); } finally { this._in = 0; } };
+  P.h2 = function (t) { md(this).push('', `## ${t}`, ''); this._in = 1; try { return _h2.apply(this, arguments); } finally { this._in = 0; } };
+  P.bullets = function (arr) { md(this).push(...arr.map(t => `- ${t}`), ''); this._in = 1; try { return _bu.apply(this, arguments); } finally { this._in = 0; } };
+  P.table = function (head, rows) { md(this).push(`| ${head.map(mdCell).join(' | ')} |`, `|${head.map(() => '---').join('|')}|`, ...rows.map(r => `| ${r.map(mdCell).join(' | ')} |`), ''); this._in = 1; try { return _tb.apply(this, arguments); } finally { this._in = 0; } };
+  P.text = function (t) { if (!this._in) md(this).push(String(t), ''); return _tx.apply(this, arguments); };
+  P.chart = async function (id, caption) { const card = document.getElementById(id); const ttl = card && card.querySelector('h3') ? card.querySelector('h3').textContent : id; const sub = caption || (card && card.querySelector('p.small') ? card.querySelector('p.small').textContent : ''); md(this).push(`*Chart: ${ttl}${sub ? ' — ' + sub : ''} (the picture is in the PDF).*`, ''); this._in = 1; try { return await _ch.apply(this, arguments); } finally { this._in = 0; } };
+  P.pdf = function () { const out = _pdf.apply(this, arguments); try { const name = `hebrew-${String(this.title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${dayKey()}.md`; setTimeout(() => saveFile(name, new Blob([md(this).join('\n')], { type: 'text/markdown;charset=utf-8' })).catch(() => { }), 600); } catch (e) { console.error(e); } return out; };
+} catch (e) { console.error(e); }
+// 4) Readiness by the final’s four parts, and every test listed with its own source (never one mixed trend).
+const N23_KIND = t => /^fs\d$/.test(t) ? 'final simulation (professor’s format)' : t === 'sim' || t === 'mock' ? 'practice final (older format)' : t === 'sp' ? 'story practice (exam format)' : /^(dg1|dg1g|dgr|rp1|rp2)$/.test(t) ? 'timed parsing diagnostic' : /^(dq1|sq1|sq2)$/.test(t) ? 'timed Hebrew-question test' : /^rt\d$/.test(t) ? 'timed Ruth baseline' : t === 'weekly' ? 'weekly check (custom mix)' : 'practice test';
+const N23_PARTS = [['parse', 'Story · parsing', 32], ['comp', 'Story · questions in Hebrew', 26], ['translation', 'Ruth · translation', 30], ['syntax', 'Ruth · syntax in English', 12]];
+function n23Rec(a) { try { const ov = ovFor(a); return ov ? recWithOverlay(a, ov) : a; } catch { return a; } }
+function n23PartStats(a, sec) {
+  const L = (a.items || []).filter(x => x.sec === sec && (sec !== 'comp' || !(x.spec || {}).dq)); if (!L.length) return null;
+  const ans = L.filter(x => x.answered); const est = ans.filter(x => x.sc === 'est' || x.chk).length;
+  return { n: L.length, answered: ans.length, acc: ans.length ? ans.reduce((s, x) => s + (x.score || 0), 0) / ans.length : null, est };
+}
+function n23ReadinessHTML() {
+  const A = (S.assess || []).filter(a => a.end).map(n23Rec).sort((a, b) => b.end - a.end);
+  const rows = N23_PARTS.map(([sec, label, pts]) => {
+    const ev = A.map(a => ({ a, s: n23PartStats(a, sec) })).filter(o => o.s && o.s.answered && o.a.type !== 'weekly').slice(0, 3);
+    if (!ev.length) return [label, pts, '<b>not measured</b>', '—'];
+    const o = ev[0];
+    return [label, pts, `${Math.round(o.s.acc * 100)}% on ${o.s.answered} answered of ${o.s.n}${o.s.est ? ` (${o.s.est} estimated, to check)` : ''} · ${esc((BLUEPRINTS[o.a.type] || {}).name || o.a.type)}, ${dShort(o.a.end)}, ${esc(N23_KIND(o.a.type))}`, ev.slice(1).map(e => `${Math.round(e.s.acc * 100)}% (${e.s.answered}/${e.s.n}, ${dShort(e.a.end)})`).join(' · ') || '—'];
+  });
+  const P = { p: [0, 0], g: [0, 0], n: [0, 0], all: [0, 0] };
+  for (const a of A) for (const x of (a.items || []).filter(x => x.kind === 'parse' && x.answered && x.spec)) { const s = x.answer || {}; const r = (gradeParse(x.spec, { p: s.p || '', g: s.g || '', n: s.n || '', conj: s.conj || '', stem: s.stem || '', root: s.root || '' }) || {}).res || {}; ['p', 'g', 'n'].forEach(k => { P[k][1]++; if (r[k]) P[k][0]++; }); P.all[1]++; if (r.p && r.g && r.n) P.all[0]++; }
+  const pc = ([a, b]) => b ? `${a}/${b} (${Math.round(a / b * 100)}%)` : '—';
+  const tests = A.slice(0, 10).map(a => { const ans = (a.items || []).filter(x => x.answered).length, n = (a.items || []).length; return [esc(a.id), dShort(a.end), esc((BLUEPRINTS[a.type] || {}).name || a.type), esc(N23_KIND(a.type)), `${ans}/${n}${a.timeUp ? ' (time ran out)' : ''}`, `${simPct(a)}%${a._ov ? ' (with grader overlay)' : ''}`]; });
+  const D = odData();
+  return `<div class="panel stack" id="n23-ready"><h2 style="margin:0">The final’s four parts: what is measured</h2>
+    <p class="small">Points are the professor’s (32 + 26 + 30 + 12 = 100). Each row shows the latest test that measured that part, with its own source; nothing is mixed into one trend. Blank items count 0 in a test’s score but are left out of these accuracies (no evidence either way). Weekly checks are left out: they use the app’s custom mix, not the final’s parts.</p>
+    ${tableHTML(['Part', 'Points', 'Latest measure (answered items)', 'Earlier'], rows)}
+    ${D ? `<div class="small">Oral diagnostic with GPT (Nov 23, untimed, provisional): ${D.grading.earned_fields_user_clarified}/120 boxes on 20 paradigm verbs — kept separate from the timed tests.</div>` : ''}
+    <div class="small"><b>Person / gender / number on every answered parse</b> (a participle has no person; an infinitive has none of the three; 1st person and 3rd plural qatal are common gender): person ${pc(P.p)} · gender ${pc(P.g)} · number ${pc(P.n)} · <b>all three right</b> ${pc(P.all)}. The weekly report’s “person, gender, number” figure is the all-three-right kind, from practice; these are from tests.</div>
+    <details><summary class="small"><b>Tests, each with its source</b></summary>${tableHTML(['Record', 'Date', 'Test', 'Kind', 'Answered', 'Score'], tests)}<div class="small muted">The “independent score” on this page is the app’s learning index (a custom mix of unseen items across practice categories). It is not a final-exam score and not a forecast.</div></details></div>`;
+}
+(function () {
+  const _rp = renderProgress;
+  renderProgress = async function () {
+    const r = await _rp.apply(this, arguments);
+    try { const v = $('#v-progress'); if (v && !$('#n23-ready', v)) v.insertAdjacentHTML('afterbegin', n23ReadinessHTML()); } catch (e) { console.error(e); }
+    return r;
+  };
+  // 5) In a diagnostic’s analysis: the items at 4/6 or less (mandatory) and the items not reached in time (a speed problem, not a knowledge error).
+  const _da = dgAnalysisHTML;
+  dgAnalysisHTML = function (rec) {
+    let h = _da.apply(this, arguments);
+    try {
+      const R = n23Rec(rec), L = (R.items || []).map(x => ({ x, six: Math.round((x.score || 0) * 6) }));
+      const low = L.filter(o => o.x.answered && o.six <= 4), miss = L.filter(o => !o.x.answered);
+      const ln = o => `${o.x.n}. ${H(esc((o.x.spec || {}).form || ''))} ${o.six}/6`;
+      h = h.replace(/<\/div>\s*$/, `<div class="small"><b>Fix first (answered, 4/6 or less):</b> ${low.length ? low.map(ln).join(' · ') : 'none'}</div><div class="small"><b>Not answered${rec.timeUp ? ' (time ran out)' : ''}:</b> ${miss.length ? miss.map(o => `${o.x.n}. ${H(esc((o.x.spec || {}).form || ''))}`).join(' · ') + ' — retest these; a blank says nothing about what you know' : 'none'}</div></div>`);
+    } catch (e) { console.error(e); }
+    return h;
+  };
+})();
+
 </script>
 <script>
 // Colour mode: dark (default), light, or the same as the computer. Remembered on this device.
@@ -12197,5 +12268,5 @@ function n23CardsHTML() {
   const b = document.getElementById('btn-theme'); if (b) b.onclick = () => { t = order[(order.indexOf(t) + 1) % order.length]; try { localStorage.setItem('het-theme', t); } catch {} apply(); };
 })();
 </script>
-<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='b1fd13b406';</script>
+<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='2d7b3fa982';</script>
 </body></html>
