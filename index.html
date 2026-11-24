@@ -12457,7 +12457,7 @@ function n23PartsRows() {
 const TW = { built: {}, pos: {}, opts: { parse: true, once: true } };
 try { const p = lsGet('twpos'); if (p && typeof p === 'object') TW.pos = p; const o = lsGet('twopts'); if (o) TW.opts = { ...TW.opts, ...o }; } catch { }
 const TW_Q = 'מַה פֵּרוּשׁ הַמִּלָּה?';
-const TW_STEMS = new Set(['qal', 'niphal', 'piel', 'pual', 'hithpael', 'hiphil', 'hophal']);
+const TW_STEMS = new Set(['qal', 'niphal', 'piel', 'pual', 'hithpael', 'hiphil', 'hophal', 'hishtaphel']);
 const twKey = w => 'tw|' + fvKey(w);
 // The verse split into words and separators, keeping the order of lexWords so word k can be marked.
 function twVerseHTML(he, k) {
@@ -12477,7 +12477,8 @@ function twVerseWords(c, v) {
   const words = wp.map((w, i) => {
     const o = same ? wo[i] : w, variant = fvKey(o) !== fvKey(w);
     let a = null; try { a = analyzeWord(o); } catch (e) { console.error(e); }
-    let ps = []; try { ps = (lexParses(o) || []).filter(p => TW_STEMS.has(p.stem) && p.conj); } catch { }
+    // The professor teaches וַיִּשְׁתַּחוּ as Hishtaphel of חוה (the Bible database's root is שׁחה): his root is the key; the grader also accepts שׁחה.
+    let ps = []; try { ps = (lexParses(o) || []).filter(p => TW_STEMS.has(p.stem) && p.conj).map(p => p.stem === 'hishtaphel' ? { ...p, root: 'חוה' } : p); } catch { }
     const seen = new Set(); ps = ps.filter(p => { const k = p.stem + p.conj + p.pgn + p.root; if (seen.has(k)) return false; seen.add(k); return true; });
     let en = '';
     if (ps.length && a) { try { en = formEnglish({ form: o, root: ps[0].root, stem: ps[0].stem, conj: ps[0].conj, pgn: ps[0].pgn, gloss: a.meaning.replace(/ — subject:.*$/, '').replace(/^.*\+ /, '').replace(/ \(root meaning;[^)]*\)/, '') }); } catch { } }
@@ -12492,7 +12493,7 @@ function twMeaning(x) {
   if (!m || m === '—') return 'not found in the dictionary: look it up in your lexicon';
   return m.replace(/^probably: /, '') + (/^probably/.test(m) || /uncertain/.test(a.how || '') ? ' (uncertain: check your lexicon)' : '');
 }
-const TW_SPELL = { qal: 'Qal', niphal: 'Niphal', piel: 'Piel', pual: 'Pual', hithpael: 'Hithpael', hiphil: 'Hiphil', hophal: 'Hophal' };
+const TW_SPELL = { qal: 'Qal', niphal: 'Niphal', piel: 'Piel', pual: 'Pual', hithpael: 'Hithpael', hiphil: 'Hiphil', hophal: 'Hophal', hishtaphel: 'Hishtaphel' };
 const TW_CONJ = { qatal: 'qatal (perfect)', weqatal: 'weqatal', yiqtol: 'yiqtol (imperfect)', weyiqtol: 'weyiqtol', wayyiqtol: 'wayyiqtol', impv: 'imperative', ptc: 'participle', inf: 'infinitive' };
 function twParseText(p) { return `${TW_SPELL[p.stem] || p.stem} ${TW_CONJ[p.conj] || p.conj}${p.pgn ? ' ' + p.pgn : ''} · root ${spaced(p.root)}`; }
 function twBackHTML(x, V, later) {
@@ -12663,5 +12664,5 @@ function twWire(root) {
   const b = document.getElementById('btn-theme'); if (b) b.onclick = () => { t = order[(order.indexOf(t) + 1) % order.length]; try { localStorage.setItem('het-theme', t); } catch {} apply(); };
 })();
 </script>
-<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='cfea21807f';</script>
+<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='07b1ee5376';</script>
 </body></html>
