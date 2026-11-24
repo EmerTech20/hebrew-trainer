@@ -11497,12 +11497,15 @@ async function buildDG1() {
 }
 const startDG1 = () => fsStart(buildDG1, 'the diagnostic');
 const dgResults = () => (S.assess || []).filter(a => a.type === 'dg1' && a.end).sort((a, b) => a.end - b.end);
+const isDG = t => /^(dg1|dg1g|dgr)$/.test(t || '');
+const dgAll = () => (S.assess || []).filter(a => isDG(a.type) && a.end).sort((a, b) => a.end - b.end);
+const DG_INTRO = {};
 (function () {
   const _ei = exItemHTML;
   exItemHTML = function (it, a, n) {
     let h = _ei.apply(this, arguments); if (!it || !it.dg) return h;
     const U = (a && a.unsure) || {};
-    h = h.replace(/Item \d+ · [^<]*/, `Item ${n} · Part ${it.part} · ${it.part === 'A' ? 'Qal: all the forms' : 'the derived stems'}`);
+    h = h.replace(/Item \d+ · [^<]*/, it.part ? `Item ${n} · Part ${it.part} · ${it.part === 'A' ? 'Qal: all the forms' : 'the derived stems'}` : `Item ${n} · ${esc(it.dgLabel || 'Retest')}`);
     return h + `<label class="f">Meaning in English<input type="text" class="ex-txt" data-k="mean" value="${esc((a && a.mean) || '')}" autocomplete="off"></label>
       <div class="row small" style="gap:6px;flex-wrap:wrap"><span class="muted">Not sure about (mark it, as GPT’s “?”):</span>${[['root', 'root'], ['stem', 'stem'], ['form', 'form'], ['pgn', 'person/gender/number'], ['mean', 'meaning']].map(([k, l]) => `<button class="btn sm ${U[k] ? 'primary' : ''}" data-dgu="${k}" aria-pressed="${!!U[k]}">? ${l}</button>`).join('')}</div>`;
   };
@@ -11515,6 +11518,7 @@ const dgResults = () => (S.assess || []).filter(a => a.type === 'dg1' && a.end).
   const _re = renderExam;
   renderExam = function () {
     const r = _re.apply(this, arguments);
+    if (EX && isDG(EX.type) && EX.type !== 'dg1' && EX.phase === 'intro') { const h1 = $('#v-session h1'); if (h1) h1.insertAdjacentHTML('afterend', DG_INTRO[EX.type] || ''); }
     if (EX && EX.type === 'dg1' && EX.phase === 'intro') { const h1 = $('#v-session h1'); if (h1) h1.insertAdjacentHTML('afterend', `<div class="note"><b>A diagnostic, not a simulation.</b> 20 verbs, one at a time: Part A (1–10) the Qal in all its forms; Part B (11–20) Niphal, Piel, Pual, Hithpael, Hishtaphel, Hiphil, Hophal. For every verb: root · stem · form · person/gender/number · the English meaning. If you are not sure of a box, still give your best answer and press “? …” for it: the analysis separates what you knew, what you guessed and what you did not know. No notes, no lexicon, no pronunciation. Target: 30 minutes. Verbs come from Ruth 2–4 (outside the passages of the nine simulations) and from the practice slides of the professor’s Pual, Hithpael and Hophal lessons.</div>`); }
     return r;
   };
@@ -11532,14 +11536,16 @@ function dgAnalysisHTML(rec) {
   const avg = L => L.length ? Math.round(L.reduce((s, o) => s + o.x.score, 0) / L.length * 100) + '% (n=' + L.length + ')' : '—';
   const boxes = ['root', 'stem', 'form', 'pgn', 'mean'], okOf = (o, k) => k === 'root' ? o.r.root : k === 'stem' ? o.r.stem : k === 'form' ? o.r.conj : k === 'pgn' ? o.pgnOK : o.mean == null ? null : o.mean >= 1;
   let uR = 0, uW = 0, sW = 0; for (const o of ans) for (const k of boxes) { const ok = okOf(o, k); if (ok == null) continue; if (o.U[k]) ok ? uR++ : uW++; else if (!ok) sW++; }
+  const P = (l, f) => { const L = rows.filter(o => f(o.it)); const done = L.filter(o => o.ans); return [l, !L.length ? 'not in this test' : done.length ? `${done.filter(o => o.x.score >= 1).length} fully right of ${done.length}${done.length < L.length ? ` (${L.length - done.length} blank)` : ''} · items ${L.map(o => o.x.n).join(', ')}` : 'not answered']; };
+  const tg = it => it.tags || [];
   const pat = [
-    ['Infinitive or participle (Nov 21: לָגוּר; Nov 22: לִזְבֹּחַ)', [6, 7, 8, 14]],
-    ['Weak Hiphil read as Qal (Nov 22: אוֹדִיעַ, וַיַּעֲבֵר)', [18, 19]],
-    ['Weak roots recovered (Nov 22: סור, ידע missed)', [1, 2, 3, 9, 10, 12, 18, 19, 20]],
-    ['Common gender: first person and 3rd plural (Nov 21: אֶקָּבֵר)', [10, 12, 15]],
-    ['Person/gender/number of 2nd feminine forms', [4, 5, 11]],
-    ['Stems never tested in a simulation: Pual, Hithpael, Hishtaphel, Hophal', [15, 16, 17, 20]],
-  ].map(([l, ns]) => { const L = rows.filter(o => ns.includes(o.x.n)); const done = L.filter(o => o.ans); return [l, done.length ? `${done.filter(o => o.x.score >= 1).length} fully right of ${done.length}${done.length < L.length ? ` (${L.length - done.length} blank)` : ''} · items ${ns.join(', ')}` : 'not answered']; });
+    P('Infinitive or participle (Nov 21: לָגוּר; Nov 22: לִזְבֹּחַ)', it => it.conj === 'inf' || it.conj === 'ptc'),
+    P('Weak Hiphil read as Qal (Nov 22: אוֹדִיעַ, וַיַּעֲבֵר)', it => it.stem === 'hiphil' && tg(it).includes('weak')),
+    P('Weak roots recovered (Nov 22: סור, ידע missed)', it => tg(it).includes('weak')),
+    P('Common gender: first person and 3rd plural (Nov 21: אֶקָּבֵר)', it => /c/.test(String(it.pgn || '').split('|')[0])),
+    P('Person/gender/number of 2nd feminine forms', it => /^2f/.test(String(it.pgn || ''))),
+    P('Stems never tested in a simulation: Pual, Hithpael, Hishtaphel, Hophal', it => ['pual', 'hithpael', 'hishtaphel', 'hophal'].includes(it.stem)),
+  ];
   return `<div class="panel stack"><h2 style="margin:0">Diagnostic analysis</h2>
     <p class="small muted">Answered ${ans.length} of ${rows.length}. Blank items are left out of every percentage (no evidence). One diagnostic shows tendencies, not a fixed level: retest the weak categories later with new verbs.</p>
     <b>By box</b>${tableHTML(['Box', 'Right'], fieldRows)}
@@ -11554,7 +11560,7 @@ function dgAnalysisHTML(rec) {
   renderExamReview = function (rec) {
     const r = _rv.apply(this, arguments);
     try {
-      if (rec && rec.type === 'dg1') {
+      if (rec && isDG(rec.type)) {
         const head = $('#v-session .panel'); if (head) head.insertAdjacentHTML('afterend', dgAnalysisHTML(rec));
         for (const x of rec.items || []) { const el = $(`.rv-item[data-ri="${x.n}"]`), it = x.spec || {}, a = x.answer || {}; if (!el) continue;
           const mean = (a.mean || '').trim(), U = Object.keys(a.unsure || {}).filter(k => a.unsure[k]);
@@ -11582,6 +11588,199 @@ function dgAnalysisHTML(rec) {
   };
 })();
 
+// ===== Everything GPT proposed on Nov 23 (Emerson: “build everything GPT suggested”) =====
+// 1) GPT’s own 20-verb parsing diagnostic, as a second version (also the retest with different verbs);
+// 2) two submissions (Part A, then Part B, no correction in between);
+// 3) a retest of the weak categories with NEW class verbs;
+// 4) Diagnostic 2: understanding Hebrew questions (what is asked, how fast);
+// 5) the decision: another full simulation or focused work, from the two diagnostic profiles.
+function rootTags(root) {
+  const r = [...String(root || '').replace(/[^א-ת]/g, '')], t = [];
+  if (r[0] === 'נ') t.push('I-nun'); if (r[0] === 'י') t.push('I-yod'); if (r.length === 3 && 'וי'.includes(r[1])) t.push('hollow');
+  if (r[2] === 'ה') t.push('III-he'); if (r.length === 3 && r[1] === r[2]) t.push('geminate');
+  if (t.length) t.unshift('weak'); return t;
+}
+const DG1G = [
+  ['A', 'שָׁמַר', 'שׁמר', 'qal', 'qatal', '3ms', 'he kept / guarded', '', null, 'Qal qatal 3ms: A–A, no prefix, no ending.'],
+  ['A', 'תִּשְׁמְרוּ', 'שׁמר', 'qal', 'yiqtol', '2mp', 'you (m. pl.) will keep', '', null, 'Prefix ת + ending וּ = you (m. pl.); I–sheva–(O) = Qal yiqtol.'],
+  ['A', 'וַיִּקְרָא', 'קרא', 'qal', 'wayyiqtol', '3ms', 'and he called', '', null, 'וַ + doubled prefix = wayyiqtol; III-alef keeps A.'],
+  ['A', 'וְהָלַכְתָּ', 'הלך', 'qal', 'weqatal', '2ms', 'and you shall go', 'קַח מַטְּךָ בְּיָדְךָ וְהָלַכְתָּ', null, 'וְ + qatal after a command = weqatal; ending תָּ = you (m.).'],
+  ['A', 'וְיִשָּׁמֵר', 'שׁמר', 'niphal', 'weyiqtol', '3ms', 'and let him be kept / take care', '', null, 'Ordinary וְ + yiqtol; doubled root 1 (שּׁ) with A then E = Niphal.'],
+  ['A', 'שֹׁמֶרֶת', 'שׁמר', 'qal', 'ptc', 'fs', 'keeping (f.)', '', null, 'O after root 1 = Qal participle; ־ֶרֶת = feminine singular. No person.'],
+  ['A', 'שְׁמֹר', 'שׁמר', 'qal', 'impv', '2ms', 'keep!', 'שְׁמֹר אֶת־הַבְּרִית', [{ conj: 'inf', pgn: '' }], 'Sheva–O with no prefix: imperative 2ms (here: a command); the same shape is the infinitive construct.'],
+  ['A', 'לַעֲשׂוֹת', 'עשה', 'qal', 'inf', '', 'to do / to make', '', null, 'לְ + infinitive of a III-he root: the ending וֹת replaces ה. No person/gender/number.'],
+  ['A', 'שָׁמוֹר', 'שׁמר', 'qal', 'inf', '', 'keeping (infinitive absolute)', '', null, 'A–O = Qal infinitive absolute (often strengthens another verb).'],
+  ['A', 'דִּבֶּר', 'דבר', 'piel', 'qatal', '3ms', 'he spoke', '', null, 'I under root 1 + doubled root 2 + E = Piel qatal 3ms.'],
+  ['B', 'יְשַׁלֵּם', 'שׁלם', 'piel', 'yiqtol', '3ms', 'he will repay', '', null, 'Sheva–A–E + doubled root 2 = Piel yiqtol.'],
+  ['B', 'מְקַדֶּשֶׁת', 'קדשׁ', 'piel', 'ptc', 'fs', 'sanctifying (f.)', '', null, 'מְ prefix + Piel pattern = Piel participle; ־ֶשֶׁת = feminine singular.'],
+  ['B', 'קֻדַּשׁ', 'קדשׁ', 'pual', 'qatal', '3ms', 'it was sanctified', '', null, 'U under root 1 + doubled root 2 = Pual (passive of Piel).'],
+  ['B', 'הֵבִיא', 'בוא', 'hiphil', 'qatal', '3ms', 'he brought', '', null, 'Hollow root in the Hiphil: הֵ + ִי; the ו of בוא is gone.'],
+  ['B', 'וַיַּעֲלוּ', 'עלה', 'hiphil', 'wayyiqtol', '3mp', 'and they brought up (or: and they went up)', '', [{ stem: 'qal' }], 'III-he: ה dropped before וּ. Qal and Hiphil look the same here (prefix pataḥ before the guttural ע): context decides; both accepted.'],
+  ['B', 'הַקְרֵב', 'קרב', 'hiphil', 'impv', '2ms', 'bring near!', '', [{ conj: 'inf', pgn: '' }], 'הַ + E with no ending: Hiphil imperative 2ms (also the infinitive).'],
+  ['B', 'הֻקְרַב', 'קרב', 'hophal', 'qatal', '3ms', 'it was brought near', '', null, 'הֻ (U) = Hophal, the passive of the Hiphil.'],
+  ['B', 'נִשְׁמָר', 'שׁמר', 'niphal', 'ptc', 'ms', 'being kept', '', [{ conj: 'qatal', pgn: '3ms' }], 'נִ + qamets under root 2 = Niphal participle (the qatal has pataḥ: נִשְׁמַר; in pause both look alike).'],
+  ['B', 'הִתְחַזֵּק', 'חזק', 'hithpael', 'impv', '2ms', 'strengthen yourself!', '', [{ conj: 'qatal', pgn: '3ms' }, { conj: 'inf', pgn: '' }], 'הִתְ + doubled root 2 = Hithpael; this shape is imperative 2ms, qatal 3ms or infinitive (context decides).'],
+  ['B', 'וַיִּשְׁתַּחוּ', 'חוה', 'hishtaphel', 'wayyiqtol', '3ms', 'and he bowed down', '', null, 'שְׁתַּ + root חוה = Hishtaphel; the final וּ belongs to the root: singular.'],
+];
+BLUEPRINTS.dg1g = { id: 'dg1g', name: 'Diagnostic 1 · GPT’s version (20 verbs)', minutes: () => 30, sections: { parse: { n: 20, w: 1, label: 'Parsing (מָה הַפֹּעַל הַזֶּה?)' } } };
+BLUEPRINTS.dgr = { id: 'dgr', name: 'Diagnostic retest · your weak categories (new verbs)', minutes: () => 20, sections: { parse: { n: 12, w: 1, label: 'Parsing (מָה הַפֹּעַל הַזֶּה?)' } } };
+DG_INTRO.dg1g = `<div class="note"><b>GPT’s version of Diagnostic 1</b> (the 20 verbs GPT proposed; mostly paradigm forms of שׁמר and familiar class verbs, not taken from one text). Same rules: root · stem · form · person/gender/number · meaning, “?” where unsure, no notes, 30 minutes, Part A (Qal) then Part B (derived stems). Use it as the second version or as the retest of Diagnostic 1.</div>`;
+DG_INTRO.dgr = `<div class="note"><b>Retest with new verbs.</b> 12 verbs from Ruth that you have not had in a diagnostic, chosen from the categories you missed (stem, form, weak-root type). Same rules as Diagnostic 1. This shows whether a weakness is real (it comes back with new verbs) or was a one-off.</div>`;
+function dgItemsFrom(list, prefix) {
+  return list.map(d => { const [part, form, root, stem, conj, pgn, gloss, src, alts, why] = d; const m = /^Ruth (\d):(\d+)$/.exec(src || ''); const v = m ? ruthVerse(+m[1], +m[2]) : null; const tags = d[10] || rootTags(root);
+    return { kind: 'parse', key: prefix + '|' + form, cid: prefix + ':' + AN.hash(form), form, root, stem, conj, pgn, gloss, gl: gloss, ref: m ? src : (src && /[א-ת]/.test(src) ? 'context given by GPT' : src || 'GPT diagnostic'), ...(alts ? { alts } : {}), why, tags, part, dg: 1, ctx: v ? v.he : (src && /[א-ת]/.test(src) ? src : ''), sec: 'parse', cat: 'protected', t: PB_STEM_TOPIC[stem] || stem, diff: tags.includes('weak') ? 2.5 : 2 }; });
+}
+async function buildDG1G() {
+  const items = dgItemsFrom(DG1G, 'dg1g'), again = (S.assess || []).some(a => a.type === 'dg1g' && a.end); if (again) items.forEach(it => it.cat = 'review');
+  return { id: 'a' + Date.now().toString(36), type: 'dg1g', blueprint: 'dg1g', items, limits: [], limitMs: 30 * 60000, created: Date.now(), passage: null, ...(again ? { retake: 1 } : {}) };
+}
+async function buildDGR() {
+  const prev = dgAll(); if (!prev.length) throw new Error('Take Diagnostic 1 first: the retest is built from its misses.');
+  const used = new Set([...DG1, ...DG1G].map(d => AN.normHe(d[1]))); prev.forEach(r => (r.items || []).forEach(x => used.add(AN.normHe((x.spec || {}).form || ''))));
+  const want = { stem: {}, conj: {}, tag: {} };
+  for (const r of prev.slice(-2)) for (const x of r.items || []) { if (!x.answered || x.score >= 1) continue; const it = x.spec || {}; want.stem[it.stem] = (want.stem[it.stem] || 0) + 1; want.conj[it.conj] = (want.conj[it.conj] || 0) + 1; (it.tags || []).forEach(t => { if (t !== 'weak') want.tag[t] = (want.tag[t] || 0) + 1; }); }
+  const banned = /^Ruth (1:|2:([1-9]|1[0-3])\b|3:([1-9]|1[01])\b|4:([1-6]|1[1-6])\b)/; // Ruth 1 (practice final) and the passages of the nine simulations
+  const pool = RUTH.verbs.map((v, i) => ({ v, i })).filter(({ v }) => !used.has(AN.normHe(v[0])) && !banned.test(v[7] || '') && !/suffix/.test(v[7] || ''));
+  const scored = pool.map(o => { const [form, root, stem, conj] = o.v; const tags = rootTags(root); return { ...o, tags, s: 2 * (want.stem[stem] || 0) + 2 * (want.conj[conj] || 0) + tags.reduce((a, t) => a + (want.tag[t] || 0), 0) + Math.random() }; }).sort((a, b) => b.s - a.s);
+  const pick = [], seenKey = {};
+  for (const o of scored) { const k = o.v[2] + '|' + o.v[3]; if ((seenKey[k] || 0) >= 2) continue; seenKey[k] = (seenKey[k] || 0) + 1; pick.push(o); if (pick.length >= 12) break; }
+  const items = pick.map(({ v, tags }) => { const [form, root, stem, conj, pgn, gloss, , note] = v; const ref = String(note || '').split(' · ')[0]; const m = /^Ruth (\d):(\d+)$/.exec(ref); const vv = m ? ruthVerse(+m[1], +m[2]) : null;
+    const alts = /^3fs$/.test(pgn) && /^(וַ?תּ?|ת)/.test(AN.normHe(form).replace(/^ו/, '')) && conj !== 'qatal' ? [{ pgn: '2ms' }] : null;
+    return { kind: 'parse', key: 'dgr|' + form, cid: 'dgr:' + AN.hash(form), form, root, stem, conj, pgn, gloss, gl: gloss, ref, ...(alts ? { alts } : {}), why: `Chosen because you missed ${stem} / ${conj}${tags.length ? ' / ' + tags.filter(t => t !== 'weak').join(', ') : ''} forms before.`, tags, dg: 1, dgLabel: 'Retest with a new verb', ctx: vv ? vv.he : '', sec: 'parse', cat: 'transfer', t: PB_STEM_TOPIC[stem] || stem, diff: 2.3 }; });
+  if (!items.length) throw new Error('No new Ruth verbs are left for a retest.');
+  return { id: 'a' + Date.now().toString(36), type: 'dgr', blueprint: 'dgr', items, limits: [], limitMs: 20 * 60000, created: Date.now(), passage: null };
+}
+const startDG1G = () => fsStart(buildDG1G, 'GPT’s diagnostic');
+const startDGR = () => fsStart(buildDGR, 'the retest');
+
+// ----- Diagnostic 2: what is the Hebrew question asking? -----
+const DQ_CATS = ['a person (who? whom? to / with whom?)', 'an owner (whose?)', 'a comparison (like whom?)', 'a thing or an action (what?)', 'a reason (why?)', 'a place (where? to where? from where?)', 'a time (when? until when? since when?)', 'a number or amount (how many? how much?)', 'a manner (how?)', 'yes or no', 'a means (with what? in what?)'];
+const DQ1 = [
+  // Hebrew question, English, category, question word, source
+  ['מָה עוֹשֶׂה בֹּעַז הַלַּיְלָה?', 'What is Boaz doing tonight?', 3, 'מָה', 'Ruth 3:2 · question bank'],
+  ['מִי הָיָה בֹּעַז?', 'Who was Boaz?', 0, 'מִי', 'Ruth 2:1 · question bank'],
+  ['אָנָה הִכָּה שָׁאוּל אֶת־הַחֲנִית?', 'Where (to) did Saul drive the spear?', 5, 'אָנָה', 'Ch. 22 · question bank'],
+  ['מִמָּתַי עָמְדָה רוּת בַּשָּׂדֶה?', 'Since when had Ruth been standing (working) in the field?', 6, 'מִמָּתַי', 'Ruth 2:7 · question bank'],
+  ['לָמָּה פָּנְתָה רוּת אֶל־בֹּעַז?', 'Why did Ruth turn to Boaz?', 4, 'לָמָּה', 'Ruth 3:9 · question bank'],
+  ['לְמִי הָיְתָה חֶלְקַת הַשָּׂדֶה אֲשֶׁר לִקְּטָה בָּהּ רוּת?', 'Whose was the portion of the field in which Ruth gleaned?', 1, 'לְמִי', 'Ruth 2:3 · question bank'],
+  ['הֲבֹעַז הוּא הַגֹּאֵל הַקָּרוֹב?', 'Is Boaz the closest redeemer?', 9, 'הֲ', 'Ruth 3:12 · question bank'],
+  ['אֶל־מִי בָּא דָוִד הָרָמָתָה?', 'To whom did David come at Ramah?', 0, 'אֶל־מִי', 'Ch. 22 · question bank'],
+  ['מָתַי נֶחֱרַד הָאִישׁ?', 'When was the man startled?', 6, 'מָתַי', 'Ruth 3:8 · question bank'],
+  ['כְּמִי בֵּרְכוּ אֶת־רוּת?', 'Like whom did they bless Ruth?', 2, 'כְּמִי', 'Ruth 4:11 · question bank'],
+  ['אֵיפֹה לִקַּטְתְּ הַיּוֹם?', 'Where did you glean today?', 5, 'אֵיפֹה', 'Ruth 2:19 · Naomi’s own words'],
+  ['כַּמָּה זְקֵנִים לָקַח בֹּעַז?', 'How many elders did Boaz take?', 7, 'כַּמָּה', 'Ruth 4:2 · question bank'],
+  ['עִם־מִי כָּרַת יְהוֹנָתָן בְּרִית?', 'With whom did Jonathan make a covenant?', 0, 'עִם־מִי', 'Ch. 22 · question bank'],
+  ['מַדּוּעַ מָצָאתִי חֵן בְּעֵינֶיךָ לְהַכִּירֵנִי?', 'Why have I found favor in your eyes, that you take notice of me?', 4, 'מַדּוּעַ', 'Ruth 2:10 · Ruth’s own words'],
+  ['עַד־מָתַי לִקְּטָה רוּת עִם נַעֲרוֹת בֹּעַז?', 'Until when did Ruth glean with Boaz’s young women?', 6, 'עַד־מָתַי', 'Ruth 2:23 · question bank'],
+  ['תַּחַת מָה בָּאָה רוּת לַחֲסוֹת?', 'Under what did Ruth come to take refuge?', 3, 'תַּחַת מָה', 'Ruth 2:12 · question bank'],
+  ['בַּמֶּה מָדַד בֹּעַז אֶת־הַשְּׂעֹרִים?', 'In what did Boaz measure the barley?', 10, 'בַּמֶּה', 'Ruth 3:15 · built with the professor’s interrogatives handout'],
+  ['עַל־מִי חָרָה אַף שָׁאוּל?', 'With whom was Saul angry?', 0, 'עַל־מִי', 'Ch. 22 · question bank'],
+  ['מֵאַיִן בָּאָה רוּת?', 'Where did Ruth come from?', 5, 'מֵאַיִן', 'Ruth 1:22 · built with the professor’s interrogatives handout'],
+  ['אֵיךְ יָצָא דָוִד מִן־הַבַּיִת?', 'How did David get out of the house?', 8, 'אֵיךְ', 'Ch. 22 · question bank'],
+];
+BLUEPRINTS.dq1 = { id: 'dq1', name: 'Diagnostic 2 · Understanding Hebrew questions (20 questions)', minutes: () => 15, sections: { comp: { n: 20, w: 1, label: 'What does the question ask for?' } } };
+async function buildDQ1() {
+  const again = (S.assess || []).some(a => a.type === 'dq1' && a.end);
+  const items = DQ1.map(([he, en, c, w, src]) => ({ kind: 'mc', key: 'dq1|' + he, cid: 'dq1:' + AN.hash(he), q: `<div class="small muted" style="text-align:center">${H('מָה שׁוֹאֲלִים כָּאן?')} · What kind of answer does this question ask for?</div><div class="he" dir="rtl" style="font-size:1.9rem;line-height:1.6;text-align:center;margin:10px 0">${esc(he)}</div>`, o: DQ_CATS, a: c, he, qe: en, qw: w, ref: src, dq: 1, sec: 'comp', cat: again ? 'review' : 'protected', t: 'interrogatives', x: `${heWrap(esc(w))} asks for ${esc(DQ_CATS[c])}. The question means: “${esc(en)}”` }));
+  return { id: 'a' + Date.now().toString(36), type: 'dq1', blueprint: 'dq1', items, limits: [], limitMs: 15 * 60000, created: Date.now(), passage: null, ...(again ? { retake: 1 } : {}) };
+}
+const startDQ1 = () => fsStart(buildDQ1, 'Diagnostic 2');
+DG_INTRO.dq1 = `<div class="note"><b>Diagnostic 2 · Can you understand what a Hebrew question is asking?</b> 20 questions in Hebrew, with no pronunciation and no English. For each one: (1) choose what kind of answer it asks for, and (2) write what the question means in English. You do not answer the question itself, so story knowledge does not matter. Work fast: on the exam each question should be understood in under 20 seconds. The question words are those of your professor’s handout (מִי, לְמִי, מָה, לָמָּה, מַדּוּעַ, אֵיפֹה, אָנָה, מֵאַיִן, מָתַי, עַד מָתַי, אֵיךְ, בַּמֶּה, כַּמָּה, הֲ) plus prepositions with them (אֶל־מִי, עִם־מִי, עַל־מִי, כְּמִי, תַּחַת מָה, מִמָּתַי). Target: 15 minutes.</div>`;
+(function () {
+  const _ei = exItemHTML;
+  exItemHTML = function (it, a, n) {
+    let h = _ei.apply(this, arguments); if (!it || !it.dq) return h;
+    return h.replace(/Item \d+ · [^<]*/, `Question ${n} of 20`) + `<label class="f">What does the question mean? (English)<input type="text" class="ex-txt" data-k="mean" value="${esc((a && a.mean) || '')}" autocomplete="off"></label>`;
+  };
+  const _re = renderExam;
+  renderExam = function () {
+    const r = _re.apply(this, arguments);
+    try {
+      if (EX && EX.type === 'dq1' && EX.phase === 'intro') { const h1 = $('#v-session h1'); if (h1) h1.insertAdjacentHTML('afterend', DG_INTRO.dq1); }
+      // Two submissions, as GPT proposed: after Part A a pause screen, no correction, then Part B.
+      if (EX && (EX.type === 'dg1' || EX.type === 'dg1g') && EX.phase === 'taking' && EX.cur === 10 && !EX.midDone) {
+        const v = $('#v-session'), done = EX.items.slice(0, 10).filter((x, i) => exAnswered(x, EX.ans[i])).length;
+        v.innerHTML = `<div class="panel stack" style="max-width:640px;margin:40px auto;text-align:center"><h2 style="margin:0">Part A handed in (${done} of 10 answered)</h2><p>No correction yet, as agreed: the analysis comes after Part B. The clock keeps running.</p><p class="small muted">Part B: items 11–20, the derived stems (Niphal, Piel, Pual, Hithpael, Hishtaphel, Hiphil, Hophal). You can still go back to Part A before the final submission.</p><div class="row" style="justify-content:center"><button class="btn primary" id="dg-partb">Start Part B</button><button class="btn" id="dg-back">Back to Part A</button></div></div>`;
+        $('#dg-partb').onclick = () => { EX.midDone = 1; exSave(); renderExam(); };
+        $('#dg-back').onclick = () => { EX.cur = 9; exSave(); renderExam(); };
+      }
+    } catch (e) { console.error(e); }
+    return r;
+  };
+})();
+function dqAnalysisHTML(rec) {
+  const rows = (rec.items || []).map(x => { const it = x.spec || {}, a = x.answer || {}; const mean = (a.mean || '').trim(); const mc = mean ? AG.enCover(it.qe || '', mean).cov : null; return { x, it, a, ok: x.answered ? x.score >= 1 : null, mean: mc == null ? null : mc >= .6 ? 1 : mc >= .3 ? .5 : 0, s: Math.round((x.ms || 0) / 1000), chose: a.o != null ? DQ_CATS[a.o] : null }; });
+  const ans = rows.filter(o => o.x.answered), med = L => { const v = L.map(o => o.s).filter(s => s > 0).sort((a, b) => a - b); return v.length ? v[Math.floor(v.length / 2)] : null; };
+  const kind = ans.filter(o => o.ok).length, means = rows.filter(o => o.mean != null), meanOK = means.reduce((s, o) => s + o.mean, 0);
+  const byW = rows.map(o => [heWrap(esc(o.it.qw)), o.x.answered ? (o.ok ? '✓' : `✗ chose “${esc((o.chose || '').split(' (')[0])}”`) : 'blank', o.mean == null ? '—' : o.mean >= 1 ? '✓' : o.mean ? '½' : '✗', o.s ? o.s + ' s' + (o.s > 30 ? ' (slow)' : '') : '—', heWrap(esc(o.it.he))]);
+  return `<div class="panel stack"><h2 style="margin:0">Diagnostic 2 · analysis</h2>
+    <div class="small"><b>Kind of answer recognized:</b> ${kind} of ${ans.length} answered (${ans.length ? Math.round(kind / ans.length * 100) : 0}%) · <b>meaning of the question</b> (automatic estimate): ${means.length ? Math.round(meanOK / means.length * 100) + '% of ' + means.length : 'not written'} · <b>median time</b> ${med(ans) ?? '—'} s per question (target under 20 s) · ${ans.filter(o => o.s > 30).length} slower than 30 s.</div>
+    <p class="small muted">Recognizing the kind of answer shows whether you know the question word; the English meaning shows whether you understood the whole question; the time shows fluency. Blank items are left out.</p>
+    ${tableHTML(['Question word', 'Kind of answer', 'Meaning', 'Time', 'Question'], byW)}</div>`;
+}
+(function () {
+  const _rv = renderExamReview;
+  renderExamReview = function (rec) {
+    const r = _rv.apply(this, arguments);
+    try { if (rec && rec.type === 'dq1') { const head = $('#v-session .panel'); if (head) head.insertAdjacentHTML('afterend', dqAnalysisHTML(rec)); for (const x of rec.items || []) { const el = $(`.rv-item[data-ri="${x.n}"]`), a = x.answer || {}; if (el) el.insertAdjacentHTML('beforeend', `<div class="small"><b>Your English:</b> ${a.mean ? '“' + esc(a.mean) + '”' : 'not given'} · <b>meaning:</b> “${esc((x.spec || {}).qe || '')}” · <span class="muted">${esc((x.spec || {}).ref || '')}</span></div>`); } } } catch (e) { console.error(e); }
+    return r;
+  };
+})();
+
+// ----- The decision GPT asked for: from the two profiles, what next? -----
+function dgProfile() {
+  const pr = dgAll().slice(-1)[0], qr = (S.assess || []).filter(a => a.type === 'dq1' && a.end).sort((a, b) => a.end - b.end).slice(-1)[0];
+  const out = { pr, qr };
+  if (pr) { const L = (pr.items || []).filter(x => x.answered); out.parse = L.length ? L.reduce((s, x) => s + x.score, 0) / L.length : null; out.parseDone = L.length / (pr.items || []).length;
+    const box = { root: [0, 0], stem: [0, 0], form: [0, 0], pgn: [0, 0] };
+    for (const x of L) { const a = x.answer || {}; const g = gradeParse(x.spec || {}, { p: a.p || '', g: a.g || '', n: a.n || '', conj: a.conj || '', stem: a.stem || '', root: a.root || '' }).res || {}; [['root', g.root], ['stem', g.stem], ['form', g.conj], ['pgn', g.p !== false && g.g !== false && g.n !== false]].forEach(([k, ok]) => { box[k][1]++; if (ok) box[k][0]++; }); }
+    out.box = Object.fromEntries(Object.entries(box).map(([k, [a, b]]) => [k, b ? a / b : null])); }
+  if (qr) { const L = (qr.items || []).filter(x => x.answered); out.q = L.length ? L.filter(x => x.score >= 1).length / L.length : null; const t = L.map(x => (x.ms || 0) / 1000).filter(Boolean).sort((a, b) => a - b); out.qt = t.length ? t[Math.floor(t.length / 2)] : null; }
+  return out;
+}
+function nextStepHTML() {
+  const P = dgProfile(); if (!P.pr && !P.qr) return '';
+  const BOX = { root: 'root', stem: 'stem (בִּנְיָן)', form: 'form (נְטִיָּה)', pgn: 'person/gender/number' }, say = [];
+  if (P.pr) { const weakest = Object.entries(P.box || {}).filter(([, v]) => v != null).sort((a, b) => a[1] - b[1])[0];
+    if (P.parse < .6) say.push(`Parsing first: average ${Math.round(P.parse * 100)}% per answered verb. Weakest box: ${BOX[weakest[0]]} (${Math.round(weakest[1] * 100)}%). Drill only that box (see the plan), then the retest with new verbs.`);
+    else if (weakest && weakest[1] < .5) say.push(`Parsing: ${Math.round(P.parse * 100)}% per answered verb, but one box fails: ${BOX[weakest[0]]} (${Math.round(weakest[1] * 100)}%). Drill only that box, then the retest with new verbs.`);
+    else say.push(`Parsing is workable: ${Math.round(P.parse * 100)}% per answered verb; weakest box ${weakest ? BOX[weakest[0]] + ' (' + Math.round(weakest[1] * 100) + '%)' : '—'}. Keep it warm with the retest; no more theory.`);
+    if (P.parseDone < .8) say.push(`Only ${Math.round(P.parseDone * 100)}% of the diagnostic was answered: finish it (or the retest) before trusting these numbers.`); }
+  else say.push('Parsing profile missing: take Diagnostic 1 first.');
+  if (P.qr) { if (P.q < .8 || (P.qt || 0) > 25) say.push(`Questions in Hebrew need work: ${Math.round(P.q * 100)}% of question types recognized, median ${Math.round(P.qt || 0)} s. Do the question-word drill and short story questions before any full simulation.`); else say.push(`Questions in Hebrew are understood (${Math.round(P.q * 100)}%, median ${Math.round(P.qt || 0)} s): the 26 story-question points depend on knowing the story, so read the stories.`); }
+  else say.push('Question profile missing: take Diagnostic 2 (15 min).');
+  const sim = P.pr && P.qr && P.parse >= .6 && P.q >= .8 && Object.values(P.box || {}).every(v => v == null || v >= .5);
+  say.push(sim ? `Both profiles are good enough: <b>take a full simulation</b> (${FS_MIN} min) next, with the Ruth translation done first.` : '<b>Not yet a full simulation:</b> fix the weakest part first (above); the Ruth translation (30 points) is still untested under time, so translate 4–6 verses timed today in any case.');
+  return `<div class="step" style="border:1px dashed var(--accent);border-radius:10px;padding:8px"><span class="n">→</span><div><b>What next? (from your two diagnostics)</b><div class="small">${say.map(x => '• ' + heWrap(x)).join('<br>')}</div><div class="small muted">Rule used (transparent, not a statistic): full simulation when parsing ≥ 60% per answered verb with no box under 50%, and question types ≥ 80% understood.</div></div></div>`;
+}
+(function () {
+  const _fc = fsCardHTML;
+  fsCardHTML = function () {
+    const h = _fc.apply(this, arguments); const R = k => (S.assess || []).filter(a => a.type === k && a.end).sort((a, b) => a.end - b.end);
+    const card = (k, title, sub, start, extra = '') => { const r = R(k), last = r[r.length - 1]; return `<div class="step ${r.length ? 'done' : ''}" style="border:1px dashed var(--accent);border-radius:10px;padding:8px"><span class="n">${r.length ? '✓' : 'D'}</span><div><b>${title}</b> <span class="small muted">${sub}</span><div class="small muted">${r.length ? `Taken ${r.length}× · last ${simPct(last)}%` : 'Not taken yet.'}</div></div><div class="stack" style="gap:6px;flex:0 0 auto">${r.length ? `<button class="btn" data-dgv="${last.id}" style="white-space:nowrap">See the analysis</button>` : ''}<button class="btn ${r.length ? '' : 'primary'}" data-dgs="${start}" style="white-space:nowrap">${r.length ? 'Take again' : 'Start'}</button>${extra}</div></div>`; };
+    const cards = card('dq1', 'Diagnostic 2 · Understanding Hebrew questions', '(20 questions, 15 min: what is asked, the English meaning, the time)', 'dq1')
+      + card('dg1g', 'Diagnostic 1 · GPT’s version', '(GPT’s 20 verbs, 30 min: the second version / retest)', 'dg1g')
+      + (dgAll().length ? card('dgr', 'Retest · your weak categories', '(12 NEW Ruth verbs chosen from your misses, 20 min)', 'dgr') : '')
+      + nextStepHTML();
+    const i = h.indexOf('data-dg1="1"'); const j = i < 0 ? -1 : h.indexOf('</div></div>', i); // right after the Diagnostic 1 card (end of its button column and step)
+    return j > 0 ? h.slice(0, j + 12) + cards + h.slice(j + 12) : h.replace('<div class="plan">', '<div class="plan">' + cards);
+  };
+  document.addEventListener('click', e => { const t = e.target.closest && e.target.closest('[data-dgs],[data-dgv]'); if (!t) return; e.preventDefault();
+    if (t.dataset.dgs) ({ dq1: startDQ1, dg1g: startDG1G, dgr: startDGR })[t.dataset.dgs](); else { const r = (S.assess || []).find(a => a.id === t.dataset.dgv); if (r) renderExamReview(r); } });
+  const _pl = planBlockList;
+  planBlockList = function (d) {
+    const B = _pl.apply(this, arguments);
+    if (d === '2026-11-23' || d === '2026-11-24') {
+      const did = k => (S.assess || []).some(a => a.type === k && a.end && dayKey(new Date(a.end)) === d);
+      const i = Math.max(0, B.findIndex(b => b.id === 'dg1')) + 1;
+      B.splice(i, 0,
+        { id: 'dq1', min: 15, title: 'Diagnostic 2 · Understanding Hebrew questions (15 min)', sub: 'What each Hebrew question asks for and what it means, against the clock. GPT’s second profile.', act: () => startDQ1(), check: () => did('dq1') },
+        { id: 'dgx', min: 20, title: 'Then: the retest of your weak categories (new verbs) or GPT’s version', sub: 'Retest = 12 new Ruth verbs chosen from your misses. GPT’s version = his 20 verbs. Then read “What next?” on the Final rescue tab.', act: () => (dgAll().length ? startDGR() : startDG1G()), check: () => did('dgr') || did('dg1g') });
+    }
+    return B;
+  };
+})();
+
 </script>
 <script>
 // Colour mode: dark (default), light, or the same as the computer. Remembered on this device.
@@ -11593,5 +11792,5 @@ function dgAnalysisHTML(rec) {
   const b = document.getElementById('btn-theme'); if (b) b.onclick = () => { t = order[(order.indexOf(t) + 1) % order.length]; try { localStorage.setItem('het-theme', t); } catch {} apply(); };
 })();
 </script>
-<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='35af2a0f30';</script>
+<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}window.__HET_VERSION__='2438a07787';</script>
 </body></html>
