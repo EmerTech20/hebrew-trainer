@@ -1,0 +1,10 @@
+const { chromium } = require('playwright'); const fs = require('fs');
+(async () => { const b = await chromium.launch(); const p = await (await b.newContext()).newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
+  await p.route('**/fonts.googleapis.com/**', r => r.abort()); await p.goto('http://localhost:8765/'); await p.waitForTimeout(2500);
+  const j = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+  const n = await p.evaluate(async d => importDocs(d), j.docs); console.log('imported', n);
+  await p.reload(); await p.waitForTimeout(3000);
+  console.log(await p.evaluate(() => ({ hist: S.prog.history.length, cards: Object.keys(S.cards).length, tests: S.prog.tests.length, lib: S.lib.length, days: Object.keys(S.prog.daily) })));
+  const n2 = await p.evaluate(async d => importDocs(d), j.docs); console.log('second import changed', n2);
+  await p.evaluate(() => go('progress')); await p.waitForTimeout(1500); console.log((await p.innerText('#v-progress')).slice(0, 400).replace(/\n+/g, ' | '));
+  console.log(errs.join('\n') || 'NO ERRORS'); await b.close(); })();

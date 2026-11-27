@@ -1,0 +1,15 @@
+const { chromium } = require('playwright'); const fs = require('fs');
+const SP = '/tmp/claude-0/-home-claude/9b0fbc78-92a0-5fc3-9ae8-eef744f87afd/scratchpad/';
+(async () => { const b = await chromium.launch(); const p = await (await b.newContext({ serviceWorkers: 'block', viewport: { width: 1000, height: 1300 } })).newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
+  await p.route('**/fonts.googleapis.com/**', r => r.abort());
+  await p.addInitScript(d => { const D = Date; const t0 = new D(d + 'T09:00:00').getTime(), s = D.now(); window.Date = class extends D { constructor(...a) { if (a.length) super(...a); else super(t0 + (D.now() - s)); } static now() { return t0 + (D.now() - s); } }; }, '2026-11-21');
+  await p.goto('http://localhost:8765/'); await p.waitForTimeout(2500);
+  const upd = JSON.parse(fs.readFileSync('/mnt/user-data/outputs/hebrew-update-2026-11-20b.json', 'utf8')); await p.evaluate(async d => importDocs(d), upd.docs); await p.reload(); await p.waitForTimeout(2500);
+  console.log(await p.evaluate(() => [pln(18,59), pln(18,11), pln(18,12), pln(19,53), pln(22,93), pln(22,118), pln(20,99), pln(16,41)].join(',')));
+  console.log(await p.evaluate(async () => { const ex = await buildPQ(18); return ex.items.map(i => i.lines || i.ref).join(' | '); }));
+  console.log(await p.evaluate(async () => { const ex = await buildSP(18); return ex.items.slice(0,6).map(i => i.lines || i.ref).join(' | '); }));
+  await p.evaluate(() => startPQ(18)); await p.waitForTimeout(1200); await p.evaluate(() => $('#ex-go').click()); await p.waitForTimeout(700);
+  await p.evaluate(() => $(`[data-xi="1"]`).click()); await p.waitForTimeout(900);
+  console.log(await p.evaluate(() => [$('details.panel summary').textContent, $('.fs-hl').innerText, ($('.qlines') || {}).innerText].join(' ## ').replace(/\s+/g,' ').slice(0,500)));
+  await p.screenshot({ path: SP + 'ln-q2.png' });
+  console.log(errs.join('\n') || 'NO ERRORS'); await b.close(); })();

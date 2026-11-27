@@ -1,0 +1,15 @@
+const { chromium } = require('playwright'); const fs = require('fs');
+(async () => { const b = await chromium.launch(); const ctx = await b.newContext({ viewport: { width: 900, height: 1100 } }); const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
+  await p.route('**/fonts.googleapis.com/**', r => r.abort()); await p.goto('http://localhost:8765/'); await p.waitForTimeout(2500);
+  const u = JSON.parse(fs.readFileSync('/home/claude/build2/tutor/update.json', 'utf8'));
+  console.log('imported', await p.evaluate(async d => await importDocs(d), u.docs));
+  await p.reload(); await p.waitForTimeout(2500);
+  console.log(await p.evaluate(() => [S.insights.length, JSON.stringify(tutorDrillCounts())]));
+  await p.evaluate(() => { S.prog.flags.noImport = 1; startTutorDrills(); }); await p.waitForTimeout(600);
+  console.log('DRILL:', (await p.innerText('#v-session .qbox')).slice(0, 300).replace(/\n+/g, ' | '));
+  await p.evaluate(() => go('library')); await p.waitForTimeout(500);
+  console.log('FOLDER:', (await p.innerText('#fold-panel')).replace(/\n+/g, ' | '));
+  await p.evaluate(() => go('progress')); await p.waitForTimeout(800);
+  const t = await p.evaluate(() => typeof tutorTimelineHTML === 'function' ? tutorTimelineHTML().replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 700) : '');
+  console.log('TIMELINE:', t);
+  console.log(errs.join('\n') || 'NO ERRORS'); await b.close(); })();

@@ -1,0 +1,11 @@
+const { chromium } = require('playwright'); const fs = require('fs');
+(async () => { const b = await chromium.launch(); const p = await (await b.newContext({ serviceWorkers: 'block' })).newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
+  await p.route('**/fonts.googleapis.com/**', r => r.abort()); await p.goto('http://localhost:8765/'); await p.waitForTimeout(2500);
+  await p.evaluate(async d => importDocs(d), JSON.parse(fs.readFileSync('/mnt/user-data/outputs/hebrew-update-2026-11-24.json', 'utf8')).docs);
+  await p.reload(); await p.waitForTimeout(3000); await p.evaluate(() => go('cards')); await p.waitForTimeout(2500);
+  await p.setInputFiles('#rvq-imp', '/mnt/user-data/uploads/Desktop/SEMINARY/2026/FALL/20440 - BEGINNING HEBREW _EXEGESIS OF RUTH/APP/Ruth_Quiz_Personal_Progress_2026-11-25.json'); await p.waitForTimeout(300);
+  console.log('msg', await p.evaluate(() => $('#rvq-msg').textContent)); await p.waitForTimeout(1600);
+  console.log('panel', await p.evaluate(() => [...document.querySelectorAll('#rvq-panel .small.muted')].map(x => x.textContent).filter(t => /meaning-only/.test(t))));
+  console.log('progress3 parsing credit:', await p.evaluate(() => JSON.stringify((RVQ.P || rvqLoad()).w).length, ), await p.evaluate(() => (RVQ.P || rvqLoad()).n));
+  console.log('first weak picks', await p.evaluate(() => rvqPick(5).map(x => x.id + ' ' + JSON.stringify((rvqOld().w[x.id] || {})))));
+  console.log('errs', errs); await b.close(); })();

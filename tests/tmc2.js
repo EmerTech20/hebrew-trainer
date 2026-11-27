@@ -1,0 +1,7 @@
+const { chromium } = require('playwright');
+(async () => { const b = await chromium.launch(); const p = await (await b.newContext({ serviceWorkers: 'block' })).newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
+  await p.route('**/fonts.googleapis.com/**', r => r.abort());
+  await p.goto('http://localhost:8765/'); await p.waitForTimeout(2500);
+  console.log(await p.evaluate(() => { const old = { kind: 'mc', key: 'wpm|context|0', t: 'comprehension', wp: 'context', q: `${H('וְרָחַץ בַּמַּיִם אֶת־בְּשָׂרוֹ')}: whose body is washed?`, o: ['Aaron’s', 'the bull’s', 'the ram’s', 'Moses’s'].map(wpOpt), a: 0, x: 'old' }; addMistake(old); SES = { items: [old], results: [], i: 0, mode: 'practice' }; logResult(old, 0); const ev = { i: AN.itemId(old) }; const before = S.prog.mistakes.map(m => m.key).join(','); const f = mcFreshItem(old); mcRefreshNotebook(); return 'before ' + before + ' | fresh ' + !!f + ' | after ' + S.prog.mistakes.map(m => m.key).join(',') + ' | void ' + JSON.stringify(S.prog.voidIds) + ' | evi ' + ev.i; }));
+  console.log(await p.evaluate(async () => { const all = await loadAllEvents(true); return all.filter(e => e.k === 'mc').length + ' ' + JSON.stringify(MEAS.excluded) + ' hist ' + S.prog.history.filter(h => h.k === 'comprehension').length + ' m ' + JSON.stringify(S.prog.mastery.comprehension); }));
+  console.log(errs.join('\n') || 'NO ERRORS'); await b.close(); })();

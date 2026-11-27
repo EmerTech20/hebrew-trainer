@@ -1,0 +1,32 @@
+const { chromium } = require('playwright'); const fs = require('fs');
+const SP = '/tmp/claude-0/-home-claude/9b0fbc78-92a0-5fc3-9ae8-eef744f87afd/scratchpad/';
+const DAY = process.argv[2] || '2026-11-21';
+(async () => { const b = await chromium.launch(); const p = await (await b.newContext({ serviceWorkers: 'block', viewport: { width: 1000, height: 1300 } })).newPage(); const errs = []; p.on('dialog', d => d.accept()); p.on('pageerror', e => errs.push(e.message));
+  await p.route('**/fonts.googleapis.com/**', r => r.abort());
+  await p.addInitScript(d => { const D = Date; const t0 = new D(d + 'T09:00:00').getTime(), s = D.now(); window.Date = class extends D { constructor(...a) { if (a.length) super(...a); else super(t0 + (D.now() - s)); } static now() { return t0 + (D.now() - s); } }; }, DAY);
+  await p.goto('http://localhost:8765/'); await p.waitForTimeout(2500);
+  const upd = JSON.parse(fs.readFileSync('/mnt/user-data/outputs/hebrew-update-2026-11-20b.json', 'utf8')); console.log('import', await p.evaluate(async d => importDocs(d), upd.docs)); await p.reload(); await p.waitForTimeout(2500);
+  await p.evaluate(() => lexLoad());
+  for (const ch of [14,15,16,17,18,19,20,21,22]) {
+    const r = await p.evaluate(async ch => { const ex = await buildPQ(ch); const bad = []; ex.items.forEach(it => { if (it.kind === 'parse') { const c = lexCheckParse({ form: it.form, stem: it.stem, conj: it.conj, pgn: String(it.pgn).split('|')[0] }); if (c && c.ok === false) bad.push(it.form + ':' + JSON.stringify(c).slice(0,120)); } }); return ex.items.length + ' items · ' + ex.items.map(i => i.kind[0] + (i.ln ? i.ln[0] : '?')).join(',') + (bad.length ? ' BAD ' + bad.join(' ; ') : ''); }, ch);
+    console.log(ch, r);
+  }
+  await p.evaluate(() => { go('rescue'); }); await p.waitForTimeout(800);
+  console.log('row', await p.evaluate(() => ($('#pq-row') || {}).innerText));
+  console.log('plan', await p.evaluate(() => planBlocks().map(b => b.id + ':' + b.min + ':' + b.title.slice(0, 50)).join(' | ')));
+  await p.evaluate(() => startPQ(18)); await p.waitForTimeout(1500);
+  console.log('intro', await p.evaluate(() => $('#v-session').innerText.replace(/\s+/g, ' ').slice(0, 700)));
+  await p.evaluate(() => $('#ex-go').click()); await p.waitForTimeout(800);
+  await p.screenshot({ path: SP + 'pq-q1.png' });
+  console.log('q1', await p.evaluate(() => $('#v-session').innerText.replace(/\s+/g, ' ').slice(0, 600)));
+  await p.evaluate(() => $(`[data-xi="4"]`).click()); await p.waitForTimeout(600);
+  await p.screenshot({ path: SP + 'pq-q5.png' });
+  await p.evaluate(() => { EX.items.forEach((it, i) => { if (it.kind === 'parse') { const g = it.pgn.split('|')[0]; EX.ans[i] = { p: g[0] || '', g: g[1] || '', n: g[2] || '', conj: it.conj, stem: it.stem, root: it.root }; } else EX.ans[i] = { text: 'יְהוָה' }; }); exSave(); submitExam ? submitExam() : null; }); await p.waitForTimeout(1500);
+  await p.evaluate(() => { $$('input[type=radio][value="1"]').forEach(x => x.checked = true); $$('[data-c]').forEach(x => x.checked = true); const g = $('#ss-go'); g && g.click(); }); await p.waitForTimeout(2000);
+  console.log('record', await p.evaluate(() => (S.assess || []).map(a => a.type + ':' + a.total + ' indep=' + a.indep + ' ' + a.passage.ref).join(' | ')));
+  console.log('review', await p.evaluate(() => $('#v-session').innerText.replace(/\s+/g, ' ').slice(0, 400)));
+  await p.screenshot({ path: SP + 'pq-review.png' });
+  await p.evaluate(() => { go('rescue'); }); await p.waitForTimeout(800);
+  console.log('row2', await p.evaluate(() => ($('#pq-row') || {}).innerText));
+  console.log('plan2', await p.evaluate(() => planBlocks().map(b => b.id + ':' + (b.check ? b.check() : '') + ':' + b.title.slice(0, 40)).join(' | ')));
+  console.log(errs.join('\n') || 'NO ERRORS'); await b.close(); })();

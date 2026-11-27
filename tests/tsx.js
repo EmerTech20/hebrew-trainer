@@ -1,0 +1,23 @@
+const { chromium } = require('playwright'); const fs = require('fs');
+(async () => { const b = await chromium.launch(); const ctx = await b.newContext({ serviceWorkers: 'block' }); const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
+  await p.route('**/fonts.googleapis.com/**', r => r.abort());
+  await p.addInitScript(() => { const D = Date; const t0 = new D('2026-11-17T14:00:00').getTime(), s = D.now(); window.Date = class extends D { constructor(...a) { if (a.length) super(...a); else super(t0 + (D.now() - s)); } static now() { return t0 + (D.now() - s); } }; });
+  await p.goto('http://localhost:8765/'); await p.waitForTimeout(2500);
+  const upd = JSON.parse(fs.readFileSync('/mnt/user-data/outputs/hebrew-update-2026-11-16.json', 'utf8'));
+  const n = await p.evaluate(async d => importDocs(d), upd.docs); await p.reload(); await p.waitForTimeout(3000);
+  console.log('imported', n, 'day', await p.evaluate(() => dayKey()));
+  console.log('plan', await p.evaluate(() => planBlocks().map(b => b.id + ':' + b.min).join(' ')));
+  console.log('stems', await p.evaluate(() => Object.keys(STEMS).join(',')), 'ruth hisht', await p.evaluate(() => RUTH.verbs.filter(v => v[2] === 'hishtaphel').map(v => v[0] + ' ' + v[1] + ' ' + v[7]).join('; ')));
+  console.log('avail', await p.evaluate(async () => (await storyChsAvailable()).join(',')));
+  await p.evaluate(() => startStoryDrill({ ch: 20 })); await p.waitForTimeout(800);
+  console.log('ses', await p.evaluate(() => JSON.stringify({ t: SES.title, n: SES.items.length, items: SES.items.map(i => `${i.form} ${i.stem} ${i.conj} ${i.pgn} ${i.root}`), passage: SES.passage && SES.passage.lines.slice(0, 2) })));
+  await p.screenshot({ path: '/tmp/claude-0/-home-claude/9b0fbc78-92a0-5fc3-9ae8-eef744f87afd/scratchpad/story-drill.png', fullPage: false });
+  // grade one hishtaphel item
+  console.log('grade', await p.evaluate(() => { const it = { form: 'וַיִּשְׁתַּחוּ', root: 'חוה', stem: 'hishtaphel', conj: 'wayyiqtol', pgn: '3ms' }; const a = gradeParse(it, { p: '3', g: 'm', n: 's', conj: 'wayyiqtol', stem: 'hishtaphel', root: 'שחה' }); const bb = gradeParse(it, { p: '3', g: 'm', n: 's', conj: 'wayyiqtol', stem: 'hithpael', root: 'חוה' }); return a.score + ' / ' + bb.score; }));
+  await p.evaluate(() => startHithSlides()); await p.waitForTimeout(600);
+  console.log('hith', await p.evaluate(() => SES.items.length + ' ' + SES.title));
+  await p.screenshot({ path: '/tmp/claude-0/-home-claude/9b0fbc78-92a0-5fc3-9ae8-eef744f87afd/scratchpad/hith.png' });
+  console.log('lexcheck', await p.evaluate(async () => { await lexLoad(); return JSON.stringify(lexCheckParse({ form: 'וַיִּשְׁתַּחוּ', stem: 'hishtaphel', conj: 'wayyiqtol', pgn: '3ms' })); }));
+  await p.evaluate(() => { S.tab = 'practice'; renderPractice(); }); await p.waitForTimeout(500);
+  console.log('btns', await p.evaluate(() => !!$('#fx-story') + ' ' + !!$('#fx-hith')));
+  console.log(errs.join('\n') || 'NO ERRORS'); await b.close(); })();

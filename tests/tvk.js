@@ -1,0 +1,20 @@
+const { chromium } = require('playwright'); const fs = require('fs');
+const SP = '/tmp/claude-0/-home-claude/9b0fbc78-92a0-5fc3-9ae8-eef744f87afd/scratchpad/';
+(async () => { const b = await chromium.launch(); const p = await (await b.newContext({ serviceWorkers: 'block', viewport: { width: 900, height: 1200 } })).newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
+  await p.route('**/fonts.googleapis.com/**', r => r.abort());
+  await p.addInitScript(() => { const D = Date; const t0 = new D('2026-11-17T14:00:00').getTime(), s = D.now(); window.Date = class extends D { constructor(...a) { if (a.length) super(...a); else super(t0 + (D.now() - s)); } static now() { return t0 + (D.now() - s); } }; });
+  await p.goto('http://localhost:8765/'); await p.waitForTimeout(2500);
+  const upd = JSON.parse(fs.readFileSync('/mnt/user-data/outputs/hebrew-update-2026-11-16.json', 'utf8')); await p.evaluate(async d => importDocs(d), upd.docs); await p.reload(); await p.waitForTimeout(2500);
+  console.log('pool', await p.evaluate(async () => { const P = await vkPool(); const c = {}; P.forEach(x => { const k = x.stem + (x.src === 'model' ? '(m)' : ''); c[k] = (c[k] || 0) + 1; }); return JSON.stringify(c); }));
+  console.log('plan', await p.evaluate(() => planBlocks().map(b => b.id).join(',')));
+  await p.evaluate(() => startVowelKey({ n: 20 })); await p.waitForTimeout(800);
+  console.log('items', await p.evaluate(() => SES.items.map(i => i.vk.form + ':' + i.vk.stem + ':' + i.vk.conj).join(' ')));
+  // answer wrong on purpose (pick option index 1 = a near stem)
+  await p.evaluate(() => answerMC(1)); await p.waitForTimeout(500);
+  await p.screenshot({ path: SP + 'vk-wrong.png', fullPage: true });
+  await p.evaluate(() => { $('#b-next') && $('#b-next').click(); }); await p.waitForTimeout(400);
+  await p.evaluate(() => answerMC(0)); await p.waitForTimeout(400);
+  console.log('right fb:', await p.evaluate(() => ($('.vk-fb') || {}).innerText.replace(/\s+/g, ' ').slice(0, 300)));
+  await p.evaluate(() => { S.tab = 'rescue'; go('rescue'); }); await p.waitForTimeout(400);
+  console.log('lessons', await p.evaluate(() => [...document.querySelectorAll('[data-lesson]')].map(d => d.dataset.lesson).join(',')));
+  console.log(errs.join('\n') || 'NO ERRORS'); await b.close(); })();

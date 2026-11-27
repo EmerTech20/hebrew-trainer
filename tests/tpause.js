@@ -1,0 +1,20 @@
+const { chromium } = require('playwright'); const fs = require('fs');
+(async () => { const b = await chromium.launch(); const ctx = await b.newContext({ serviceWorkers: 'block' });
+  const p = await ctx.newPage(); const errs = []; p.on('dialog', d => d.accept()); p.on('pageerror', e => errs.push(e.message));
+  await p.route('**/fonts.googleapis.com/**', r => r.abort());
+  await p.goto('http://localhost:8765/'); await p.waitForTimeout(2500);
+  const upd = JSON.parse(fs.readFileSync('/mnt/user-data/outputs/hebrew-update-2026-11-21b.json', 'utf8')); await p.evaluate(async d => importDocs(d), upd.docs);
+  await p.reload(); await p.waitForTimeout(3000);
+  // build his state: fs1 running, 112 min used, last heartbeat 40 min ago
+  await p.evaluate(async () => { await startFS('fs1'); EX.phase = 'taking'; EX.ans[0] = { text: 'my answer 1' }; EX.ans[1] = { p: '3', g: 'm', n: 's', conj: 'qatal', stem: 'qal', root: 'אבג' };
+    const now = Date.now(); EX.elapsed = 100 * 60000; EX.segStart = now - 52 * 60000; EX.seen = now - 40 * 60000; EX_TICK && clearInterval(EX_TICK); lsSet('exam', EX); EX = null; });
+  await p.reload(); await p.waitForTimeout(3000); await p.evaluate(() => go('today')); await p.waitForTimeout(800);
+  console.log('BANNER:', await p.evaluate(() => (document.querySelector('.banner') || {}).innerText));
+  await p.click('#cy-resume'); await p.waitForTimeout(2500);
+  console.log('AFTER RESUME:', await p.evaluate(() => `phase ${EX.phase} left ${Math.round((EX.limitMs - exElapsed()) / 60000)} min, clock ${$('#ex-clock').textContent}, ans0 ${JSON.stringify(EX.ans[0])}, ans1 ${JSON.stringify(EX.ans[1])}, pauses ${JSON.stringify(EX.pauses.map(x => Math.round((x[1] - x[0]) / 60000) + 'min ' + x[2]))}`));
+  await p.click('#ex-pause'); await p.waitForTimeout(500); console.log('PAUSED:', (await p.innerText('#v-session')).replace(/\n+/g, ' | '));
+  await p.waitForTimeout(3000); await p.reload(); await p.waitForTimeout(3000); await p.evaluate(() => go('today')); await p.waitForTimeout(500);
+  await p.click('#cy-resume'); await p.waitForTimeout(800); console.log('RESUMED INTO:', (await p.innerText('#v-session')).slice(0, 120).replace(/\n+/g, ' | '));
+  const l1 = await p.evaluate(() => exElapsed()); await p.waitForTimeout(2000); console.log('clock stopped while paused:', l1 === await p.evaluate(() => exElapsed()));
+  await p.click('#ex-unpause'); await p.waitForTimeout(2000); console.log('CONTINUE:', await p.evaluate(() => `phase ${EX.phase} paused ${EX.paused} left ${((EX.limitMs - exElapsed()) / 60000).toFixed(2)} min, cur ${EX.cur}, pauses ${EX.pauses.length}`));
+  console.log(errs.join('\n') || 'NO ERRORS'); await b.close(); })();

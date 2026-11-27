@@ -1,0 +1,12 @@
+const { chromium } = require('playwright');
+(async () => { const b = await chromium.launch(); const p = await (await b.newContext({ viewport: { width: 760, height: 1100 } })).newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
+  await p.route('**/fonts.googleapis.com/**', r => r.abort()); await p.goto('http://localhost:8765/'); await p.waitForTimeout(2500);
+  const r = await p.evaluate(async () => { S.prog.flags.noImport = 1; await lexLoad(); await loadVbc();
+    const rows = wordTable(['וַיְמַלֵּא מֹשֶׁה אֶת־יְדֵי אַהֲרֹן וְאֶת־בָּנָיו'], []).map(w => `${w.he} = ${w.meaning} | ${w.lemma || ''} | ${w.grammar || ''} | ${w.src || ''}`);
+    const where = []; PARSE_BANK.forEach((x, i) => { if (/מַמְלִיךְ/.test(x[0])) where.push('pb' + i); }); PRACTICE_VERBS.forEach((x, i) => { if (/מַמְלִיךְ/.test(x[0])) where.push('pk' + i); });
+    return { rows, where }; });
+  console.log(r.rows.join('\n')); console.log(r.where);
+  const k = r.where[0]; await p.evaluate(k => { const it = k.startsWith('pb') ? bankItem(+k.slice(2)) : pkItem(+k.slice(2)); startSession({ title: 't', items: [it], noVary: true }); }, k); await p.waitForTimeout(300);
+  await p.click('.pc[data-f="p"][data-v="1"]'); await p.click('.pc[data-f="g"][data-v="m"]'); await p.click('.pc[data-f="n"][data-v="s"]'); await p.click('.pc[data-f="conj"][data-v="ptc"]'); await p.click('.pc[data-f="stem"][data-v="hiphil"]'); await p.fill('#p-root', 'מלכ'); await p.click('#b-check'); await p.waitForTimeout(1500);
+  console.log('FORM-EN:', await p.innerText('#form-en')); console.log('FB:', (await p.innerText('#fb')).slice(0, 300).replace(/\n+/g, ' | '));
+  console.log('VERSION:', await p.evaluate(() => window.__HET_VERSION__)); console.log(errs.join('\n') || 'NO ERRORS'); await b.close(); })();

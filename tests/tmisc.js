@@ -1,0 +1,22 @@
+const { chromium } = require('playwright'); const fs = require('fs');
+const U21 = JSON.parse(fs.readFileSync('/mnt/user-data/outputs/hebrew-update-2026-11-21b.json', 'utf8'));
+const U23 = JSON.parse(fs.readFileSync('/mnt/user-data/outputs/hebrew-update-2026-11-23.json', 'utf8'));
+const R0 = Date.now();
+(async () => { const b = await chromium.launch(); const ctx = await b.newContext({ serviceWorkers: 'block' });
+  await ctx.addInitScript(([t, r]) => { const D = Date; const off = t - r; class MD extends D { constructor(...a) { if (!a.length) super(D.now() + off); else super(...a); } static now() { return D.now() + off; } } window.Date = MD; }, [new Date('2026-11-24T09:00:00').getTime(), R0]);
+  const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
+  await p.route('**/fonts.googleapis.com/**', r => r.abort()); await p.goto('http://localhost:8765/'); await p.waitForTimeout(2500);
+  await p.evaluate(async ([a, c]) => { await importDocs(a.docs); await importDocs(c.docs); }, [U21, U23]);
+  const o = await p.evaluate(async () => { const out = {};
+    out.indepW = INDEP_W; out.indepSum = Object.values(INDEP_W).reduce((s, x) => s + x, 0);
+    out.examDay = typeof EXAM_DAY !== 'undefined' ? EXAM_DAY : null; out.anExam = anSet().examDate; out.schedule = SCHEDULE.filter(e => /final|exam/i.test(e.t || e.title || JSON.stringify(e))).map(e => JSON.stringify(e).slice(0, 120));
+    out.targets = AN.targets(50, null, 0.2).map(t => [t.t, t.req, t.status]);
+    out.plan25 = planBlockList('2026-11-25').map(b => `${b.id} ${b.min}m ${b.title}`.slice(0, 90));
+    out.plan24 = planBlockList('2026-11-24').map(b => `${b.id} ${b.min}m`).join(' | '); out.plan24min = planBlockList('2026-11-24').reduce((s, b) => s + (b.min || 0), 0);
+    const cats = []; for (const ch of [14, 15, 16, 17, 18, 22]) { const Q = await fsDef('storyqs/' + ch); if (Q) Q.q.forEach(x => cats.push(qwCat(x[0]))); }
+    out.qwCatNull = cats.filter(c => c == null).length + ' of ' + cats.length;
+    out.stemsKnown = Object.keys(STEMS); out.xvStems = Object.keys(XV_STEMEN);
+    out.tabsVisible = [...document.querySelectorAll('#tabs .tab')].filter(t => !t.hidden && t.offsetParent !== null).map(t => t.dataset.tab);
+    out.helpLang = (S.prog.settings || {}).helpLang || (S.prog.settings || {}).lang || null;
+    return out; });
+  console.log(JSON.stringify(o, null, 1)); console.log(errs.join('\n') || 'NO ERRORS'); await b.close(); })();

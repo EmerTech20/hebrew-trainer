@@ -1,0 +1,11 @@
+const { chromium } = require('playwright');
+const SP = '/tmp/claude-0/-home-claude/9b0fbc78-92a0-5fc3-9ae8-eef744f87afd/scratchpad/t23/';
+(async () => { const b = await chromium.launch(); const ctx = await b.newContext({ serviceWorkers: 'block', viewport: { width: 1200, height: 900 } });
+  const p = await ctx.newPage(); const errs = []; p.on('dialog', d => { errs.push('DIALOG ' + d.message()); d.accept(); }); p.on('pageerror', e => errs.push(e.message + (e.stack || '').split('\n')[1]));
+  await p.route('**/fonts.googleapis.com/**', r => r.abort()); await p.goto('http://localhost:8765/'); await p.waitForTimeout(2500);
+  await p.evaluate(() => startDG1()); await p.waitForTimeout(1200); await p.click('#ex-go'); await p.waitForTimeout(500);
+  await p.evaluate(() => { EX.items.forEach((it, i) => { if (i < 19) EX.ans[i] = { p: '3', g: 'm', n: 's', conj: it.conj, stem: 'piel', root: it.root }; }); EX.midDone = 1; EX.cur = 18; EX.elapsed = EX.limitMs - 4000; exSave(); renderExam(); });
+  await p.waitForTimeout(9000);
+  console.log((await p.innerText('body')).slice(0, 600).replace(/\n+/g, ' | '));
+  await p.screenshot({ path: SP + 'timeup.png' });
+  console.log(errs.join('\n') || 'NO ERRORS'); await b.close(); })();

@@ -1,0 +1,11 @@
+const { chromium } = require('playwright');
+(async () => { const b = await chromium.launch(); const p = await (await b.newContext()).newPage();
+  await p.route('**/fonts.googleapis.com/**', r => r.abort()); await p.goto('http://localhost:8765/'); await p.waitForTimeout(2500);
+  await p.evaluate(() => startWeakRoots()); await p.waitForTimeout(800);
+  console.log(await p.evaluate(() => document.querySelector('[data-rc="I-נ"]').outerHTML));
+  console.log(await p.evaluate(() => getComputedStyle(document.querySelector('[data-rc="I-נ"]')).direction));
+  await b.close(); })();
+(async () => { const b = await chromium.launch(); const p = await (await b.newContext({deviceScaleFactor:3})).newPage();
+  await p.route('**/fonts.googleapis.com/**', r => r.abort()); await p.goto('http://localhost:8765/'); await p.waitForTimeout(2500);
+  await p.evaluate(() => startWeakRoots()); await p.waitForTimeout(800);
+  const el = await p.$('#rc-row .pchips'); await el.screenshot({ path: 'rc_big.png' }); await b.close(); })();

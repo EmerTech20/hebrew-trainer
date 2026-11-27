@@ -1,0 +1,10 @@
+const { chromium } = require('playwright');
+(async () => { const b = await chromium.launch(); const p = await (await b.newContext({ viewport: { width: 760, height: 900 } })).newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
+  await p.route('**/fonts.googleapis.com/**', r => r.abort()); await p.goto('http://localhost:8765/'); await p.waitForTimeout(2500);
+  const r = await p.evaluate(async () => { const i = SUFFIX_BANK.findIndex(x => x[0] === 'בָּנָיו'); startSession({ title: 'T', items: [suffixItem(i, 'B')] }); return [i, SES.items[0].q]; });
+  console.log(r); await p.waitForTimeout(300);
+  await p.evaluate(() => { const it = SES.items[0]; [...document.querySelectorAll('.opt')].find(b => +b.dataset.o !== it.a).click(); }); await p.waitForTimeout(3500);
+  console.log(await p.evaluate(() => [...document.querySelectorAll('.meaning tr')].map(tr => tr.innerText.replace(/\s+/g, ' ')).join('\n')));
+  console.log(await p.evaluate(() => (document.querySelector('.meaning .small.muted:last-of-type') || {}).innerText));
+  await p.screenshot({ path: '/home/claude/tests/suf.png', fullPage: true });
+  console.log(errs.join('\n') || 'NO ERRORS'); await b.close(); })();

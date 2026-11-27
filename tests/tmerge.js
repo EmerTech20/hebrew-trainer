@@ -1,0 +1,10 @@
+const { chromium } = require('playwright'); const fs = require('fs');
+const BK = '/mnt/user-data/uploads/Desktop/SEMINARY/2026/FALL/20440 - BEGINNING HEBREW _EXEGESIS OF RUTH/APP/hebrew-trainer-backup-2026-11-24.json';
+(async () => { const b = await chromium.launch(); const p = await (await b.newContext({ serviceWorkers: 'block' })).newPage();
+  await p.route('**/fonts.googleapis.com/**', r => r.abort()); await p.goto('http://localhost:8765/'); await p.waitForTimeout(2500);
+  await p.evaluate(async d => importDocs(d), JSON.parse(fs.readFileSync(BK, 'utf8')).docs);
+  const n4 = JSON.parse(fs.readFileSync('/mnt/user-data/outputs/hebrew-trainer-my-progress-2026-11-04.json', 'utf8'));
+  console.log('changed docs', await p.evaluate(async d => importDocs(d), n4.docs || n4));
+  await p.reload(); await p.waitForTimeout(4000);
+  console.log(await p.evaluate(() => ({ all: (MEAS.all || []).length, excl: MEAS.excluded, assess: S.assess.length })));
+  await b.close(); })();

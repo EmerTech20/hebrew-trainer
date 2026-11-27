@@ -1,0 +1,34 @@
+const { chromium } = require('playwright'); const fs = require('fs');
+const SP = '/tmp/claude-0/-home-claude/9b0fbc78-92a0-5fc3-9ae8-eef744f87afd/scratchpad/t22/';
+const R0 = Date.now();
+(async () => { const b = await chromium.launch(); const ctx = await b.newContext({ serviceWorkers: 'block', viewport: { width: 900, height: 1300 } });
+  await ctx.addInitScript(([t, r]) => { const D = Date; const off = t - r; class MD extends D { constructor(...a) { if (!a.length) super(D.now() + off); else super(...a); } static now() { return D.now() + off; } } window.Date = MD; }, [new Date('2026-11-23T14:00:00').getTime(), R0]);
+  const p = await ctx.newPage(); const errs = []; p.on('dialog', d => d.accept()); p.on('pageerror', e => errs.push(e.message + (e.stack || '').split('\n')[1]));
+  await p.route('**/fonts.googleapis.com/**', r => r.abort()); await p.goto('http://localhost:8765/'); await p.waitForTimeout(3000);
+  await p.evaluate(() => go('today')); await p.waitForTimeout(600);
+  console.log('PLAN:', (await p.evaluate(() => $('#plan-card').innerText)).replace(/\n+/g, ' | ').slice(0, 300));
+  await p.click('[data-pb="dg1"]'); await p.waitForTimeout(1500);
+  console.log('INTRO:', (await p.innerText('#v-session')).replace(/\n+/g, ' | ').slice(0, 700));
+  await p.click('#ex-go'); await p.waitForTimeout(800);
+  console.log('ITEM1:', (await p.innerText('#v-session')).replace(/\n+/g, ' | ').slice(0, 900));
+  await p.screenshot({ path: SP + 'dg_item.png' });
+  // answer: some right, some wrong, some unsure
+  await p.evaluate(() => {
+    const set = (i, o) => { EX.ans[i] = Object.assign(EX.ans[i] || {}, o); };
+    set(0, { p: '3', g: 'f', n: 's', conj: 'wayyiqtol', stem: 'qal', root: 'נתן', mean: 'and she gave' });
+    set(1, { p: '3', g: 'm', n: 's', conj: 'yiqtol', stem: 'niphal', root: 'פלל', mean: 'he will fall', unsure: { stem: true, root: true } });
+    set(5, { p: '3', g: 'm', n: 's', conj: 'ptc', stem: 'qal', root: 'ברך', mean: 'blessed' });
+    set(6, { p: '', g: 'f', n: 's', conj: 'ptc', stem: 'qal', root: 'גאל', mean: 'redeeming you' });
+    set(9, { p: '1', g: 'm', n: 's', conj: 'qatal', stem: 'qal', root: 'קנה', mean: 'I bought' });
+    set(11, { p: '3', g: 'c', n: 'p', conj: 'qatal', stem: 'piel', root: 'כלה', mean: 'they finished' });
+    set(17, { p: '3', g: 'm', n: 's', conj: 'yiqtol', stem: 'qal', root: 'כור', mean: 'he will know', unsure: { root: true } });
+    set(19, { p: '3', g: 'm', n: 'p', conj: 'wayyiqtol', stem: 'hophal', root: 'נכה', mean: 'and they were struck' });
+    exSave(); renderExam(); });
+  await p.waitForTimeout(300); await p.click('#ex-sub'); await p.waitForTimeout(300); await p.click('#ex-yes'); await p.waitForTimeout(3000);
+  console.log('ANALYSIS:', (await p.evaluate(() => { const h = [...$$('#v-session h2')].find(x => /Diagnostic analysis/.test(x.textContent)); return h ? h.parentElement.innerText : 'MISSING'; })).replace(/\n+/g, ' | ').slice(0, 2500));
+  console.log('ITEM 2 REVIEW:', (await p.evaluate(() => $('.rv-item[data-ri="2"]').innerText)).replace(/\n+/g, ' | ').slice(-600));
+  const an = await p.evaluate(() => { const h = [...$$('#v-session h2')].find(x => /Diagnostic analysis/.test(x.textContent)); h.scrollIntoView(); return 1; }); await p.waitForTimeout(300);
+  await p.screenshot({ path: SP + 'dg_analysis.png' });
+  await p.evaluate(() => go('rescue')); await p.waitForTimeout(800);
+  await (await p.$('#fs-card .plan .step')).screenshot({ path: SP + 'dg_card.png' });
+  console.log(errs.join('\n') || 'NO ERRORS'); await b.close(); })();

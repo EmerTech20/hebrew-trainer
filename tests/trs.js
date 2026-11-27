@@ -1,0 +1,11 @@
+const { chromium } = require('playwright');
+(async () => { const b = await chromium.launch(); const p = await (await b.newContext({ serviceWorkers: 'block' })).newPage(); const errs=[]; p.on('pageerror', e => errs.push(e.message));
+  await p.route('**/fonts.googleapis.com/**', r => r.abort());
+  await p.addInitScript(() => { const D = Date; const t0 = new D('2026-11-20T09:00:00').getTime(), s = D.now(); window.Date = class extends D { constructor(...a) { if (a.length) super(...a); else super(t0 + (D.now() - s)); } static now() { return t0 + (D.now() - s); } }; });
+  await p.goto('http://localhost:8765/'); await p.waitForTimeout(2500); await p.evaluate(() => lexLoad());
+  console.log(await p.evaluate(() => REVIEW_SLIDES.map(v => { const c = lexCheckParse({ form: v[0], stem: v[2], conj: v[3], pgn: String(v[4]).split('|')[0] }); return c && c.ok === false ? 'BAD ' + v[0] + ' ' + (c.why || JSON.stringify(c)).slice(0, 100) : null; }).filter(Boolean).join('\n') || 'all lexicon checks ok'));
+  console.log(await p.evaluate(() => planBlocks().map(b => b.id + ':' + b.min).join(' | ')));
+  await p.evaluate(() => startReviewSlides()); await p.waitForTimeout(600);
+  console.log(await p.evaluate(() => $('#v-session').innerText.slice(0, 200)));
+  await p.evaluate(() => go('rescue')); await p.waitForTimeout(600); console.log(await p.evaluate(() => !!$('#rs-btn')));
+  console.log(errs.join('\n') || 'NO ERRORS'); await b.close(); })();

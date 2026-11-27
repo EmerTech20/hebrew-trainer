@@ -1,0 +1,27 @@
+const { chromium } = require('playwright'); const fs = require('fs');
+const SP = '/tmp/claude-0/-home-claude/9b0fbc78-92a0-5fc3-9ae8-eef744f87afd/scratchpad/t22/';
+const T0 = new Date('2026-11-22T07:05:00').getTime(), R0 = Date.now();
+(async () => { const b = await chromium.launch(); const ctx = await b.newContext({ serviceWorkers: 'block', viewport: { width: 1000, height: 1300 } });
+  await ctx.addInitScript(([t, r]) => { const D = Date; const off = t - r; class MD extends D { constructor(...a) { if (!a.length) super(D.now() + off); else super(...a); } static now() { return D.now() + off; } } window.Date = MD; }, [T0, R0]);
+  const p = await ctx.newPage(); const errs = []; p.on('dialog', d => d.accept()); p.on('pageerror', e => errs.push(e.message + ' ' + (e.stack || '').split('\n')[1]));
+  await p.route('**/fonts.googleapis.com/**', r => r.abort());
+  await p.goto('http://localhost:8765/'); await p.waitForTimeout(2500);
+  const upd = JSON.parse(fs.readFileSync('/mnt/user-data/outputs/hebrew-update-2026-11-21b.json', 'utf8')); await p.evaluate(async d => importDocs(d), upd.docs);
+  const pr = JSON.parse(fs.readFileSync('/mnt/user-data/attachments/9b0fbc78-92a0-5fc3-9ae8-eef744f87afd/6c9a83f3-hebrew-progress-2026-11-21.json', 'utf8'));
+  const rec = pr.assessments.find(a => a.id === 'amwlfof49'); for (const k of ['start', 'end', 'created']) if (rec[k] && rec[k].ts) rec[k] = rec[k].ts; delete rec.checksumVerified;
+  await p.evaluate(r => { lsSet('assess', [r]); }, rec);
+  await p.reload(); await p.waitForTimeout(3500);
+  const log = (k, s) => console.log('== ' + k + '\n' + String(s).replace(/\n+/g, ' | ').slice(0, 2500));
+  log('SIM1', await p.evaluate(() => { const r = S.assess.find(a => a.id === 'amwlfof49'); renderExamReview(r); return `${BLUEPRINTS[r.type].name}; checksum ${AN.checksum(r) === r.checksum}; total ${r.total}`; }));
+  await p.waitForTimeout(800);
+  log('HEAD', (await p.innerText('#v-session')).slice(0, 900));
+  log('items', await p.evaluate(() => [1, 4, 9, 13, 14, 16, 19, 22, 24, 26].map(n => { const el = $(`.rv-item[data-ri="${n}"]`); return n + ': ' + (el ? (el.innerText.replace(/\n+/g, ' / ').match(/(partly \(\d+%\)|correct|incorrect|not answered|seen, left blank|not reached|Box by box.{0,300}|With today.{0,150}|No diagnosis|Self-scored|Root not recognized|Syntax misunderstood|Wrong [a-z ,/]+)/g) || []).join(' ¦ ') : 'missing'); }).join('\n')));
+  await p.screenshot({ path: SP + 'sim1_head.png' });
+  await p.evaluate(() => $('.rv-item[data-ri="4"]').scrollIntoView()); await p.screenshot({ path: SP + 'sim1_item4.png' });
+  // resume timing with consistent clock
+  await p.evaluate(async () => { await startFS('fs3'); EX.phase = 'taking'; exSave(); renderExam(); });
+  await p.waitForTimeout(12000); const e1 = await p.evaluate(() => exElapsed());
+  await p.reload(); await p.waitForTimeout(6000); await p.evaluate(() => resumeExam()); await p.waitForTimeout(500);
+  log('RESUME', await p.evaluate(e1 => `before ${Math.round(e1 / 1000)}s, after reload ${Math.round(exElapsed() / 1000)}s; gaps ${JSON.stringify((EX.gaps || []).map(g => Math.round((g[1] - g[0]) / 1000) + 's'))}; clock ${$('#ex-clock').textContent}`, e1));
+  await p.evaluate(() => { EX = null; lsSet('exam', null); });
+  console.log(errs.join('\n') || 'NO ERRORS'); await b.close(); })();

@@ -1,0 +1,10 @@
+const { chromium } = require('playwright'); const fs=require('fs');
+(async () => { const b = await chromium.launch(); const p = await (await b.newContext({ viewport: { width: 760, height: 900 }, deviceScaleFactor: 2 })).newPage(); const errs=[]; p.on('pageerror', e => errs.push(e.message));
+  await p.route('**/fonts.googleapis.com/**', r => r.abort()); await p.goto('http://localhost:8765/'); await p.waitForTimeout(2500);
+  const bk = JSON.parse(fs.readFileSync('/mnt/user-data/outputs/hebrew-trainer-my-progress-2026-11-04.json', 'utf8'));
+  await p.evaluate(async d => importDocs(d), bk.docs); await p.reload(); await p.waitForTimeout(3500);
+  await p.evaluate(() => go('today')); await p.waitForTimeout(2500);
+  await p.addStyleTag({content:'.top{position:static!important}'}); const el = await p.$('#plan-card'); await el.screenshot({ path: '/mnt/user-data/outputs/todays-session.png' });
+  console.log(await p.evaluate(() => document.documentElement.scrollWidth));
+  await p.evaluate(() => startPgnDrill()); await p.waitForTimeout(800); await p.screenshot({ path: 'pgn_mob.png' });
+  console.log(errs.join('\n') || 'NO ERRORS'); await b.close(); })();

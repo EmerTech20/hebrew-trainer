@@ -1,0 +1,10 @@
+const { chromium } = require('playwright');
+(async () => { const b = await chromium.launch(); const p = await b.newPage({ viewport: { width: 900, height: 1100 } });
+  await p.goto('http://localhost:8765/'); await p.waitForTimeout(2500);
+  await p.evaluate(() => { go('cards'); }); await p.waitForTimeout(1200);
+  await p.evaluate(() => startReview('core')); await p.waitForTimeout(3000);
+  console.log('FRONT VISIBLE:', (await p.evaluate(() => { const s = $('#v-session'); return s.innerText; })).replace(/\n+/g, ' | ').slice(0, 900));
+  await p.screenshot({ path: '/tmp/claude-0/-home-claude/9b0fbc78-92a0-5fc3-9ae8-eef744f87afd/scratchpad/doc/fc_front.png' });
+  await p.click('#fc'); await p.waitForTimeout(800);
+  console.log('AFTER FLIP:', (await p.evaluate(() => $('#v-session').innerText)).replace(/\n+/g, ' | ').slice(0, 1200));
+  await b.close(); })();

@@ -1,0 +1,16 @@
+const { chromium } = require('playwright'); const fs = require('fs');
+(async () => { const b = await chromium.launch(); const p = await (await b.newContext({ viewport: { width: 760, height: 1100 } })).newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
+  await p.route('**/fonts.googleapis.com/**', r => r.abort()); await p.goto('http://localhost:8765/'); await p.waitForTimeout(2500);
+  const bk = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+  const docs = Object.fromEntries(Object.entries(bk.docs).filter(([k]) => /^(library|libmeta)\//.test(k)));
+  await p.evaluate(async d => { S.prog.flags.noImport = 1; await importDocs(d); }, docs); await p.waitForTimeout(1500);
+  await p.reload(); await p.waitForTimeout(2500);
+  await p.evaluate(() => go('cards')); await p.waitForTimeout(1500);
+  console.log('decks:', (await p.$$eval('.deck h3', hs => hs.map(h => h.textContent))).slice(0, 6));
+  const t0 = Date.now(); await p.click('[data-fvbuild]'); await p.waitForFunction(() => FULLV.cards && !FULLV.busy, null, { timeout: 120000 }); await p.waitForTimeout(800);
+  console.log('build ms', Date.now() - t0);
+  const r = await p.evaluate(() => ({ msg: FULLV.msg, n: FULLV.cards.length, sem: FULLV.cards.filter(c => c.sem).length, sample: FULLV.cards.filter(c => c.key.startsWith('lem|')).slice(0, 25).map(c => `${c.front} = ${c.back} [${c.extra}]`), keys: ['core', 'ch', 'ruth', 's:', 'lem'].map(k => k + ':' + FULLV.cards.filter(c => c.key.startsWith(k)).length), yd: FULLV.cards.filter(c => /^יָד$|^בֵּן$/.test(c.front)).map(c => `${c.front} = ${c.back} [${c.extra}]`) }));
+  console.log(JSON.stringify(r, null, 1));
+  console.log((await p.innerText('#v-cards')).slice(0, 900));
+  await p.screenshot({ path: 'voc.png' });
+  console.log(errs.join('\n') || 'NO ERRORS'); await b.close(); })();

@@ -1,0 +1,10 @@
+const { chromium } = require('playwright'); const fs = require('fs');
+(async () => { const b = await chromium.launch(); const p = await (await b.newContext({ serviceWorkers: 'block' })).newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message)); p.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });
+  await p.route('**/fonts.googleapis.com/**', r => r.abort());
+  await p.goto('http://localhost:8765/'); await p.waitForTimeout(2500);
+  const bk = JSON.parse(fs.readFileSync('/mnt/user-data/outputs/hebrew-trainer-my-progress-2026-11-04.json', 'utf8'));
+  await p.evaluate(async d => importDocs(d), bk.docs); await p.reload(); await p.waitForTimeout(3000);
+  console.log(await p.evaluate(() => JSON.stringify({ help: S.prog.settings.help, f: S.prog.settings.noPtNov21, lib: S.lib.length, sample: !!S.sample })));
+  await p.evaluate(() => { delete S.prog.settings.noPtNov21; go('practice'); }); await p.waitForTimeout(1000);
+  console.log(await p.evaluate(() => JSON.stringify({ help: S.prog.settings.help, f: S.prog.settings.noPtNov21 })));
+  console.log(errs.join('\n') || 'NO ERRORS'); await b.close(); })();
